@@ -6,7 +6,7 @@ from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 
-# ===== Setup 
+# ===== Setup =====
 basedir = os.path.abspath(os.path.dirname(__file__))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///'+ \
                 os.path.join(basedir, 'db.sqlite3')
@@ -15,6 +15,7 @@ db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
 
+# ===== Database Models =====
 class User(db.Model):
     # PK User_id auto created by SQLAlchemy
     username = db.Column(db.String(100))
@@ -185,3 +186,41 @@ class UserCharacterStats(db.Model):
     defensive_star_chance_won  = db.Column(db.Integer) #Calculated
 
 #TODO class CharacterInfo(db.Models): #Transform stat sheet into database table
+
+
+# ===== Marshamllow Schemas =====
+class UserSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = User
+
+class GameSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = Game
+
+class GameCharacterSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = GameCharacter
+
+class PitchSummarySchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = PitchSummary
+
+class ContactSummarySchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = ContactSummary
+
+class FieldingSummarySchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = FieldingSummary
+
+class UserCharacterStatsSchema(ma.SQLAlchemyAutoSchema):
+    class Meta:
+        model = UserCharacterStats
+
+#TODO add CharacterInfo model
+#class CharacterInfoSchema(ma.SQLAlchemyAutoSchema):
+#    class Meta:
+#        model = CharacterInfo
+
+
+# ===== API Routes =====
