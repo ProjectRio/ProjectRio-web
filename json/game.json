@@ -1,0 +1,23 @@
+{
+
+  "Away Player": "Hyde",
+  "Home Player": "PeacockSlayer",
+
+
+  "GameID": "f8,066,663",
+  "Date": "Mon Dec 20 22:57:09 2021",
+
+  "Ranked": 0,
+  "StadiumID": "DK's Jungle",
+  "Away Score": 4,
+  "Home Score": 0,
+
+  "Innings Selected": 7,
+  "Innings Played": 7,
+
+  "Home Team Captain": "Diddy",
+  "Home Team Roster": ["Toadsworth", "Toad(R)", "Bro(B)", "Birdo", "Shy Guy(B)", "Pianta(R)", "Dixie", "Diddy", "Baby Mario"],
+  "Away Team Captain": "Mario",
+  "Away Team Roster": ["Boo", "Daisy", "Luigi", "Mario", "Toadette", "Noki(G)", "Monty", "Paragoomba", "Bowser Jr"],
+  "Quitter Team": 0
+}
