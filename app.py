@@ -1,12 +1,13 @@
 import os.path
+from decouple import config
+
 import secrets #For key generation
 from flask import Flask, request, jsonify, abort
-from flask_login.mixins import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
 
-from flask_login      import LoginManager
+from flask_login      import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from flask_bcrypt     import Bcrypt
 
 
@@ -17,6 +18,9 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'db.sqlite3')
 DB_URI = 'sqlite:///{}'.format(DB_PATH)
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
+ # Set up the App SECRET_KEY
+app.config['SECRET_KEY'] = config('SECRET_KEY', default='S#perS3crEt_007')
+
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
@@ -190,6 +194,22 @@ user_schema = UserSchema()
 def index():
     return 'API online...'
 
+
+# == User Routes ==
+
+# provide login manager with load_user callback
+@lm.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Logout user
+@app.route('/logout/')
+def logout():
+    logout_user()
+    
+    resp = jsonify(success=True)
+    return resp
+
 @app.route('/register/', methods=['POST'])
 def register():    
     in_username = request.json['Username']
@@ -199,11 +219,11 @@ def register():
     # filter User out of database through username
     user = User.query.filter_by(username=in_username).first()
 
-    # filter User out of database through username
+    # filter User out of database through email
     user_by_email = User.query.filter_by(email=in_email).first()
 
     if user or user_by_email:
-        return abort(408, description='Username has already been taken')
+        return abort(409, description='Username has already been taken')
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
     else:
@@ -212,6 +232,44 @@ def register():
         db.session.commit()
 
     return user_schema.dump(new_user)
+
+# Authenticate user, login via username or email
+@app.route('/login/', methods=['POST'])
+def login():
+    in_username = request.json['Username']
+    in_password = request.json['Password']
+    in_email    = request.json['Email']
+
+    # filter User out of database through username
+    user = User.query.filter_by(username=in_username).first()
+
+    # filter User out of database through email
+    user_by_email = User.query.filter_by(email=in_email).first()
+
+    if user or user_by_email:
+        user_to_login = user if user else user_by_email
+        if bc.check_password_hash(user_to_login.password, in_password):
+            login_user(user_to_login)
+            return user_schema.dump(user_to_login)
+        else:
+            return abort(401, description='Incorrect password')
+    else:
+        return abort(406, description='User does not exist')
+
+#GET will retreive user key, POST with empty JSON will generate new rio key and return it
+@app.route('/key/', methods=['GET', 'POST'])
+@login_required
+def update_rio_key():
+    if current_user.is_authenticated:
+        # Return Key
+        if request.method == 'GET':
+            return user_schema.dump(current_user)
+        # Generate new key and return it
+        elif request.method == 'POST':
+            current_user.rio_key  = secrets.token_urlsafe(32)            
+            db.session.commit()
+            return user_schema.dump(current_user)
+    
 
 
 @app.route('/game/', methods=['POST'])
