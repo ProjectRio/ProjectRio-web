@@ -1,9 +1,13 @@
 import os.path
 import secrets #For key generation
 from flask import Flask, request, jsonify, abort
+from flask_login.mixins import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 from marshmallow_sqlalchemy import SQLAlchemyAutoSchema
+
+from flask_login      import LoginManager
+from flask_bcrypt     import Bcrypt
 
 
 # ===== Setup =====
@@ -16,6 +20,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
+bc = Bcrypt(app)
+lm = LoginManager()
+lm.init_app(app)
 
 # ===== Models =====
 class Game(db.Model):
@@ -116,13 +123,20 @@ class Game(db.Model):
     self.away_roster_8 = away_roster_8
     self.quitter = quitter
 
-class User(db.Model):
-    username = db.Column(db.String(100))
-    rio_key = db.Column(db.String(50), primary_key = True)
+class User(db.Model, UserMixin):
+    id       = db.Column(db.Integer,     primary_key=True)
+    username = db.Column(db.String(64),  unique = True)
+    email    = db.Column(db.String(120), unique = True)
+    password = db.Column(db.String(500))
+    rio_key  = db.Column(db.String(50), unique = True)
 
-    def __init__(self, in_username, in_rio_key):
+    def __init__(self, in_username, in_email, in_password):
         self.username = in_username
-        self.rio_key = in_rio_key
+        self.email    = in_email
+        self.password = bc.generate_password_hash(in_password)
+        self.rio_key  = secrets.token_urlsafe(32)
+
+    
 
 
 # ===== Schema =====
@@ -177,25 +191,26 @@ def index():
     return 'API online...'
 
 @app.route('/register/', methods=['POST'])
-def create_user():
-    print(request.json)
-    print("Hello")
+def register():    
     in_username = request.json['Username']
-    
-    #Check if alphanumeric
-    if in_username.isalnum() == False:
-        return abort(406, description='Provided username is not alphanumeric')
-    #check for unique
-    exisiting_user = User.query.filter_by(username=in_username).first()
-    if exisiting_user is not None:
+    in_password = request.json['Password']
+    in_email    = request.json['Email']
+
+    # filter User out of database through username
+    user = User.query.filter_by(username=in_username).first()
+
+    # filter User out of database through username
+    user_by_email = User.query.filter_by(email=in_email).first()
+
+    if user or user_by_email:
         return abort(408, description='Username has already been taken')
-    #generate key
-    secret_key = secrets.token_urlsafe(32)
-    print('Key:', secret_key)
-    #post key
-    new_user = User(in_username, secret_key)
-    db.session.add(new_user)
-    db.session.commit()
+    elif in_username.isalnum() == False:
+        return abort(406, description='Provided username is not alphanumeric')
+    else:
+        new_user = User(in_username, in_email, in_password)
+        db.session.add(new_user)
+        db.session.commit()
+
     return user_schema.dump(new_user)
 
 
