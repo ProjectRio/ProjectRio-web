@@ -17,6 +17,9 @@ Jinja2 = "==3.0.3"
 MarkupSafe = "==2.0.1"
 SQLAlchemy = "==1.4.28"
 Werkzeug = "==2.0.2"
+flask-login = "*"
+flask-bcrypt = "*"
+python-decouple = "*"
 
 [dev-packages]
 
