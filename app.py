@@ -1,8 +1,11 @@
 import os.path
-from flask import Flask, request, jsonify
+import secrets #For key generation
+from flask import Flask, request, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 
+
+# ===== Setup =====
 app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -11,6 +14,7 @@ DB_URI = 'sqlite:///{}'.format(DB_PATH)
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
+
 
 # ===== Models =====
 class Game(db.Model):
@@ -48,6 +52,13 @@ class Game(db.Model):
 
   game_character = db.relationship('GameCharacter', backref='game')
 
+class User(db.Model):
+    username = db.Column(db.String(100))
+    rio_key = db.Column(db.String(50), primary_key = True)
+
+    def __init__(self, in_username, in_rio_key):
+        self.username = in_username
+        self.rio_key = in_rio_key
 
 class GameCharacter(db.Model):
   GameCharacter_id = db.Column(db.Integer, primary_key=True)
@@ -166,7 +177,6 @@ class GameCharacterSchema(ma.Schema):
       'star_hits',
     )
 
-
 game_schema = GameSchema()
 games_schema = GameSchema(many=True)
 
@@ -176,6 +186,29 @@ game_character_schema = GameCharacterSchema()
 @app.route('/')
 def index():
     return 'API online...'
+
+@app.route('/register/', methods=['POST'])
+def create_user():
+    print(request.json)
+    print("Hello")
+    in_username = request.json['Username']
+    
+    #Check if alphanumeric
+    if in_username.isalnum() == False:
+        return abort(406, description='Provided username is not alphanumeric')
+    #check for unique
+    exisiting_user = User.query.filter_by(username=in_username).first()
+    if exisiting_user is not None:
+        return abort(408, description='Username has already been taken')
+    #generate key
+    secret_key = secrets.token_urlsafe(32)
+    print('Key:', secret_key)
+    #post key
+    new_user = User(in_username, secret_key)
+    db.session.add(new_user)
+    db.session.commit()
+    return user_schema.dump(new_user)
+
 
 @app.route('/game/', methods=['POST'])
 def populate_db():
@@ -263,7 +296,6 @@ def populate_db():
 
   db.session.commit()
   return game_schema.jsonify(game)
-
 
 if __name__ == '__main__':
     app.run(debug=True)
