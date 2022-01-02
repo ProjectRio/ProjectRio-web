@@ -1,8 +1,13 @@
 import os.path
+from decouple import config
+
 import secrets #For key generation
 from flask import Flask, request, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
+
+from flask_login      import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+from flask_bcrypt     import Bcrypt
 
 
 # ===== Setup =====
@@ -12,9 +17,15 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'db.sqlite3')
 DB_URI = 'sqlite:///{}'.format(DB_PATH)
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
+ # Set up the App SECRET_KEY
+app.config['SECRET_KEY'] = config('SECRET_KEY', default='S#perS3crEt_007')
+
 db = SQLAlchemy(app)
 ma = Marshmallow(app)
 
+bc = Bcrypt(app)
+lm = LoginManager()
+lm.init_app(app)
 
 # ===== Models =====
 class Game(db.Model):
@@ -52,13 +63,20 @@ class Game(db.Model):
 
   game_character = db.relationship('GameCharacter', backref='game')
 
-class User(db.Model):
-    username = db.Column(db.String(100))
-    rio_key = db.Column(db.String(50), primary_key = True)
+class User(db.Model, UserMixin):
+    id       = db.Column(db.Integer,     primary_key=True)
+    username = db.Column(db.String(64),  unique = True)
+    email    = db.Column(db.String(120), unique = True)
+    password = db.Column(db.String(500))
+    rio_key  = db.Column(db.String(50), unique = True)
 
-    def __init__(self, in_username, in_rio_key):
+    def __init__(self, in_username, in_email, in_password):
         self.username = in_username
-        self.rio_key = in_rio_key
+        self.email    = in_email
+        self.password = bc.generate_password_hash(in_password)
+        self.rio_key  = secrets.token_urlsafe(32)
+
+    
 
 class GameCharacter(db.Model):
   GameCharacter_id = db.Column(db.Integer, primary_key=True)
@@ -187,27 +205,82 @@ game_character_schema = GameCharacterSchema()
 def index():
     return 'API online...'
 
-@app.route('/register/', methods=['POST'])
-def create_user():
-    print(request.json)
-    print("Hello")
-    in_username = request.json['Username']
+
+# == User Routes ==
+
+# provide login manager with load_user callback
+@lm.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# Logout user
+@app.route('/logout/')
+def logout():
+    logout_user()
     
-    #Check if alphanumeric
-    if in_username.isalnum() == False:
+    resp = jsonify(success=True)
+    return resp
+
+@app.route('/register/', methods=['POST'])
+def register():    
+    in_username = request.json['Username']
+    in_password = request.json['Password']
+    in_email    = request.json['Email']
+
+    # filter User out of database through username
+    user = User.query.filter_by(username=in_username).first()
+
+    # filter User out of database through email
+    user_by_email = User.query.filter_by(email=in_email).first()
+
+    if user or user_by_email:
+        return abort(409, description='Username has already been taken')
+    elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
-    #check for unique
-    exisiting_user = User.query.filter_by(username=in_username).first()
-    if exisiting_user is not None:
-        return abort(408, description='Username has already been taken')
-    #generate key
-    secret_key = secrets.token_urlsafe(32)
-    print('Key:', secret_key)
-    #post key
-    new_user = User(in_username, secret_key)
-    db.session.add(new_user)
-    db.session.commit()
+    else:
+        new_user = User(in_username, in_email, in_password)
+        db.session.add(new_user)
+        db.session.commit()
+
     return user_schema.dump(new_user)
+
+# Authenticate user, login via username or email
+@app.route('/login/', methods=['POST'])
+def login():
+    in_username = request.json['Username']
+    in_password = request.json['Password']
+    in_email    = request.json['Email']
+
+    # filter User out of database through username
+    user = User.query.filter_by(username=in_username).first()
+
+    # filter User out of database through email
+    user_by_email = User.query.filter_by(email=in_email).first()
+
+    if user or user_by_email:
+        user_to_login = user if user else user_by_email
+        if bc.check_password_hash(user_to_login.password, in_password):
+            login_user(user_to_login)
+            return user_schema.dump(user_to_login)
+        else:
+            return abort(401, description='Incorrect password')
+    else:
+        return abort(406, description='User does not exist')
+
+#GET will retreive user key, POST with empty JSON will generate new rio key and return it
+@app.route('/key/', methods=['GET', 'POST'])
+@login_required
+def update_rio_key():
+    if current_user.is_authenticated:
+        # Return Key
+        if request.method == 'GET':
+            return user_schema.dump(current_user)
+        # Generate new key and return it
+        elif request.method == 'POST':
+            current_user.rio_key  = secrets.token_urlsafe(32)            
+            db.session.commit()
+            return user_schema.dump(current_user)
+    
 
 
 @app.route('/game/', methods=['POST'])
