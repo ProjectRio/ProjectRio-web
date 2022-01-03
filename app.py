@@ -28,6 +28,19 @@ lm = LoginManager()
 lm.init_app(app)
 
 # ===== Models =====
+class User(db.Model, UserMixin):
+    id       = db.Column(db.Integer,     primary_key=True)
+    username = db.Column(db.String(64),  unique = True)
+    email    = db.Column(db.String(120), unique = True)
+    password = db.Column(db.String(500))
+    rio_key  = db.Column(db.String(50), unique = True)
+
+    def __init__(self, in_username, in_email, in_password):
+        self.username = in_username
+        self.email    = in_email
+        self.password = bc.generate_password_hash(in_password)
+        self.rio_key  = secrets.token_urlsafe(32)
+
 class Game(db.Model):
   id = db.Column(db.String(255), primary_key = True)
   date_time = db.Column(db.String(255))
@@ -62,21 +75,6 @@ class Game(db.Model):
   quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
 
   game_character = db.relationship('GameCharacter', backref='game')
-
-class User(db.Model, UserMixin):
-    id       = db.Column(db.Integer,     primary_key=True)
-    username = db.Column(db.String(64),  unique = True)
-    email    = db.Column(db.String(120), unique = True)
-    password = db.Column(db.String(500))
-    rio_key  = db.Column(db.String(50), unique = True)
-
-    def __init__(self, in_username, in_email, in_password):
-        self.username = in_username
-        self.email    = in_email
-        self.password = bc.generate_password_hash(in_password)
-        self.rio_key  = secrets.token_urlsafe(32)
-
-    
 
 class GameCharacter(db.Model):
   GameCharacter_id = db.Column(db.Integer, primary_key=True)
@@ -118,6 +116,11 @@ class GameCharacter(db.Model):
 
 
 # ===== Schema =====
+
+class UserSchema(ma.Schema):
+  class Meta:
+      fields = ('username', 'email', 'rio_key')
+
 class GameSchema(ma.Schema):
   class Meta:
     fields = (
@@ -194,6 +197,8 @@ class GameCharacterSchema(ma.Schema):
       'bases_stolen',
       'star_hits',
     )
+
+user_schema = UserSchema()
 
 game_schema = GameSchema()
 games_schema = GameSchema(many=True)
@@ -281,7 +286,7 @@ def update_rio_key():
             db.session.commit()
             return user_schema.dump(current_user)
     
-
+# == Game Routes ==
 
 @app.route('/game/', methods=['POST'])
 def populate_db():
