@@ -42,7 +42,7 @@ class User(db.Model, UserMixin):
         self.rio_key  = secrets.token_urlsafe(32)
 
 class Game(db.Model):
-  id = db.Column(db.String(255), primary_key = True)
+  game_id = db.Column(db.String(255), primary_key = True)
   date_time = db.Column(db.String(255))
   ranked = db.Column(db.Integer)
   stadium_id = db.Column(db.String(255))
@@ -52,33 +52,13 @@ class Game(db.Model):
   home_score = db.Column(db.Integer)
   innings_selected = db.Column(db.Integer)
   innings_played = db.Column(db.Integer)
-  home_captain = db.Column(db.String(255))
-  home_roster_0 = db.Column(db.String(255))
-  home_roster_1 = db.Column(db.String(255))
-  home_roster_2 = db.Column(db.String(255))
-  home_roster_3 = db.Column(db.String(255))
-  home_roster_4 = db.Column(db.String(255))
-  home_roster_5 = db.Column(db.String(255))
-  home_roster_6 = db.Column(db.String(255))
-  home_roster_7 = db.Column(db.String(255))
-  home_roster_8 = db.Column(db.String(255))
-  away_captain = db.Column(db.String(255))
-  away_roster_0 = db.Column(db.String(255))
-  away_roster_1 = db.Column(db.String(255))
-  away_roster_2 = db.Column(db.String(255))
-  away_roster_3 = db.Column(db.String(255))
-  away_roster_4 = db.Column(db.String(255))
-  away_roster_5 = db.Column(db.String(255))
-  away_roster_6 = db.Column(db.String(255))
-  away_roster_7 = db.Column(db.String(255))
-  away_roster_8 = db.Column(db.String(255))
   quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
 
-  game_character = db.relationship('GameCharacter', backref='game')
+  game_character_summary = db.relationship('CharacterGameSummary', backref='game')
 
-class GameCharacter(db.Model):
-  GameCharacter_id = db.Column(db.Integer, primary_key=True)
-  game_id = db.Column(db.String(255), db.ForeignKey('game.id'), nullable=False)
+class CharacterGameSummary(db.Model):
+  id = db.Column(db.Integer, primary_key=True)
+  game_id = db.Column(db.String(255), db.ForeignKey('game.game_id'), nullable=False)
   team_id = db.Column(db.Integer)
   roster_loc = db.Column(db.Integer) #0-8
   superstar = db.Column(db.Boolean)
@@ -124,7 +104,7 @@ class UserSchema(ma.Schema):
 class GameSchema(ma.Schema):
   class Meta:
     fields = (
-      'id',
+      'game_id',
       'date_time',
       'ranked',
       'stadium_id',
@@ -134,33 +114,13 @@ class GameSchema(ma.Schema):
       'home_score',
       'innings_selected',
       'innings_played',
-      'home_captain',
-      'home_roster_0',
-      'home_roster_1',
-      'home_roster_2',
-      'home_roster_3',
-      'home_roster_4',
-      'home_roster_5',
-      'home_roster_6',
-      'home_roster_7',
-      'home_roster_8',
-      'away_captain',
-      'away_roster_0',
-      'away_roster_1',
-      'away_roster_2',
-      'away_roster_3',
-      'away_roster_4',
-      'away_roster_5',
-      'away_roster_6',
-      'away_roster_7',
-      'away_roster_8',
       'quitter',
     )
 
-class GameCharacterSchema(ma.Schema):
+class CharacterGameSummarySchema(ma.Schema):
   class Meta:
     fields = (
-      'game_char_id',
+      'id',
       'game_id',
       'team_id',
       'roster_loc',
@@ -199,11 +159,9 @@ class GameCharacterSchema(ma.Schema):
     )
 
 user_schema = UserSchema()
-
 game_schema = GameSchema()
 games_schema = GameSchema(many=True)
-
-game_character_schema = GameCharacterSchema()
+character_game_summary_schema = CharacterGameSummarySchema()
 
 # ===== API Routes =====
 @app.route('/')
@@ -292,7 +250,7 @@ def update_rio_key():
 def populate_db():
 
   game = Game(
-    id = request.json['GameID'],
+    game_id = request.json['GameID'],
     date_time = request.json['Date'],
     ranked = request.json['Ranked'],
     stadium_id = request.json['StadiumID'],
@@ -300,30 +258,10 @@ def populate_db():
     home_score = request.json['Home Score'],
     innings_selected = request.json['Innings Selected'],
     innings_played = request.json['Innings Played'],
-    home_captain = request.json['Home Team Captain'],
-    home_roster_0 = request.json['Home Team Roster'][0],
-    home_roster_1 = request.json['Home Team Roster'][1],
-    home_roster_2 = request.json['Home Team Roster'][2],
-    home_roster_3 = request.json['Home Team Roster'][3],
-    home_roster_4 = request.json['Home Team Roster'][4],
-    home_roster_5 = request.json['Home Team Roster'][5],
-    home_roster_6 = request.json['Home Team Roster'][6],
-    home_roster_7 = request.json['Home Team Roster'][7],
-    home_roster_8 = request.json['Home Team Roster'][8],
-    away_captain = request.json['Away Team Captain'],
-    away_roster_0 = request.json['Away Team Roster'][0],
-    away_roster_1 = request.json['Away Team Roster'][1],
-    away_roster_2 = request.json['Away Team Roster'][2],
-    away_roster_3 = request.json['Away Team Roster'][3],
-    away_roster_4 = request.json['Away Team Roster'][4],
-    away_roster_5 = request.json['Away Team Roster'][5],
-    away_roster_6 = request.json['Away Team Roster'][6],
-    away_roster_7 = request.json['Away Team Roster'][7],
-    away_roster_8 = request.json['Away Team Roster'][8],
     quitter = request.json['Quitter Team'],
   )
   db.session.add(game)
-
+  
 
   # Game Characters
   player_stats = request.json['Player Stats']
@@ -331,7 +269,7 @@ def populate_db():
     defensive_stats = character['Defensive Stats']
     offensive_stats = character['Offensive Stats']
 
-    game_character = GameCharacter(
+    character_game_summary = CharacterGameSummary(
       game = game,
       team_id = 0 if character['Team'] == 'Home' else 1,
       roster_loc = character['RosterID'],
@@ -369,7 +307,7 @@ def populate_db():
       star_hits = offensive_stats['Star Hits'],
     )
 
-    db.session.add(game_character)
+    db.session.add(character_game_summary)
 
 
   db.session.commit()
