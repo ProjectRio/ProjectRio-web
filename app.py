@@ -42,77 +42,116 @@ class User(db.Model, UserMixin):
         self.rio_key  = secrets.token_urlsafe(32)
 
 class Game(db.Model):
-  id = db.Column(db.String(255), primary_key = True)
-  date_time = db.Column(db.String(255))
-  ranked = db.Column(db.Integer)
-  stadium_id = db.Column(db.String(255))
-  # away_player_id = db.Column(db.ForeignKey('user.rio_key'), nullable=True) #One-to-One
-  # home_player_id = db.Column(db.ForeignKey('user.rio_key'), nullable=True) #One-to-One
-  away_score = db.Column(db.Integer)
-  home_score = db.Column(db.Integer)
-  innings_selected = db.Column(db.Integer)
-  innings_played = db.Column(db.Integer)
-  home_captain = db.Column(db.String(255))
-  home_roster_0 = db.Column(db.String(255))
-  home_roster_1 = db.Column(db.String(255))
-  home_roster_2 = db.Column(db.String(255))
-  home_roster_3 = db.Column(db.String(255))
-  home_roster_4 = db.Column(db.String(255))
-  home_roster_5 = db.Column(db.String(255))
-  home_roster_6 = db.Column(db.String(255))
-  home_roster_7 = db.Column(db.String(255))
-  home_roster_8 = db.Column(db.String(255))
-  away_captain = db.Column(db.String(255))
-  away_roster_0 = db.Column(db.String(255))
-  away_roster_1 = db.Column(db.String(255))
-  away_roster_2 = db.Column(db.String(255))
-  away_roster_3 = db.Column(db.String(255))
-  away_roster_4 = db.Column(db.String(255))
-  away_roster_5 = db.Column(db.String(255))
-  away_roster_6 = db.Column(db.String(255))
-  away_roster_7 = db.Column(db.String(255))
-  away_roster_8 = db.Column(db.String(255))
-  quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
+    game_id = db.Column(db.String(255), primary_key = True)
+    date_time = db.Column(db.String(255))
+    ranked = db.Column(db.Integer)
+    stadium_id = db.Column(db.String(255))
+    # away_player_id = db.Column(db.ForeignKey('user.rio_key'), nullable=True) #One-to-One
+    # home_player_id = db.Column(db.ForeignKey('user.rio_key'), nullable=True) #One-to-One
+    away_score = db.Column(db.Integer)
+    home_score = db.Column(db.Integer)
+    innings_selected = db.Column(db.Integer)
+    innings_played = db.Column(db.Integer)
+    quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
 
-  game_character = db.relationship('GameCharacter', backref='game')
+    character_game_summary = db.relationship('CharacterGameSummary', backref='game')
 
-class GameCharacter(db.Model):
-  GameCharacter_id = db.Column(db.Integer, primary_key=True)
-  game_id = db.Column(db.String(255), db.ForeignKey('game.id'), nullable=False)
-  team_id = db.Column(db.Integer)
-  roster_loc = db.Column(db.Integer) #0-8
-  superstar = db.Column(db.Boolean)
+class CharacterGameSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.String(255), db.ForeignKey('game.game_id'), nullable=False)
+    team_id = db.Column(db.Integer)
+    roster_loc = db.Column(db.Integer) #0-8
+    superstar = db.Column(db.Boolean)
+    batters_faced = db.Column(db.Integer)
+    runs_allowed = db.Column(db.Integer)
+    batters_walked = db.Column(db.Integer)
+    batters_hit = db.Column(db.Integer)
+    hits_allowed = db.Column(db.Integer)
+    homeruns_allowed = db.Column(db.Integer)
+    pitches_thrown = db.Column(db.Integer)
+    stamina = db.Column(db.Integer)
+    was_pitcher = db.Column(db.Integer)
+    batter_outs = db.Column(db.Integer)
+    strike_outs_pitched = db.Column(db.Integer)
+    star_pitches_thrown = db.Column(db.Integer)
+    big_plays = db.Column(db.Integer)
+    innings_pitched = db.Column(db.Integer)
+    at_bats = db.Column(db.Integer)
+    hits = db.Column(db.Integer)
+    singles = db.Column(db.Integer)
+    doubles = db.Column(db.Integer)
+    triples = db.Column(db.Integer)
+    homeruns = db.Column(db.Integer)
+    strike_outs = db.Column(db.Integer)
+    walks_bb = db.Column(db.Integer)
+    walks_hit = db.Column(db.Integer)
+    rbi = db.Column(db.Integer)
+    bases_stolen = db.Column(db.Integer)
+    star_hits = db.Column(db.Integer)
 
-  # #Defensive stats
-  batters_faced = db.Column(db.Integer)
-  runs_allowed = db.Column(db.Integer)
-  batters_walked = db.Column(db.Integer)
-  batters_hit = db.Column(db.Integer)
-  hits_allowed = db.Column(db.Integer)
-  homeruns_allowed = db.Column(db.Integer)
-  pitches_thrown = db.Column(db.Integer)
-  stamina = db.Column(db.Integer)
-  was_pitcher = db.Column(db.Integer)
-  batter_outs = db.Column(db.Integer)
-  strike_outs_pitched = db.Column(db.Integer)
-  star_pitches_thrown = db.Column(db.Integer)
-  big_plays = db.Column(db.Integer)
-  #Rio curated stats
-  innings_pitched = db.Column(db.Integer)
+    batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
+    pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
+    fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary')
 
-  #Offensive Stats
-  at_bats = db.Column(db.Integer)
-  hits = db.Column(db.Integer)
-  singles = db.Column(db.Integer)
-  doubles = db.Column(db.Integer)
-  triples = db.Column(db.Integer)
-  homeruns = db.Column(db.Integer)
-  strike_outs = db.Column(db.Integer)
-  walks_bb = db.Column(db.Integer)
-  walks_hit = db.Column(db.Integer)
-  rbi = db.Column(db.Integer)
-  bases_stolen = db.Column(db.Integer)
-  star_hits = db.Column(db.Integer)
+class PitchSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    inning = db.Column(db.Integer)
+    half_inning = db.Column(db.Integer)
+    batter_score = db.Column(db.Integer)
+    pitcher_score = db.Column(db.Integer)
+    balls = db.Column(db.Integer)
+    strikes = db.Column(db.Integer)
+    outs = db.Column(db.Integer)
+    runner_on_1 = db.Column(db.Integer)
+    runner_on_2 = db.Column(db.Integer)
+    runner_on_3 = db.Column(db.Integer)
+    chem_links_ob = db.Column(db.Integer)
+    star_chance = db.Column(db.Integer)
+    batter_stars = db.Column(db.Integer)
+    pitcher_stars = db.Column(db.Integer)
+    pitcher_handedness = db.Column(db.Integer)
+    pitch_type = db.Column(db.Integer)
+    charge_pitch_type = db.Column(db.Integer)
+    star_pitch = db.Column(db.Integer)
+    pitch_speed = db.Column(db.Integer)
+    type_of_swing = db.Column(db.String(64))
+    rbi = db.Column(db.Integer)
+    num_outs = db.Column(db.Integer)
+    result_inferred = db.Column(db.Integer)
+    result_game = db.Column(db.Integer)
+
+    contact_summary = db.relationship('ContactSummary', backref = 'contact_summary')
+
+class ContactSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    pitchsummary_id = db.Column(db.Integer, db.ForeignKey('pitch_summary.id'), nullable=False)
+    type_of_contact = db.Column(db.Integer)
+    charge_power_up = db.Column(db.Float)
+    charge_power_down = db.Column(db.Float)
+    star_swing_five_star = db.Column(db.Integer)
+    input_direction = db.Column(db.Integer)
+    batter_handedness = db.Column(db.Integer)
+    ball_angle = db.Column(db.String(64))
+    ball_horiz_power = db.Column(db.String(64))
+    ball_vert_power = db.Column(db.String(64))
+    ball_x_velocity = db.Column(db.Float)
+    ball_y_velocity = db.Column(db.Float)
+    ball_z_velocity = db.Column(db.Float)
+    ball_x_pos = db.Column(db.Float)
+    ball_y_pos = db.Column(db.Float)
+    ball_z_pos = db.Column(db.Float)
+    ball_x_pos_upon_hit = db.Column(db.Float)
+    ball_y_pos_upon_hit = db.Column(db.Float)
+
+    fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary_table')
+
+class FieldingSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=False)
+    character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    position = db.Column(db.Integer)
 
 
 # ===== Schema =====
@@ -124,7 +163,7 @@ class UserSchema(ma.Schema):
 class GameSchema(ma.Schema):
   class Meta:
     fields = (
-      'id',
+      'game_id',
       'date_time',
       'ranked',
       'stadium_id',
@@ -134,33 +173,13 @@ class GameSchema(ma.Schema):
       'home_score',
       'innings_selected',
       'innings_played',
-      'home_captain',
-      'home_roster_0',
-      'home_roster_1',
-      'home_roster_2',
-      'home_roster_3',
-      'home_roster_4',
-      'home_roster_5',
-      'home_roster_6',
-      'home_roster_7',
-      'home_roster_8',
-      'away_captain',
-      'away_roster_0',
-      'away_roster_1',
-      'away_roster_2',
-      'away_roster_3',
-      'away_roster_4',
-      'away_roster_5',
-      'away_roster_6',
-      'away_roster_7',
-      'away_roster_8',
       'quitter',
     )
 
-class GameCharacterSchema(ma.Schema):
+class CharacterGameSummarySchema(ma.Schema):
   class Meta:
     fields = (
-      'game_char_id',
+      'id',
       'game_id',
       'team_id',
       'roster_loc',
@@ -198,12 +217,76 @@ class GameCharacterSchema(ma.Schema):
       'star_hits',
     )
 
-user_schema = UserSchema()
+class PitchSummarySchema(ma.Schema):
+  class Meta:
+    fields = (
+      'id',
+      'batter_id',
+      'batter_id',
+      'pitcher_id',
+      'inning',
+      'half_inning',
+      'batter_score',
+      'pitcher_score',
+      'balls',
+      'strikes',
+      'outs',
+      'runner_on_1',
+      'runner_on_2',
+      'runner_on_3',
+      'chem_links_ob',
+      'star_chance',
+      'batter_stars',
+      'pitcher_stars',
+      'pitcher_handedness',
+      'pitch_type',
+      'charge_pitch_type',
+      'star_pitch',
+      'pitch_speed',
+      'type_of_swing',
+      'rbi',
+      'num_outs',
+      'result_inferred',
+      'result_game',
+    )
 
+class ContactSummarySchema(ma.Schema):
+  class Meta:
+    fields = (
+      'id',
+      'pitchsummary_id',
+      'type_of_contact',
+      'charge_power_up',
+      'charge_power_down',
+      'star_swing_five_star',
+      'input_direction',
+      'batter_handedness',
+      'ball_angle',
+      'ball_horiz_power',
+      'ball_vert_power',
+      'ball_x_velocity',
+      'ball_y_velocity',
+      'ball_z_velocity',
+      'ball_x_pos',
+      'ball_y_pos',
+      'ball_z_pos',
+      'ball_x_pos_upon_hit',
+      'ball_y_pos_upon_hit',
+    )
+
+class FieldingSummarySchema(ma.Schema):
+  class Meta:
+    fields = (
+      'id',
+      'contact_summary_id',
+      'character_game_summary_id',
+      'position',
+    )
+
+user_schema = UserSchema()
 game_schema = GameSchema()
 games_schema = GameSchema(many=True)
-
-game_character_schema = GameCharacterSchema()
+character_game_summary_schema = CharacterGameSummarySchema()
 
 # ===== API Routes =====
 @app.route('/')
@@ -286,94 +369,150 @@ def update_rio_key():
             db.session.commit()
             return user_schema.dump(current_user)
     
-# == Game Routes ==
 
+# == Game Routes ==
 @app.route('/game/', methods=['POST'])
 def populate_db():
-
-  game = Game(
-    id = request.json['GameID'],
-    date_time = request.json['Date'],
-    ranked = request.json['Ranked'],
-    stadium_id = request.json['StadiumID'],
-    away_score = request.json['Away Score'],
-    home_score = request.json['Home Score'],
-    innings_selected = request.json['Innings Selected'],
-    innings_played = request.json['Innings Played'],
-    home_captain = request.json['Home Team Captain'],
-    home_roster_0 = request.json['Home Team Roster'][0],
-    home_roster_1 = request.json['Home Team Roster'][1],
-    home_roster_2 = request.json['Home Team Roster'][2],
-    home_roster_3 = request.json['Home Team Roster'][3],
-    home_roster_4 = request.json['Home Team Roster'][4],
-    home_roster_5 = request.json['Home Team Roster'][5],
-    home_roster_6 = request.json['Home Team Roster'][6],
-    home_roster_7 = request.json['Home Team Roster'][7],
-    home_roster_8 = request.json['Home Team Roster'][8],
-    away_captain = request.json['Away Team Captain'],
-    away_roster_0 = request.json['Away Team Roster'][0],
-    away_roster_1 = request.json['Away Team Roster'][1],
-    away_roster_2 = request.json['Away Team Roster'][2],
-    away_roster_3 = request.json['Away Team Roster'][3],
-    away_roster_4 = request.json['Away Team Roster'][4],
-    away_roster_5 = request.json['Away Team Roster'][5],
-    away_roster_6 = request.json['Away Team Roster'][6],
-    away_roster_7 = request.json['Away Team Roster'][7],
-    away_roster_8 = request.json['Away Team Roster'][8],
-    quitter = request.json['Quitter Team'],
-  )
-  db.session.add(game)
-
-
-  # Game Characters
-  player_stats = request.json['Player Stats']
-  for character in player_stats:
-    defensive_stats = character['Defensive Stats']
-    offensive_stats = character['Offensive Stats']
-
-    game_character = GameCharacter(
-      game = game,
-      team_id = 0 if character['Team'] == 'Home' else 1,
-      roster_loc = character['RosterID'],
-      superstar = True if character['Is Starred'] == 1 else False,
-
-      #Defensive stats
-      batters_faced = defensive_stats['Batters Faced'],
-      runs_allowed = defensive_stats['Runs Allowed'],
-      batters_walked = defensive_stats['Batters Walked'],
-      batters_hit = defensive_stats['Batters Hit'],
-      hits_allowed = defensive_stats['Hits Allowed'],
-      homeruns_allowed = defensive_stats['HRs Allowed'],
-      pitches_thrown = defensive_stats['Pitches Thrown'],
-      stamina = defensive_stats['Stamina'],
-      was_pitcher = defensive_stats['Was Pitcher'],
-      batter_outs = defensive_stats['Batter Outs'],
-      strike_outs_pitched = defensive_stats['Strikeouts'],
-      star_pitches_thrown = defensive_stats['Star Pitches Thrown'],
-      big_plays = defensive_stats['Big Plays'],
-      #Rio curated stats
-      innings_pitched = defensive_stats['Innings Pitched'],
-
-      #Offensive Stats
-      at_bats = offensive_stats['At Bats'],
-      hits = offensive_stats['Hits'],
-      singles = offensive_stats['Singles'],
-      doubles = offensive_stats['Doubles'],
-      triples = offensive_stats['Triples'],
-      homeruns = offensive_stats['Homeruns'],
-      strike_outs = offensive_stats['Strikeouts'],
-      walks_bb = offensive_stats['Walks (4 Balls)'],
-      walks_hit = offensive_stats['Walks (Hit)'],
-      rbi = offensive_stats['RBI'],
-      bases_stolen = offensive_stats['Bases Stolen'],
-      star_hits = offensive_stats['Star Hits'],
+    # === Game ===
+    game = Game(
+        game_id = request.json['GameID'],
+        date_time = request.json['Date'],
+        ranked = request.json['Ranked'],
+        stadium_id = request.json['StadiumID'],
+        away_score = request.json['Away Score'],
+        home_score = request.json['Home Score'],
+        innings_selected = request.json['Innings Selected'],
+        innings_played = request.json['Innings Played'],
+        quitter = request.json['Quitter Team'],
     )
+    db.session.add(game)
 
-    db.session.add(game_character)
 
+    # === Character Game Summary ===
+    player_stats = request.json['Player Stats']
+    teams = {
+      'Home': [None] * 9,
+      'Away': [None] * 9,
+    }
+    for character in player_stats:
+        defensive_stats = character['Defensive Stats']
+        offensive_stats = character['Offensive Stats']
 
-  db.session.commit()
-  return game_schema.jsonify(game)
+        character_game_summary = CharacterGameSummary(
+            game = game,
+            team_id = 0 if character['Team'] == 'Home' else 1,
+            roster_loc = character['RosterID'],
+            superstar = True if character['Is Starred'] == 1 else False,
+            batters_faced = defensive_stats['Batters Faced'],
+            runs_allowed = defensive_stats['Runs Allowed'],
+            batters_walked = defensive_stats['Batters Walked'],
+            batters_hit = defensive_stats['Batters Hit'],
+            hits_allowed = defensive_stats['Hits Allowed'],
+            homeruns_allowed = defensive_stats['HRs Allowed'],
+            pitches_thrown = defensive_stats['Pitches Thrown'],
+            stamina = defensive_stats['Stamina'],
+            was_pitcher = defensive_stats['Was Pitcher'],
+            batter_outs = defensive_stats['Batter Outs'],
+            strike_outs_pitched = defensive_stats['Strikeouts'],
+            star_pitches_thrown = defensive_stats['Star Pitches Thrown'],
+            big_plays = defensive_stats['Big Plays'],
+            innings_pitched = defensive_stats['Innings Pitched'],
+            at_bats = offensive_stats['At Bats'],
+            hits = offensive_stats['Hits'],
+            singles = offensive_stats['Singles'],
+            doubles = offensive_stats['Doubles'],
+            triples = offensive_stats['Triples'],
+            homeruns = offensive_stats['Homeruns'],
+            strike_outs = offensive_stats['Strikeouts'],
+            walks_bb = offensive_stats['Walks (4 Balls)'],
+            walks_hit = offensive_stats['Walks (Hit)'],
+            rbi = offensive_stats['RBI'],
+            bases_stolen = offensive_stats['Bases Stolen'],
+            star_hits = offensive_stats['Star Hits'],
+        )
+
+        db.session.add(character_game_summary)
+        db.session.commit()
+
+        teams[character['Team']][character['RosterID']] = character_game_summary
+
+    # === Pitch Summary ===
+    for character in player_stats:
+        for pitch in character['Pitch Summary']:
+            pitch_summary = PitchSummary(
+                batter_id = teams[character['Team']][character['RosterID']].id,
+                pitcher_id = teams['Home' if character['Team'] == 'Away' else 'Away'][pitch["Pitcher Roster Location"]].id,
+                inning = pitch['Inning'],
+                half_inning = pitch['Half Inning'],
+                batter_score = pitch['Batter Score'],
+                pitcher_score = pitch['Fielder Score'],
+                balls = pitch['Balls'],
+                strikes = pitch['Strikes'],
+                outs = pitch['Outs'],
+                runner_on_1 = True if pitch['Runners on Base'][2] == 1 else False,
+                runner_on_2 = True if pitch['Runners on Base'][1] == 1 else False,
+                runner_on_3 = True if pitch['Runners on Base'][0] == 1 else False,
+                chem_links_ob = pitch['Chemistry Links on Base'],
+                star_chance = pitch['Star Chance'],
+                batter_stars = pitch['Batter Stars'],
+                pitcher_stars = pitch['Pitcher Stars'],
+                pitcher_handedness = pitch['Pitcher Handedness'],
+                pitch_type = pitch['Pitch Type'],
+                charge_pitch_type = pitch['Charge Pitch Type'],
+                star_pitch = pitch['Star Pitch'],
+                pitch_speed = pitch['Pitch Speed'],
+                type_of_swing = pitch['Type of Swing'],
+                rbi = pitch['RBI'],
+                num_outs = pitch['Number Outs During Play'],
+                result_inferred = pitch['Final Result - Inferred'],
+                result_game = pitch['Final Result - Game'],
+            )
+
+            db.session.add(pitch_summary)
+            db.session.commit()
+
+            # === Contact Summary === 
+            if pitch['Contact Summary']:
+                contact_summary = ContactSummary(
+                    pitchsummary_id = pitch_summary.id,
+                    type_of_contact = pitch['Contact Summary'][0]['Type of Contact'],
+                    charge_power_up = pitch['Contact Summary'][0]['Charge Power Up'],
+                    charge_power_down = pitch['Contact Summary'][0]['Charge Power Down'],
+                    star_swing_five_star = pitch['Contact Summary'][0]['Star Swing Five-Star'],
+                    input_direction = pitch['Contact Summary'][0]['Input Direction'],
+                    batter_handedness = pitch['Batter Handedness'],
+                    ball_angle = pitch['Contact Summary'][0]['Ball Angle'],
+                    ball_horiz_power = pitch['Contact Summary'][0]['Ball Horizontal Power'],
+                    ball_vert_power = pitch['Contact Summary'][0]['Ball Vertical Power'],
+                    ball_x_velocity = pitch['Contact Summary'][0]['Ball Velocity - X'],
+                    ball_y_velocity = pitch['Contact Summary'][0]['Ball Velocity - Y'],
+                    ball_z_velocity = pitch['Contact Summary'][0]['Ball Velocity - Z'],
+                    ball_x_pos = pitch['Contact Summary'][0]['Ball Acceleration - X'],
+                    ball_y_pos = pitch['Contact Summary'][0]['Ball Acceleration - Y'],
+                    ball_z_pos = pitch['Contact Summary'][0]['Ball Acceleration - Z'],
+                    ball_x_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact- x'],
+                    ball_y_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact- Y'],
+                )
+
+                db.session.add(contact_summary)
+                db.session.commit()
+
+                # === Fielding Summary ===
+                if pitch['Contact Summary'][0]['Fielding Summary']:
+                    fielder_roster_location = pitch['Contact Summary'][0]['Fielding Summary'][0]['Fielder Roster Location']
+                    fielder_team = 'Home' if character['Team'] == 'Away' else 'Away'
+
+                    fielding_summary = FieldingSummary(
+                        contact_summary_id = contact_summary.id,
+                        character_game_summary_id = teams[fielder_team][fielder_roster_location].id,
+                        position = pitch['Contact Summary'][0]['Fielding Summary'][0]['Fielder Position'],
+                    )
+
+                db.session.add(fielding_summary)
+                db.session.commit()
+
+    db.session.commit()
+    return game_schema.jsonify(game)
 
 if __name__ == '__main__':
     app.run(debug=True)

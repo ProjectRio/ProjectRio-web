@@ -4,29 +4,19 @@
 - Install Postman Desktop Client (Broswer client cannot be used to send Requests to localhost servers) : https://www.postman.com/downloads/ 
 - Install DB Browser for SQLite to easily view data in db.sqlite3 https://sqlitebrowser.org/dl/
 
-## Creating a new sqlite3 database
+## Creating a new sqlite3 database and hosting on localhost:5000
 1. Open a terminal of your choice and navigate to project root directory
-2. Delete __pycache__ and db.sqlite3 (if they exist)
-3.  Install dependencies if necessary
+2. Create a new pipenv instance if necessary
 ```console
   foo@bar:~$ pipenv --three
-  foo@bar:~$ pipenv install flask
-  foo@bar:~$ pipenv install flask-marshmallow
-  foo@bar:~$ pipenv install flask-sqlalchemy
-  foo@bar:~$ pipenv install marshmallow-sqlalchemy
 ```
-4. Setup database
-  ```console
-  foo@bar:~$ python3
-  >>> from app import db
-  >>> db.create_all()
-  ```
-
-## Opening app.py on localhost:5000
-1. Open a terminal of your choice and navigate to project root directory
-2. Enter the following into terminal:
+2.  Install dependencies if necessary
 ```console
-  python3 app.py
+  foo@bar:~$ pipenv install
+```
+3. Run reset-script.py to remove previous db.sqlite3 file and setup database/host
+```console
+  foo@bar:~$ python3 reset-script.py
 ```
 
 ## Testing a POST request for /game/
@@ -48,4 +38,3 @@
 1. Open db.sqlite3 file with DB Browser for SQLite
 2. Click browse data
 3. Choose table
-
