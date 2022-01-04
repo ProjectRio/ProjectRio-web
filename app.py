@@ -54,7 +54,7 @@ class Game(db.Model):
     innings_played = db.Column(db.Integer)
     quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
 
-    game_character_summary = db.relationship('CharacterGameSummary', backref='game')
+    character_game_summary = db.relationship('CharacterGameSummary', backref='game')
 
 class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -94,6 +94,36 @@ class CharacterGameSummary(db.Model):
     bases_stolen = db.Column(db.Integer)
     star_hits = db.Column(db.Integer)
 
+    batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
+    pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
+
+class PitchSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    inning = db.Column(db.Integer)
+    half_inning = db.Column(db.Integer)
+    batter_score = db.Column(db.Integer)
+    pitcher_score = db.Column(db.Integer)
+    balls = db.Column(db.Integer)
+    strikes = db.Column(db.Integer)
+    outs = db.Column(db.Integer)
+    runner_on_1 = db.Column(db.Integer)
+    runner_on_2 = db.Column(db.Integer)
+    runner_on_3 = db.Column(db.Integer)
+    chem_links_ob = db.Column(db.Integer)
+    star_chance = db.Column(db.Integer)
+    batter_stars = db.Column(db.Integer)
+    pitcher_stars = db.Column(db.Integer)
+    pitcher_handedness = db.Column(db.Integer)
+    pitch_type = db.Column(db.Integer)
+    charge_pitch_type = db.Column(db.Integer)
+    star_pitch = db.Column(db.Integer)
+    pitch_speed = db.Column(db.Integer)
+    rbi = db.Column(db.Integer)
+    num_outs = db.Column(db.Integer)
+    result_inferred = db.Column(db.Integer)
+    result_game = db.Column(db.Integer)
 
 # ===== Schema =====
 
@@ -156,6 +186,39 @@ class CharacterGameSummarySchema(ma.Schema):
       'rbi',
       'bases_stolen',
       'star_hits',
+    )
+
+
+class PitchSummarySchema(ma.Schema):
+  class Meta:
+    fields = (
+      'id',
+      'batter_id',
+      'batter_id',
+      'pitcher_id',
+      'inning',
+      'half_inning',
+      'batter_score',
+      'pitcher_score',
+      'balls',
+      'strikes',
+      'outs',
+      'runner_on_1',
+      'runner_on_2',
+      'runner_on_3',
+      'chem_links_ob',
+      'star_chance',
+      'batter_stars',
+      'pitcher_stars',
+      'pitcher_handedness',
+      'pitch_type',
+      'charge_pitch_type',
+      'star_pitch',
+      'pitch_speed',
+      'rbi',
+      'num_outs',
+      'result_inferred',
+      'result_game',
     )
 
 user_schema = UserSchema()
@@ -248,6 +311,7 @@ def update_rio_key():
 
 @app.route('/game/', methods=['POST'])
 def populate_db():
+    # === Game ===
     game = Game(
         game_id = request.json['GameID'],
         date_time = request.json['Date'],
@@ -262,8 +326,12 @@ def populate_db():
     db.session.add(game)
 
 
-    # Game Characters
+    # === Character Game Summary ===
     player_stats = request.json['Player Stats']
+    teams = {
+      'Home': [],
+      'Away': [],
+    }
     for character in player_stats:
         defensive_stats = character['Defensive Stats']
         offensive_stats = character['Offensive Stats']
@@ -307,6 +375,45 @@ def populate_db():
         )
 
         db.session.add(character_game_summary)
+        db.session.commit()
+
+        teams[character['Team']].append(character_game_summary)
+
+    # === Pitch Summary ===
+    for character in player_stats:
+        for pitch in character['Pitch Summary']:
+            pitch_summary = PitchSummary(
+                batter_id = teams[character['Team']][character['RosterID']].id,
+                pitcher_id = teams['Home' if character['Team'] == 'Away' else 'Away'][pitch["Pitcher Roster Location"]].id,
+                inning = pitch['Inning'],
+                half_inning = pitch['Half Inning'],
+                batter_score = pitch['Batter Score'],
+                pitcher_score = pitch['Fielder Score'],
+                balls = pitch['Balls'],
+                strikes = pitch['Strikes'],
+                outs = pitch['Outs'],
+                runner_on_1 = True if pitch['Runners on Base'][2] == 1 else False,
+                runner_on_2 = True if pitch['Runners on Base'][1] == 1 else False,
+                runner_on_3 = True if pitch['Runners on Base'][0] == 1 else False,
+                chem_links_ob = pitch['Chemistry Links on Base'],
+                star_chance = pitch['Star Chance'],
+                batter_stars = pitch['Batter Stars'],
+                pitcher_stars = pitch['Pitcher Stars'],
+                pitcher_handedness = pitch['Pitcher Handedness'],
+                pitch_type = pitch['Pitch Type'],
+                charge_pitch_type = pitch['Charge Pitch Type'],
+                star_pitch = pitch['Star Pitch'],
+                pitch_speed = pitch['Pitch Speed'],
+                rbi = pitch['RBI'],
+                num_outs = pitch['Number Outs During Play'],
+                result_inferred = pitch['Final Result - Inferred'],
+                result_game = pitch['Final Result - Game'],
+            )
+
+            db.session.add(pitch_summary)
+            db.session.commit()
+
+      
 
     db.session.commit()
     return game_schema.jsonify(game)
