@@ -91,6 +91,7 @@ class CharacterGameSummary(db.Model):
 
     batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
     pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
+    fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary')
 
 class PitchSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -115,6 +116,7 @@ class PitchSummary(db.Model):
     charge_pitch_type = db.Column(db.Integer)
     star_pitch = db.Column(db.Integer)
     pitch_speed = db.Column(db.Integer)
+    type_of_swing = db.Column(db.String(64))
     rbi = db.Column(db.Integer)
     num_outs = db.Column(db.Integer)
     result_inferred = db.Column(db.Integer)
@@ -143,6 +145,13 @@ class ContactSummary(db.Model):
     ball_x_pos_upon_hit = db.Column(db.Float)
     ball_y_pos_upon_hit = db.Column(db.Float)
 
+    fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary_table')
+
+class FieldingSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=False)
+    character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    position = db.Column(db.Integer)
 
 
 # ===== Schema =====
@@ -234,6 +243,7 @@ class PitchSummarySchema(ma.Schema):
       'charge_pitch_type',
       'star_pitch',
       'pitch_speed',
+      'type_of_swing',
       'rbi',
       'num_outs',
       'result_inferred',
@@ -243,6 +253,7 @@ class PitchSummarySchema(ma.Schema):
 class ContactSummarySchema(ma.Schema):
   class Meta:
     fields = (
+      'id',
       'pitchsummary_id',
       'type_of_contact',
       'charge_power_up',
@@ -261,6 +272,15 @@ class ContactSummarySchema(ma.Schema):
       'ball_z_pos',
       'ball_x_pos_upon_hit',
       'ball_y_pos_upon_hit',
+    )
+
+class FieldingSummarySchema(ma.Schema):
+  class Meta:
+    fields = (
+      'id',
+      'contact_summary_id',
+      'character_game_summary_id',
+      'position',
     )
 
 user_schema = UserSchema()
@@ -371,8 +391,8 @@ def populate_db():
     # === Character Game Summary ===
     player_stats = request.json['Player Stats']
     teams = {
-      'Home': [],
-      'Away': [],
+      'Home': [None] * 9,
+      'Away': [None] * 9,
     }
     for character in player_stats:
         defensive_stats = character['Defensive Stats']
@@ -414,7 +434,7 @@ def populate_db():
         db.session.add(character_game_summary)
         db.session.commit()
 
-        teams[character['Team']].append(character_game_summary)
+        teams[character['Team']][character['RosterID']] = character_game_summary
 
     # === Pitch Summary ===
     for character in player_stats:
@@ -441,6 +461,7 @@ def populate_db():
                 charge_pitch_type = pitch['Charge Pitch Type'],
                 star_pitch = pitch['Star Pitch'],
                 pitch_speed = pitch['Pitch Speed'],
+                type_of_swing = pitch['Type of Swing'],
                 rbi = pitch['RBI'],
                 num_outs = pitch['Number Outs During Play'],
                 result_inferred = pitch['Final Result - Inferred'],
@@ -474,6 +495,21 @@ def populate_db():
                 )
 
                 db.session.add(contact_summary)
+                db.session.commit()
+
+                # === Fielding Summary ===
+                if pitch['Contact Summary'][0]['Fielding Summary']:
+                    fielder_roster_location = pitch['Contact Summary'][0]['Fielding Summary'][0]['Fielder Roster Location']
+                    fielder_team = 'Home' if character['Team'] == 'Away' else 'Away'
+
+                    fielding_summary = FieldingSummary(
+                        contact_summary_id = contact_summary.id,
+                        character_game_summary_id = teams[fielder_team][fielder_roster_location].id,
+                        position = pitch['Contact Summary'][0]['Fielding Summary'][0]['Fielder Position'],
+                    )
+
+                db.session.add(fielding_summary)
+                db.session.commit()
 
     db.session.commit()
     return game_schema.jsonify(game)
