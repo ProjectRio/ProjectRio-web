@@ -62,8 +62,6 @@ class CharacterGameSummary(db.Model):
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8
     superstar = db.Column(db.Boolean)
-
-    # #Defensive stats
     batters_faced = db.Column(db.Integer)
     runs_allowed = db.Column(db.Integer)
     batters_walked = db.Column(db.Integer)
@@ -77,10 +75,7 @@ class CharacterGameSummary(db.Model):
     strike_outs_pitched = db.Column(db.Integer)
     star_pitches_thrown = db.Column(db.Integer)
     big_plays = db.Column(db.Integer)
-    #Rio curated stats
     innings_pitched = db.Column(db.Integer)
-
-    #Offensive Stats
     at_bats = db.Column(db.Integer)
     hits = db.Column(db.Integer)
     singles = db.Column(db.Integer)
@@ -124,6 +119,31 @@ class PitchSummary(db.Model):
     num_outs = db.Column(db.Integer)
     result_inferred = db.Column(db.Integer)
     result_game = db.Column(db.Integer)
+
+    contact_summary = db.relationship('ContactSummary', backref = 'contact_summary')
+
+class ContactSummary(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    pitchsummary_id = db.Column(db.Integer, db.ForeignKey('pitch_summary.id'), nullable=False)
+    type_of_contact = db.Column(db.Integer)
+    charge_power_up = db.Column(db.Float)
+    charge_power_down = db.Column(db.Float)
+    star_swing_five_star = db.Column(db.Integer)
+    input_direction = db.Column(db.Integer)
+    batter_handedness = db.Column(db.Integer)
+    ball_angle = db.Column(db.String(64))
+    ball_horiz_power = db.Column(db.String(64))
+    ball_vert_power = db.Column(db.String(64))
+    ball_x_velocity = db.Column(db.Float)
+    ball_y_velocity = db.Column(db.Float)
+    ball_z_velocity = db.Column(db.Float)
+    ball_x_pos = db.Column(db.Float)
+    ball_y_pos = db.Column(db.Float)
+    ball_z_pos = db.Column(db.Float)
+    ball_x_pos_upon_hit = db.Column(db.Float)
+    ball_y_pos_upon_hit = db.Column(db.Float)
+
+
 
 # ===== Schema =====
 
@@ -188,7 +208,6 @@ class CharacterGameSummarySchema(ma.Schema):
       'star_hits',
     )
 
-
 class PitchSummarySchema(ma.Schema):
   class Meta:
     fields = (
@@ -219,6 +238,29 @@ class PitchSummarySchema(ma.Schema):
       'num_outs',
       'result_inferred',
       'result_game',
+    )
+
+class ContactSummarySchema(ma.Schema):
+  class Meta:
+    fields = (
+      'pitchsummary_id',
+      'type_of_contact',
+      'charge_power_up',
+      'charge_power_down',
+      'star_swing_five_star',
+      'input_direction',
+      'batter_handedness',
+      'ball_angle',
+      'ball_horiz_power',
+      'ball_vert_power',
+      'ball_x_velocity',
+      'ball_y_velocity',
+      'ball_z_velocity',
+      'ball_x_pos',
+      'ball_y_pos',
+      'ball_z_pos',
+      'ball_x_pos_upon_hit',
+      'ball_y_pos_upon_hit',
     )
 
 user_schema = UserSchema()
@@ -307,8 +349,8 @@ def update_rio_key():
             db.session.commit()
             return user_schema.dump(current_user)
     
-# == Game Routes ==
 
+# == Game Routes ==
 @app.route('/game/', methods=['POST'])
 def populate_db():
     # === Game ===
@@ -341,8 +383,6 @@ def populate_db():
             team_id = 0 if character['Team'] == 'Home' else 1,
             roster_loc = character['RosterID'],
             superstar = True if character['Is Starred'] == 1 else False,
-
-            #Defensive stats
             batters_faced = defensive_stats['Batters Faced'],
             runs_allowed = defensive_stats['Runs Allowed'],
             batters_walked = defensive_stats['Batters Walked'],
@@ -356,10 +396,7 @@ def populate_db():
             strike_outs_pitched = defensive_stats['Strikeouts'],
             star_pitches_thrown = defensive_stats['Star Pitches Thrown'],
             big_plays = defensive_stats['Big Plays'],
-            #Rio curated stats
             innings_pitched = defensive_stats['Innings Pitched'],
-
-            #Offensive Stats
             at_bats = offensive_stats['At Bats'],
             hits = offensive_stats['Hits'],
             singles = offensive_stats['Singles'],
@@ -413,7 +450,30 @@ def populate_db():
             db.session.add(pitch_summary)
             db.session.commit()
 
-      
+            # === Contact Summary === 
+            if pitch['Contact Summary']:
+                contact_summary = ContactSummary(
+                    pitchsummary_id = pitch_summary.id,
+                    type_of_contact = pitch['Contact Summary'][0]['Type of Contact'],
+                    charge_power_up = pitch['Contact Summary'][0]['Charge Power Up'],
+                    charge_power_down = pitch['Contact Summary'][0]['Charge Power Down'],
+                    star_swing_five_star = pitch['Contact Summary'][0]['Star Swing Five-Star'],
+                    input_direction = pitch['Contact Summary'][0]['Input Direction'],
+                    batter_handedness = pitch['Batter Handedness'],
+                    ball_angle = pitch['Contact Summary'][0]['Ball Angle'],
+                    ball_horiz_power = pitch['Contact Summary'][0]['Ball Horizontal Power'],
+                    ball_vert_power = pitch['Contact Summary'][0]['Ball Vertical Power'],
+                    ball_x_velocity = pitch['Contact Summary'][0]['Ball Velocity - X'],
+                    ball_y_velocity = pitch['Contact Summary'][0]['Ball Velocity - Y'],
+                    ball_z_velocity = pitch['Contact Summary'][0]['Ball Velocity - Z'],
+                    ball_x_pos = pitch['Contact Summary'][0]['Ball Acceleration - X'],
+                    ball_y_pos = pitch['Contact Summary'][0]['Ball Acceleration - Y'],
+                    ball_z_pos = pitch['Contact Summary'][0]['Ball Acceleration - Z'],
+                    ball_x_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact- x'],
+                    ball_y_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact- Y'],
+                )
+
+                db.session.add(contact_summary)
 
     db.session.commit()
     return game_schema.jsonify(game)
