@@ -1,5 +1,6 @@
 import os.path
 from decouple import config
+import json
 
 import secrets #For key generation
 from flask import Flask, request, jsonify, abort
@@ -35,6 +36,10 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(500))
     rio_key  = db.Column(db.String(50), unique = True)
 
+    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user')
+    away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
+    home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
+
     def __init__(self, in_username, in_email, in_password):
         self.username = in_username
         self.email    = in_email
@@ -43,11 +48,11 @@ class User(db.Model, UserMixin):
 
 class Game(db.Model):
     game_id = db.Column(db.String(255), primary_key = True)
+    away_player_id = db.Column(db.ForeignKey('user.id'), nullable=True) #One-to-One
+    home_player_id = db.Column(db.ForeignKey('user.id'), nullable=True) #One-to-One
     date_time = db.Column(db.String(255))
     ranked = db.Column(db.Integer)
     stadium_id = db.Column(db.String(255))
-    # away_player_id = db.Column(db.ForeignKey('user.rio_key'), nullable=True) #One-to-One
-    # home_player_id = db.Column(db.ForeignKey('user.rio_key'), nullable=True) #One-to-One
     away_score = db.Column(db.Integer)
     home_score = db.Column(db.Integer)
     innings_selected = db.Column(db.Integer)
@@ -59,6 +64,7 @@ class Game(db.Model):
 class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.String(255), db.ForeignKey('game.game_id'), nullable=False)
+    char_id = db.Column(db.String(4), db.ForeignKey('character.char_id'), nullable=False)
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8
     superstar = db.Column(db.Boolean)
@@ -153,6 +159,17 @@ class FieldingSummary(db.Model):
     character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)
 
+class Character(db.Model):
+    char_id = db.Column(db.String(4), primary_key=True)
+    name = db.Column(db.String(16))
+
+    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_character')
+    character_game_summary = db.relationship('CharacterGameSummary', backref = 'character_game_summary_from_character')
+
+class UserCharacterStats(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    char_id = db.Column(db.String(4), db.ForeignKey('character.char_id'), nullable=False)
 
 # ===== Schema =====
 
@@ -167,8 +184,8 @@ class GameSchema(ma.Schema):
       'date_time',
       'ranked',
       'stadium_id',
-      # 'away_player_id',
-      # 'home_player_id',
+      'away_player_id',
+      'home_player_id',
       'away_score',
       'home_score',
       'innings_selected',
@@ -181,11 +198,10 @@ class CharacterGameSummarySchema(ma.Schema):
     fields = (
       'id',
       'game_id',
+      'char_id',
       'team_id',
       'roster_loc',
       'superstar',
-
-      #Defensive stats
       'batters_faced',
       'runs_allowed',
       'batters_walked',
@@ -199,10 +215,7 @@ class CharacterGameSummarySchema(ma.Schema):
       'strike_outs_pitched',
       'star_pitches_thrown',
       'big_plays',
-      #Rio curated stats
       'innings_pitched',
-
-      #Offensive Stats
       'at_bats',
       'hits',
       'singles',
@@ -283,16 +296,47 @@ class FieldingSummarySchema(ma.Schema):
       'position',
     )
 
+class CharacterSchema(ma.Schema):
+  class Meta:
+    fields: (
+        'char_id',
+        'name',
+    )
+
+class UserCharacterStatsSchema(ma.Schema):
+  class Meta:
+    fields: (
+      'id',
+      'user_id',
+      'char_id',
+    )
+
 user_schema = UserSchema()
 game_schema = GameSchema()
-games_schema = GameSchema(many=True)
-character_game_summary_schema = CharacterGameSummarySchema()
+user_character_stats_schema = UserCharacterStatsSchema(many=True)
 
 # ===== API Routes =====
 @app.route('/')
 def index():
     return 'API online...'
 
+# ===== Init DB Routes ===== 
+@app.route('/create_characters/', methods = ['POST'])
+def create_characters():
+    f = open('./json/MSB_Stats_dec.json')
+    character_list = json.load(f)["Characters"]
+
+    for character in character_list:
+        character = Character(
+            char_id = character['Char Id'],
+            name = character['Char Name']
+        )
+
+        db.session.add(character)
+
+    db.session.commit()
+
+    return 'Character tables created...'
 
 # == User Routes ==
 
@@ -329,6 +373,17 @@ def register():
         new_user = User(in_username, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
+
+        # === Create UserCharacterStats tables ===
+        characters = Character.query.all()
+        for character in characters:
+            user_character_stats = UserCharacterStats(
+                user_id = new_user.id,
+                char_id = character.char_id,
+            )
+
+            db.session.add(user_character_stats)
+            db.session.commit()
 
     return user_schema.dump(new_user)
 
@@ -374,8 +429,14 @@ def update_rio_key():
 @app.route('/game/', methods=['POST'])
 def populate_db():
     # === Game ===
+    # Get players from User table
+    home_player = User.query.filter_by(username=request.json['Home Player']).first()
+    away_player = User.query.filter_by(username=request.json['Away Player']).first()
+
     game = Game(
         game_id = request.json['GameID'],
+        away_player_id = away_player.id,
+        home_player_id = home_player.id,
         date_time = request.json['Date'],
         ranked = request.json['Ranked'],
         stadium_id = request.json['StadiumID'],
@@ -401,6 +462,7 @@ def populate_db():
         character_game_summary = CharacterGameSummary(
             game = game,
             team_id = 0 if character['Team'] == 'Home' else 1,
+            char_id = Character.query.filter_by(name=character["Character"]).first().char_id,
             roster_loc = character['RosterID'],
             superstar = True if character['Is Starred'] == 1 else False,
             batters_faced = defensive_stats['Batters Faced'],
