@@ -3,12 +3,16 @@ from decouple import config
 import json
 
 import secrets #For key generation
-from flask import Flask, request, jsonify, abort
+from flask import Flask, Blueprint, request, jsonify, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_marshmallow import Marshmallow
 
 from flask_login      import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from flask_bcrypt     import Bcrypt
+
+from views.test_view import test
+
+# from models.models import Game
 
 
 # ===== Setup =====
@@ -18,7 +22,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'db.sqlite3')
 DB_URI = 'sqlite:///{}'.format(DB_PATH)
 app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
- # Set up the App SECRET_KEY
+# Set up the App SECRET_KEY
 app.config['SECRET_KEY'] = config('SECRET_KEY', default='S#perS3crEt_007')
 
 db = SQLAlchemy(app)
@@ -316,9 +320,11 @@ game_schema = GameSchema()
 user_character_stats_schema = UserCharacterStatsSchema(many=True)
 
 # ===== API Routes =====
-@app.route('/')
-def index():
-    return 'API online...'
+# @app.route('/')
+# def index():
+#     return 'API online...'
+app.register_blueprint(test)
+
 
 # ===== Init DB Routes ===== 
 @app.route('/create_characters/', methods = ['POST'])
