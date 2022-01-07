@@ -1,4 +1,3 @@
-import os.path
 from decouple import config
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
@@ -15,13 +14,7 @@ ma = Marshmallow()
 def init_app():
     # Construct core application
     app = Flask(__name__)
-
-    # Configuration (MOVE TO config.py)
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DB_PATH = os.path.join(BASE_DIR, 'db.sqlite3')
-    DB_URI = 'sqlite:///{}'.format(DB_PATH)
-    app.config['SQLALCHEMY_DATABASE_URI'] = DB_URI
-    app.config['SECRET_KEY'] = config('SECRET_KEY', default='S#perS3crEt_007')
+    app.config.from_pyfile('config.py')
 
     # Initialize Plugins
     db.init_app(app)
