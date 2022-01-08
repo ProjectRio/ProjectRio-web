@@ -4,6 +4,7 @@ import secrets
 
 class Character(db.Model):
     char_id = db.Column(db.String(4), primary_key=True)
+    chemistry_table_id = db.Column(db.ForeignKey('chemistry_table.id'), nullable = False)
     name = db.Column(db.String(16))
     starting_addr = db.Column(db.String(16))
     curve_ball_speed = db.Column(db.String(3))
@@ -30,6 +31,12 @@ class Character(db.Model):
     pitching_stat_bar = db.Column(db.String(1))
     running_stat_bar = db.Column(db.String(1))
     fielding_stat_bar = db.Column(db.String(1))
+    
+    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_character')
+    character_game_summary = db.relationship('CharacterGameSummary', backref = 'character_game_summary_from_character')
+
+class ChemistryTable(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
     mario = db.Column(db.String(3))
     luigi = db.Column(db.String(3))
     dk = db.Column(db.String(3))
@@ -84,9 +91,8 @@ class Character(db.Model):
     dry_bones_b = db.Column(db.String(3))
     bro_f = db.Column(db.String(3))
     bro_b = db.Column(db.String(3))
-    
-    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_character')
-    character_game_summary = db.relationship('CharacterGameSummary', backref = 'character_game_summary_from_character')
+
+    character = db.relationship('Character', backref = 'character')
 
 class User(db.Model, UserMixin):
     id       = db.Column(db.Integer,     primary_key=True)
@@ -95,7 +101,7 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(500))
     rio_key  = db.Column(db.String(50), unique = True)
 
-    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user')
+    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
 
@@ -109,12 +115,12 @@ class UserCharacterStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     char_id = db.Column(db.String(4), db.ForeignKey('character.char_id'), nullable=False)
-
+    num_of_games = db.Column(db.Integer)
 
 class Game(db.Model):
     game_id = db.Column(db.String(255), primary_key = True)
-    away_player_id = db.Column(db.ForeignKey('user.id'), nullable=True) #One-to-One
-    home_player_id = db.Column(db.ForeignKey('user.id'), nullable=True) #One-to-One
+    away_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
+    home_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
     date_time = db.Column(db.String(255))
     ranked = db.Column(db.Integer)
     stadium_id = db.Column(db.String(255))

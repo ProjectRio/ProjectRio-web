@@ -3,7 +3,7 @@ from flask_login import login_user, logout_user, current_user, login_required
 from flask import current_app as app
 import secrets
 from . import lm, bc
-from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary
+from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
 
@@ -17,35 +17,7 @@ def create_character_tables():
     character_list = json.load(f)["Characters"]
 
     for character in character_list:
-        character = Character(
-            char_id = character['Char Id'],
-            name = character['Char Name'],
-            starting_addr = character['Starting Addr'],
-            curve_ball_speed = character['Curve Ball Speed (0x0)'],
-            fast_ball_speed = character['Fast Ball Speed (0x1)'],
-            curve = character['Curve (0x3)'],
-            fielding_arm = character['Fielding Arm (righty:0,lefty:1) (0x26)'],
-            batting_stance = character['Batting Stance (righty:0,lefty:1) (0x27)'],
-            nice_contact_spot_size = character['Nice Contact Spot Size (0x28)'],
-            perfect_contact_spot_size = character['Perfect Contact Spot Size (0x29)'],
-            slap_hit_power = character['Slap Hit Power (0x2a)'],
-            charge_hit_power = character['Charge Hit Power (0x2b)'],
-            bunting = character['Bunting (0x2c)'],
-            hit_trajectory_mpp = character['Hit trajectory (mid:0,pull:1,push:2) (0x2d)'],
-            hit_trajectory_mhl = character['Hit trajectory (mid:0,high:1,low:2) (0x2e)'],
-            speed = character['Speed (0x2f)'],
-            throwing_arm = character['Throwing Arm (0x30)'],
-            character_class = character['Character Class (balance:0,power:1,speed:2,technique:3) (0x31)'],
-            weight = character['Weight (0x32)'],
-            captain = character['Captain (true:1,false:0) (0x33)'],
-            captain_star_hit_or_pitch = character['Captain Star Hit/Pitch (0x34)'],
-            non_captain_star_swing = character['Non Captain Star Swing (1:pop fly,2:grounder,3:line drive) (0x35)'],
-            non_captain_star_pitch = character['Non Captain Star Pitch (0x36)'],
-            batting_stat_bar = character['Batting Stat Bar (0x37)'],
-            pitching_stat_bar = character['Pitching Stat Bar (0x38)'],
-            running_stat_bar = character['Running Stat Bar (0x39)'],
-            fielding_stat_bar = character['Fielding Stat Bar (0x3a)'],
-            # Chemistry tables
+        chemistry_table = ChemistryTable(
             mario = character['Mario (0x3b)'],
             luigi = character['Luigi (0x3c)'],
             dk = character['DK (0x3d)'],
@@ -100,6 +72,40 @@ def create_character_tables():
             dry_bones_b = character['Dry Bones(B) (0x6e)'],
             bro_f = character['Bro(F) (0x6f)'],
             bro_b = character['Bro(B) (0x70)'],
+        )
+
+        db.session.add(chemistry_table)
+        db.session.commit()
+
+        character = Character(
+            char_id = character['Char Id'],
+            chemistry_table_id = chemistry_table.id,
+            name = character['Char Name'],
+            starting_addr = character['Starting Addr'],
+            curve_ball_speed = character['Curve Ball Speed (0x0)'],
+            fast_ball_speed = character['Fast Ball Speed (0x1)'],
+            curve = character['Curve (0x3)'],
+            fielding_arm = character['Fielding Arm (righty:0,lefty:1) (0x26)'],
+            batting_stance = character['Batting Stance (righty:0,lefty:1) (0x27)'],
+            nice_contact_spot_size = character['Nice Contact Spot Size (0x28)'],
+            perfect_contact_spot_size = character['Perfect Contact Spot Size (0x29)'],
+            slap_hit_power = character['Slap Hit Power (0x2a)'],
+            charge_hit_power = character['Charge Hit Power (0x2b)'],
+            bunting = character['Bunting (0x2c)'],
+            hit_trajectory_mpp = character['Hit trajectory (mid:0,pull:1,push:2) (0x2d)'],
+            hit_trajectory_mhl = character['Hit trajectory (mid:0,high:1,low:2) (0x2e)'],
+            speed = character['Speed (0x2f)'],
+            throwing_arm = character['Throwing Arm (0x30)'],
+            character_class = character['Character Class (balance:0,power:1,speed:2,technique:3) (0x31)'],
+            weight = character['Weight (0x32)'],
+            captain = character['Captain (true:1,false:0) (0x33)'],
+            captain_star_hit_or_pitch = character['Captain Star Hit/Pitch (0x34)'],
+            non_captain_star_swing = character['Non Captain Star Swing (1:pop fly,2:grounder,3:line drive) (0x35)'],
+            non_captain_star_pitch = character['Non Captain Star Pitch (0x36)'],
+            batting_stat_bar = character['Batting Stat Bar (0x37)'],
+            pitching_stat_bar = character['Pitching Stat Bar (0x38)'],
+            running_stat_bar = character['Running Stat Bar (0x39)'],
+            fielding_stat_bar = character['Fielding Stat Bar (0x3a)'],
         )
 
         db.session.add(character)
