@@ -104,6 +104,15 @@ class UserCharacterStatsSchema(ma.Schema):
             'user_id',
             'char_id',
             'num_of_games',
+            'at_bats',
+            'hits',
+            'walks',
+            'bases_stolen',
+            'strikeouts',
+            'innings_pitched',
+            'batters_faced',
+            'runs_allowed',
+            'defensive_star_pitches',
         )
 
 class GameSchema(ma.Schema):

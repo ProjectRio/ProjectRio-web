@@ -116,6 +116,15 @@ class UserCharacterStats(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     char_id = db.Column(db.String(4), db.ForeignKey('character.char_id'), nullable=False)
     num_of_games = db.Column(db.Integer)
+    at_bats = db.Column(db.Integer)
+    hits = db.Column(db.Integer)
+    walks = db.Column(db.Integer)
+    bases_stolen = db.Column(db.Integer)
+    strikeouts = db.Column(db.Integer)
+    innings_pitched = db.Column(db.Integer)
+    batters_faced = db.Column(db.Integer)
+    runs_allowed = db.Column(db.Integer)
+    defensive_star_pitches = db.Column(db.Integer)
 
 class Game(db.Model):
     game_id = db.Column(db.String(255), primary_key = True)
