@@ -35,6 +35,38 @@ class Character(db.Model):
     user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_character')
     character_game_summary = db.relationship('CharacterGameSummary', backref = 'character_game_summary_from_character')
 
+    def to_dict(self):
+        return {
+            'char_id': self.char_id,
+            'chemistry_table_id': self.chemistry_table_id,
+            'name': self.name,
+            'starting_addr': self.starting_addr,
+            'curve_ball_speed': self.curve_ball_speed,
+            'fast_ball_speed': self.fast_ball_speed,
+            'curve': self.curve,
+            'fielding_arm': self.fielding_arm,
+            'batting_stance': self.batting_stance,
+            'nice_contact_spot_size': self.nice_contact_spot_size,
+            'perfect_contact_spot_size': self.perfect_contact_spot_size,
+            'slap_hit_power': self.slap_hit_power,
+            'charge_hit_power': self.charge_hit_power,
+            'bunting': self.bunting,
+            'hit_trajectory_mpp': self.hit_trajectory_mpp,
+            'hit_trajectory_mhl': self.hit_trajectory_mhl,
+            'speed': self.speed,
+            'throwing_arm': self.throwing_arm,
+            'character_class': self.character_class,
+            'weight': self.weight,
+            'captain': self.captain,
+            'captain_star_hit_or_pitch': self.captain_star_hit_or_pitch,
+            'non_captain_star_swing': self.non_captain_star_swing,
+            'non_captain_star_pitch': self.non_captain_star_pitch,
+            'batting_stat_bar': self.batting_stat_bar,
+            'pitching_stat_bar': self.pitching_stat_bar,
+            'running_stat_bar': self.running_stat_bar,
+            'fielding_stat_bar': self.fielding_stat_bar,
+        }
+
 class ChemistryTable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     mario = db.Column(db.String(3))
