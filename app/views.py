@@ -382,3 +382,16 @@ def populate_db():
         db.session.commit()
 
     return 'Successfully added...'
+
+
+
+# === Get Characters ===
+@app.route('/characters/', methods = ['GET'])
+def get_characters():
+    characters = []
+    for character in Character.query.all():
+        characters.append(character.to_dict())
+
+    return {
+        'characters': characters
+        }
