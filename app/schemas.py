@@ -98,6 +98,7 @@ class UserSchema(ma.Schema):
           'username',
           'email',
           'rio_key',
+          'private',
       )
 
 class UserCharacterStatsSchema(ma.Schema):
@@ -153,7 +154,7 @@ class CharacterGameSummarySchema(ma.Schema):
             'stamina',
             'was_pitcher',
             'batter_outs',
-            'strike_outs_pitched',
+            'strikeouts_pitched',
             'star_pitches_thrown',
             'big_plays',
             'innings_pitched',
@@ -163,7 +164,7 @@ class CharacterGameSummarySchema(ma.Schema):
             'doubles',
             'triples',
             'homeruns',
-            'strike_outs',
+            'strikeouts',
             'walks_bb',
             'walks_hit',
             'rbi',

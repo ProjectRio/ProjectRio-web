@@ -132,6 +132,7 @@ class User(db.Model, UserMixin):
     email    = db.Column(db.String(120), unique = True)
     password = db.Column(db.String(500))
     rio_key  = db.Column(db.String(50), unique = True)
+    private = db.Column(db.Boolean)
 
     user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
@@ -142,6 +143,7 @@ class User(db.Model, UserMixin):
         self.email    = in_email
         self.password = bc.generate_password_hash(in_password)
         self.rio_key  = secrets.token_urlsafe(32)
+        self.private = True
 
 class UserCharacterStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -222,7 +224,7 @@ class CharacterGameSummary(db.Model):
     stamina = db.Column(db.Integer)
     was_pitcher = db.Column(db.Integer)
     batter_outs = db.Column(db.Integer)
-    strike_outs_pitched = db.Column(db.Integer)
+    strikeouts_pitched = db.Column(db.Integer)
     star_pitches_thrown = db.Column(db.Integer)
     big_plays = db.Column(db.Integer)
     innings_pitched = db.Column(db.Integer)
@@ -232,7 +234,7 @@ class CharacterGameSummary(db.Model):
     doubles = db.Column(db.Integer)
     triples = db.Column(db.Integer)
     homeruns = db.Column(db.Integer)
-    strike_outs = db.Column(db.Integer)
+    strikeouts = db.Column(db.Integer)
     walks_bb = db.Column(db.Integer)
     walks_hit = db.Column(db.Integer)
     rbi = db.Column(db.Integer)

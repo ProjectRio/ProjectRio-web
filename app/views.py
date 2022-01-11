@@ -232,11 +232,12 @@ def populate_db():
     for character in player_stats:
         defensive_stats = character['Defensive Stats']
         offensive_stats = character['Offensive Stats']
+        char_id = Character.query.filter_by(name=character["Character"]).first().char_id
 
         character_game_summary = CharacterGameSummary(
             game_id = game.game_id,
             team_id = 0 if character['Team'] == 'Home' else 1,
-            char_id = Character.query.filter_by(name=character["Character"]).first().char_id,
+            char_id = char_id,
             roster_loc = character['RosterID'],
             superstar = True if character['Is Starred'] == 1 else False,
             batters_faced = defensive_stats['Batters Faced'],
@@ -249,7 +250,7 @@ def populate_db():
             stamina = defensive_stats['Stamina'],
             was_pitcher = defensive_stats['Was Pitcher'],
             batter_outs = defensive_stats['Batter Outs'],
-            strike_outs_pitched = defensive_stats['Strikeouts'],
+            strikeouts_pitched = defensive_stats['Strikeouts'],
             star_pitches_thrown = defensive_stats['Star Pitches Thrown'],
             big_plays = defensive_stats['Big Plays'],
             innings_pitched = defensive_stats['Innings Pitched'],
@@ -259,7 +260,7 @@ def populate_db():
             doubles = offensive_stats['Doubles'],
             triples = offensive_stats['Triples'],
             homeruns = offensive_stats['Homeruns'],
-            strike_outs = offensive_stats['Strikeouts'],
+            strikeouts = offensive_stats['Strikeouts'],
             walks_bb = offensive_stats['Walks (4 Balls)'],
             walks_hit = offensive_stats['Walks (Hit)'],
             rbi = offensive_stats['RBI'],
@@ -271,26 +272,27 @@ def populate_db():
         db.session.commit()
 
         teams[character['Team']][character['RosterID']] = character_game_summary
+
+        # Update CharacterUserStats
+        if character['Team'] == 'Home':
+            user_char_stats = home_player.user_character_stats.filter_by(char_id=char_id).first()
+        else: 
+            user_char_stats = away_player.user_character_stats.filter_by(char_id=char_id).first()
+        user_char_stats.num_of_games += 1
+        user_char_stats.at_bats += character_game_summary.at_bats
+        user_char_stats.hits += character_game_summary.hits
+        user_char_stats.walks += (character['Offensive Stats']['Walks (4 Balls)'] + character['Offensive Stats']['Walks (Hit)'])
+        user_char_stats.bases_stolen += character_game_summary.bases_stolen
+        user_char_stats.strikeouts += character_game_summary.strikeouts
+        user_char_stats.innings_pitched += character_game_summary.innings_pitched
+        user_char_stats.batters_faced += character_game_summary.batters_faced
+        user_char_stats.runs_allowed += character_game_summary.runs_allowed
+        user_char_stats.defensive_star_pitches += character_game_summary.star_pitches_thrown
+
+        db.session.add(user_char_stats)
+        db.session.commit()
         
     for character in player_stats:
-        
-        # Increment CharacterUserStats values
-        if character['Team'] == 'Home':
-            char_user_stats_table = home_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
-        else: 
-            char_user_stats_table = away_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
-        char_user_stats_table.num_of_games += 1
-        char_user_stats_table.at_bats += character['Offensive Stats']['At Bats']
-        char_user_stats_table.hits += character['Offensive Stats']['Hits']
-        char_user_stats_table.walks += (character['Offensive Stats']['Walks (4 Balls)'] + character['Offensive Stats']['Walks (Hit)'])
-        char_user_stats_table.bases_stolen += character['Offensive Stats']['Bases Stolen']
-        char_user_stats_table.strikeouts += character['Offensive Stats']['Strikeouts']
-        char_user_stats_table.innings_pitched += character['Defensive Stats']['Innings Pitched']
-        char_user_stats_table.batters_faced += character['Defensive Stats']['Batters Faced']
-        char_user_stats_table.runs_allowed += character['Defensive Stats']['Runs Allowed']
-        char_user_stats_table.defensive_star_pitches += character['Defensive Stats']['Star Pitches Thrown']
-        
-
         for pitch in character['Pitch Summary']:
             pitch_summary = PitchSummary(
                 batter_id = teams[character['Team']][character['RosterID']].id,
@@ -363,9 +365,6 @@ def populate_db():
 
                 db.session.add(fielding_summary)
                 db.session.commit()
-
-        db.session.add(char_user_stats_table)
-        db.session.commit()
 
     return 'Successfully added...'
 
