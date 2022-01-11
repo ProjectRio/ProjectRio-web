@@ -152,7 +152,8 @@ class UserCharacterStats(db.Model):
     num_of_games = db.Column(db.Integer)
     at_bats = db.Column(db.Integer)
     hits = db.Column(db.Integer)
-    walks = db.Column(db.Integer)
+    walks_bb = db.Column(db.Integer)
+    walks_hit = db.Column(db.Integer)
     bases_stolen = db.Column(db.Integer)
     strikeouts = db.Column(db.Integer)
     innings_pitched = db.Column(db.Integer)
@@ -166,7 +167,8 @@ class UserCharacterStats(db.Model):
         self.num_of_games = 0
         self.at_bats = 0
         self.hits = 0
-        self.walks = 0
+        self.walks_bb = 0
+        self.walks_hit = 0
         self.bases_stolen = 0
         self.strikeouts = 0
         self.innings_pitched = 0
@@ -182,7 +184,8 @@ class UserCharacterStats(db.Model):
             'num_of_games': self.num_of_games,
             'at_bats': self.at_bats,
             'hits': self.hits,
-            'walks': self.walks,
+            'walks_bb': self.walks_bb,
+            'walks_hit': self.walks_hit,
             'bases_stolen': self.bases_stolen,
             'strikeouts': self.strikeouts,
             'innings_pitched': self.innings_pitched,

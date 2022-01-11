@@ -232,12 +232,11 @@ def populate_db():
     for character in player_stats:
         defensive_stats = character['Defensive Stats']
         offensive_stats = character['Offensive Stats']
-        char_id = Character.query.filter_by(name=character["Character"]).first().char_id
 
         character_game_summary = CharacterGameSummary(
             game_id = game.game_id,
             team_id = 0 if character['Team'] == 'Home' else 1,
-            char_id = char_id,
+            char_id = Character.query.filter_by(name=character["Character"]).first().char_id,
             roster_loc = character['RosterID'],
             superstar = True if character['Is Starred'] == 1 else False,
             batters_faced = defensive_stats['Batters Faced'],
@@ -272,27 +271,30 @@ def populate_db():
         db.session.commit()
 
         teams[character['Team']][character['RosterID']] = character_game_summary
+        
+    for character in player_stats:
 
         # Update CharacterUserStats
         if character['Team'] == 'Home':
-            user_char_stats = home_player.user_character_stats.filter_by(char_id=char_id).first()
+            user_char_stats = home_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
+            character_game_summary = teams['Home'][character['RosterID']]
         else: 
-            user_char_stats = away_player.user_character_stats.filter_by(char_id=char_id).first()
+            user_char_stats = away_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
+            character_game_summary = teams['Away'][character['RosterID']]
+
         user_char_stats.num_of_games += 1
         user_char_stats.at_bats += character_game_summary.at_bats
         user_char_stats.hits += character_game_summary.hits
-        user_char_stats.walks += (character['Offensive Stats']['Walks (4 Balls)'] + character['Offensive Stats']['Walks (Hit)'])
+        user_char_stats.walks_bb += character_game_summary.walks_bb
+        user_char_stats.walks_hit += character_game_summary.walks_hit
         user_char_stats.bases_stolen += character_game_summary.bases_stolen
         user_char_stats.strikeouts += character_game_summary.strikeouts
         user_char_stats.innings_pitched += character_game_summary.innings_pitched
         user_char_stats.batters_faced += character_game_summary.batters_faced
         user_char_stats.runs_allowed += character_game_summary.runs_allowed
-        user_char_stats.defensive_star_pitches += character_game_summary.star_pitches_thrown
+        user_char_stats.defensive_star_pitches += character_game_summary.star_pitches_thrown       
 
-        db.session.add(user_char_stats)
-        db.session.commit()
-        
-    for character in player_stats:
+
         for pitch in character['Pitch Summary']:
             pitch_summary = PitchSummary(
                 batter_id = teams[character['Team']][character['RosterID']].id,
@@ -365,6 +367,9 @@ def populate_db():
 
                 db.session.add(fielding_summary)
                 db.session.commit()
+
+        db.session.add(user_char_stats)
+        db.session.commit()
 
     return 'Successfully added...'
 
