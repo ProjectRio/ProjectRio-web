@@ -3,34 +3,37 @@ from . import ma
 class CharacterSchema(ma.Schema):
     class Meta:
       fields: (
-          'char_id',
-          'name',
-          'starting_addr',
-          'curve_ball_speed',
-          'fast_ball_speed',
-          'curve',
-          'fielding_arm',
-          'batting_stance',
-          'nice_contact_spot_size',
-          'perfect_contact_spot_size',
-          'slap_hit_power',
-          'charge_hit_power',
-          'bunting',
-          'hit_trajectory_mpp',
-          'hit_trajectory_mhl',
-          'speed',
-          'throwing_arm',
-          'character_class',
-          'weight',
-          'non_captain_star_swing',
-          'non_captain_star_pitch',
-          'batting_stat_bar',
-          'pitching_stat_bar',
-          'running_stat_bar',
-          'fielding_stat_bar',
+            'char_id',
+            'chemistry_table_id',
+            'name',
+            'starting_addr',
+            'curve_ball_speed',
+            'fast_ball_speed',
+            'curve',
+            'fielding_arm',
+            'batting_stance',
+            'nice_contact_spot_size',
+            'perfect_contact_spot_size',
+            'slap_hit_power',
+            'charge_hit_power',
+            'bunting',
+            'hit_trajectory_mpp',
+            'hit_trajectory_mhl',
+            'speed',
+            'throwing_arm',
+            'character_class',
+            'weight',
+            'captain',
+            'captain_star_hit_or_pitch',
+            'non_captain_star_swing',
+            'non_captain_star_pitch',
+            'batting_stat_bar',
+            'pitching_stat_bar',
+            'running_stat_bar',
+            'fielding_stat_bar',
       )
 
-class ChemistryTable(ma.Schema):
+class ChemistryTableSchema(ma.Schema):
     class Meta:
         fields = (
             'mario',
@@ -225,3 +228,11 @@ class ContactSummarySchema(ma.Schema):
             'ball_y_pos_upon_hit',
         )
 
+class FieldingSummarySchema(ma.Schema):
+    class Meta:
+        fields = (
+            'id',
+            'contact_summary_id',
+            'fielder_character_game_summary_id',
+            'position',
+        )
