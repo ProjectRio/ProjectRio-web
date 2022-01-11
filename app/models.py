@@ -57,7 +57,7 @@ class Character(db.Model):
             'throwing_arm': self.throwing_arm,
             'character_class': self.character_class,
             'weight': self.weight,
-            'captain': self.captain,
+            'captain': 'True' if self.captain == '1' else 'False',
             'captain_star_hit_or_pitch': self.captain_star_hit_or_pitch,
             'non_captain_star_swing': self.non_captain_star_swing,
             'non_captain_star_pitch': self.non_captain_star_pitch,
@@ -157,6 +157,20 @@ class UserCharacterStats(db.Model):
     batters_faced = db.Column(db.Integer)
     runs_allowed = db.Column(db.Integer)
     defensive_star_pitches = db.Column(db.Integer)
+
+    def __init__(self, user_id, char_id):
+        self.user_id = user_id
+        self.char_id = char_id
+        self.num_of_games = 0
+        self.at_bats = 0
+        self.hits = 0
+        self.walks = 0
+        self.bases_stolen = 0
+        self.strikeouts = 0
+        self.innings_pitched = 0
+        self.batters_faced = 0
+        self.runs_allowed = 0
+        self.defensive_star_pitches = 0
 
     def to_dict(self): 
         return {
@@ -286,5 +300,5 @@ class ContactSummary(db.Model):
 class FieldingSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=False)
-    character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)

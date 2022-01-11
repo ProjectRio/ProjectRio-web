@@ -154,21 +154,7 @@ def register():
         # === Create UserCharacterStats tables ===
         characters = Character.query.all()
         for character in characters:
-            user_character_stats = UserCharacterStats(
-                user_id = new_user.id,
-                char_id = character.char_id,
-                num_of_games = 0,
-                at_bats = 0,
-                hits = 0,
-                walks = 0,
-                bases_stolen = 0,
-                innings_pitched = 0,
-                strikeouts = 0,
-                batters_faced = 0,
-                runs_allowed = 0,
-                defensive_star_pitches = 0,
-            )
-
+            user_character_stats = UserCharacterStats(new_user.id, character.char_id)
             db.session.add(user_character_stats)
             db.session.commit()
 
@@ -371,7 +357,7 @@ def populate_db():
 
                     fielding_summary = FieldingSummary(
                         contact_summary_id = contact_summary.id,
-                        character_game_summary_id = teams[fielder_team][fielder_roster_location].id,
+                        fielder_character_game_summary_id = teams[fielder_team][fielder_roster_location].id,
                         position = pitch['Contact Summary'][0]['Fielding Summary'][0]['Fielder Position'],
                     )
 
@@ -397,7 +383,7 @@ def get_characters():
         }
 
 @app.route('/user_characters/<user>', methods = ['GET'])
-def get_history(user):
+def get_user_character_stats(user):
     characters = []
     user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
     
