@@ -158,6 +158,24 @@ class UserCharacterStats(db.Model):
     runs_allowed = db.Column(db.Integer)
     defensive_star_pitches = db.Column(db.Integer)
 
+    def to_dict(self): 
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'char_id': self.char_id,
+            'num_of_games': self.num_of_games,
+            'at_bats': self.at_bats,
+            'hits': self.hits,
+            'walks': self.walks,
+            'bases_stolen': self.bases_stolen,
+            'strikeouts': self.strikeouts,
+            'innings_pitched': self.innings_pitched,
+            'batters_faced': self.batters_faced,
+            'runs_allowed': self.runs_allowed,
+            'defensive_star_pitches': self.defensive_star_pitches,
+        }
+        
+
 class Game(db.Model):
     game_id = db.Column(db.String(255), primary_key = True)
     away_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
