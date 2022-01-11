@@ -395,3 +395,15 @@ def get_characters():
     return {
         'characters': characters
         }
+
+@app.route('/user_characters/<user>', methods = ['GET'])
+def get_history(user):
+    characters = []
+    user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
+    
+    for character in user_characters:
+        characters.append(character.to_dict())
+    
+    return {
+        'User Characters': characters
+        }
