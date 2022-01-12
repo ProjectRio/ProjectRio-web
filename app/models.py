@@ -161,21 +161,21 @@ class UserCharacterStats(db.Model):
     strikeouts = db.Column(db.Integer)
     bases_stolen = db.Column(db.Integer)
     double_plays = db.Column(db.Integer)
-    offensive_stars_swings = db.Column(db.Integer)
+    offensive_star_swings = db.Column(db.Integer)
     offensive_stars_used = db.Column(db.Integer)
-    offensive_star_put_in_play = db.Column(db.Integer)
-    offensive_stars_success = db.Column(db.Integer)
+    offensive_stars_put_in_play = db.Column(db.Integer)
+    offensive_star_successes = db.Column(db.Integer)
     offensive_star_chances = db.Column(db.Integer)
-    offensive_stars_chances_won = db.Column(db.Integer)
+    offensive_star_chances_won = db.Column(db.Integer)
     strikeouts_pitched = db.Column(db.Integer)
     innings_pitched = db.Column(db.Integer)
     batters_faced = db.Column(db.Integer)
     runs_allowed = db.Column(db.Integer)
     defensive_star_pitches = db.Column(db.Integer)
     defensive_stars_used = db.Column(db.Integer)
-    defensive_stars_success = db.Column(db.Integer)
+    defensive_star_successes = db.Column(db.Integer)
     defensive_star_chances = db.Column(db.Integer)
-    defensive_stars_chances_won = db.Column(db.Integer)
+    defensive_star_chances_won = db.Column(db.Integer)
 
     def __init__(self, user_id, char_id):
         self.user_id = user_id
@@ -191,21 +191,22 @@ class UserCharacterStats(db.Model):
         self.walks_hit = 0
         self.strikeouts = 0
         self.bases_stolen = 0
-        self.offensive_stars_swings = 0
+        self.double_plays = 0
+        self.offensive_star_swings = 0
         self.offensive_stars_used = 0
-        self.offensive_star_put_in_play = 0
-        self.offensive_stars_success = 0
+        self.offensive_stars_put_in_play = 0
+        self.offensive_star_successes = 0
         self.offensive_star_chances = 0
-        self.offensive_stars_chances_won = 0
+        self.offensive_star_chances_won = 0
         self.strikeouts_pitched = 0
         self.innings_pitched = 0
         self.batters_faced = 0
         self.runs_allowed = 0
         self.defensive_star_pitches = 0
         self.defensive_stars_used = 0
-        self.defensive_stars_success = 0
+        self.defensive_star_successes = 0
         self.defensive_star_chances = 0
-        self.defensive_stars_chances_won = 0
+        self.defensive_star_chances_won = 0
 
     def to_dict(self): 
         return {
@@ -215,14 +216,32 @@ class UserCharacterStats(db.Model):
             'num_of_games': self.num_of_games,
             'at_bats': self.at_bats,
             'hits': self.hits,
+            'singles': self.singles,
+            'doubles': self.doubles,
+            'triples': self.triples,
+            'homeruns': self.homeruns,
             'walks_bb': self.walks_bb,
             'walks_hit': self.walks_hit,
-            'bases_stolen': self.bases_stolen,
             'strikeouts': self.strikeouts,
+            'bases_stolen': self.bases_stolen,
+            'double_plays': self.double_plays,
+            'offensive_star_swings': self.offensive_star_swings,
+            'offensive_stars_used': self.offensive_stars_used,
+            'offensive_stars_put_in_play': self.offensive_stars_put_in_play,
+            'offensive_star_successes': self.offensive_star_successes,
+            'offensive_star_chances': self.offensive_star_chances,
+            'offensive_star_chances_won': self.offensive_star_chances_won,
+            'strikeouts_pitched': self.strikeouts,
             'innings_pitched': self.innings_pitched,
             'batters_faced': self.batters_faced,
             'runs_allowed': self.runs_allowed,
             'defensive_star_pitches': self.defensive_star_pitches,
+            'defensive_stars_used': self.defensive_stars_used,
+            'defensive_star_successes': self.defensive_star_successes,
+            'defensive_star_chances': self.defensive_star_chances,
+            'defensive_stars_chance_won': self.defensive_star_chances_won
+
+            #TODO Add calculated stats
         }
         
 
