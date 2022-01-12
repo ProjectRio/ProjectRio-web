@@ -7,6 +7,8 @@ from .models import db, User, Character, UserCharacterStats, Game, CharacterGame
 from .schemas import UserSchema
 import json
 
+from .consts import *
+
 # Schemas
 user_schema = UserSchema()
 
@@ -277,23 +279,26 @@ def populate_db():
         # Update CharacterUserStats
         if character['Team'] == 'Home':
             user_char_stats = home_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
-            character_game_summary = teams['Home'][character['RosterID']]
+            batting_character_game_summary = teams['Home'][character['RosterID']]
         else: 
             user_char_stats = away_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
-            character_game_summary = teams['Away'][character['RosterID']]
-
+            batting_character_game_summary = teams['Away'][character['RosterID']]
+        
         user_char_stats.num_of_games += 1
-        user_char_stats.at_bats += character_game_summary.at_bats
-        user_char_stats.hits += character_game_summary.hits
-        user_char_stats.walks_bb += character_game_summary.walks_bb
-        user_char_stats.walks_hit += character_game_summary.walks_hit
-        user_char_stats.bases_stolen += character_game_summary.bases_stolen
-        user_char_stats.strikeouts += character_game_summary.strikeouts
-        user_char_stats.innings_pitched += character_game_summary.innings_pitched
-        user_char_stats.batters_faced += character_game_summary.batters_faced
-        user_char_stats.runs_allowed += character_game_summary.runs_allowed
-        user_char_stats.defensive_star_pitches += character_game_summary.star_pitches_thrown       
-
+        user_char_stats.at_bats += batting_character_game_summary.at_bats
+        user_char_stats.hits += batting_character_game_summary.hits
+        user_char_stats.singles += batting_character_game_summary.singles
+        user_char_stats.doubles += batting_character_game_summary.doubles
+        user_char_stats.triples += batting_character_game_summary.triples
+        user_char_stats.homeruns += batting_character_game_summary.homeruns
+        user_char_stats.walks_bb += batting_character_game_summary.walks_bb
+        user_char_stats.walks_hit += batting_character_game_summary.walks_hit
+        user_char_stats.strikeouts += batting_character_game_summary.strikeouts
+        user_char_stats.bases_stolen += batting_character_game_summary.bases_stolen
+        user_char_stats.strikeouts_pitched += batting_character_game_summary.strikeouts_pitched
+        user_char_stats.innings_pitched += batting_character_game_summary.innings_pitched
+        user_char_stats.batters_faced += batting_character_game_summary.batters_faced
+        user_char_stats.runs_allowed += batting_character_game_summary.runs_allowed
 
         for pitch in character['Pitch Summary']:
             pitch_summary = PitchSummary(
@@ -325,6 +330,57 @@ def populate_db():
                 result_game = pitch['Final Result - Game'],
             )
 
+
+            strike_or_strikeout_or_foul = ((pitch['Final Result - Inferred'] == "Strike-looking")
+                                        or (pitch['Final Result - Inferred'] == "Strike-swing")
+                                        or (pitch['Final Result - Inferred'] == "Strike-bunting")
+                                        or (pitch['Final Result - Inferred'] == "Foul")
+                                        or (pitch['Final Result - Game'] == "1"))
+            
+            # Get pitchers user_char_stats
+            if character['Team'] == 'Home':
+                pitcher_user_char_stats = home_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=pitch["PitcherID"]).first().char_id).first()
+            else: 
+                pitcher_user_char_stats = away_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=pitch["PitcherID"]).first().char_id).first()
+            
+            # == Offensive Star Use ==
+            star_swing = pitch['Type of Swing'] == 'Star'
+            star_cost = 1
+            #if (captain_char and !captain):
+            #    star_cost = 2
+            user_char_stats.offensive_star_swings += star_swing
+            user_char_stats.offensive_stars_used += star_swing * star_cost
+            #Star landed and batter got on base
+            if ((int(pitch['Final Result - Game']) in cPLAY_RESULT_SAFE.keys()) 
+             or (int(pitch['Final Result - Game']) in cPLAY_RESULT_BUNT.keys() and pitch['Number Outs During Play'] == 0)):
+                user_char_stats.offensive_star_successes += star_swing
+                user_char_stats.offensive_star_chances_won += pitch['Star Chance']
+
+            if (int(pitch['Final Result - Game']) in cPLAY_RESULT_OUT.keys()):
+                pitcher_user_char_stats.defensive_star_chances_won += pitch['Star Chance']
+                        
+            user_char_stats.offensive_stars_put_in_play += star_swing and not strike_or_strikeout_or_foul
+
+            user_char_stats.double_plays += int(pitch['Number Outs During Play'] >= 2)
+
+
+            # == Defensive Star Use ==
+            star_pitch = pitch['Star Pitch']
+            star_cost = 1
+            #if (captain_char and !captain):
+            #    star_cost = 2
+            pitcher_user_char_stats.defensive_star_pitches   += star_pitch
+            pitcher_user_char_stats.defensive_stars_used     += star_pitch * star_cost
+            pitcher_user_char_stats.defensive_star_successes += int(star_pitch and strike_or_strikeout_or_foul)
+
+            #Play is over, see if AB was a star chance
+            if int(pitch['Final Result - Game']) not in cPLAY_RESULT_INVLD:
+                user_char_stats.offensive_star_chances += pitch['Star Chance']
+                pitcher_user_char_stats.defensive_star_chances += pitch['Star Chance']
+
+
+            db.session.add(user_char_stats)
+            db.session.add(pitcher_user_char_stats)
             db.session.add(pitch_summary)
             db.session.commit()
 
