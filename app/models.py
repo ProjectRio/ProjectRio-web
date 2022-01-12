@@ -152,14 +152,30 @@ class UserCharacterStats(db.Model):
     num_of_games = db.Column(db.Integer)
     at_bats = db.Column(db.Integer)
     hits = db.Column(db.Integer)
+    singles = db.Column(db.Integer)
+    doubles = db.Column(db.Integer)
+    triples = db.Column(db.Integer)
+    homeruns = db.Column(db.Integer)
     walks_bb = db.Column(db.Integer)
     walks_hit = db.Column(db.Integer)
-    bases_stolen = db.Column(db.Integer)
     strikeouts = db.Column(db.Integer)
+    bases_stolen = db.Column(db.Integer)
+    double_plays = db.Column(db.Integer)
+    offensive_stars_swings = db.Column(db.Integer)
+    offensive_stars_used = db.Column(db.Integer)
+    offensive_star_put_in_play = db.Column(db.Integer)
+    offensive_stars_success = db.Column(db.Integer)
+    offensive_star_chances = db.Column(db.Integer)
+    offensive_stars_chances_won = db.Column(db.Integer)
+    strikeouts_pitched = db.Column(db.Integer)
     innings_pitched = db.Column(db.Integer)
     batters_faced = db.Column(db.Integer)
     runs_allowed = db.Column(db.Integer)
     defensive_star_pitches = db.Column(db.Integer)
+    defensive_stars_used = db.Column(db.Integer)
+    defensive_stars_success = db.Column(db.Integer)
+    defensive_star_chances = db.Column(db.Integer)
+    defensive_stars_chances_won = db.Column(db.Integer)
 
     def __init__(self, user_id, char_id):
         self.user_id = user_id
@@ -167,14 +183,29 @@ class UserCharacterStats(db.Model):
         self.num_of_games = 0
         self.at_bats = 0
         self.hits = 0
+        self.singles = 0
+        self.doubles = 0
+        self.triples = 0
+        self.homeruns = 0
         self.walks_bb = 0
         self.walks_hit = 0
-        self.bases_stolen = 0
         self.strikeouts = 0
+        self.bases_stolen = 0
+        self.offensive_stars_swings = 0
+        self.offensive_stars_used = 0
+        self.offensive_star_put_in_play = 0
+        self.offensive_stars_success = 0
+        self.offensive_star_chances = 0
+        self.offensive_stars_chances_won = 0
+        self.strikeouts_pitched = 0
         self.innings_pitched = 0
         self.batters_faced = 0
         self.runs_allowed = 0
         self.defensive_star_pitches = 0
+        self.defensive_stars_used = 0
+        self.defensive_stars_success = 0
+        self.defensive_star_chances = 0
+        self.defensive_stars_chances_won = 0
 
     def to_dict(self): 
         return {
