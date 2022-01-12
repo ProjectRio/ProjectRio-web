@@ -1,6 +1,7 @@
 from flask import request, jsonify, abort
 from flask_login import login_user, logout_user, current_user, login_required
 from flask import current_app as app
+from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, unset_jwt_cookies
 import secrets
 from . import lm, bc
 from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
@@ -123,12 +124,13 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # Logout user
-@app.route('/logout/')
+@app.route('/logout/', methods=['POST'])
 def logout():
     logout_user()
     
-    resp = jsonify(success=True)
-    return resp
+    response = jsonify({'msg': 'logout successful'})
+    unset_jwt_cookies(response)
+    return response
 
 @app.route('/register/', methods=['POST'])
 def register():    
@@ -177,7 +179,16 @@ def login():
         user_to_login = user if user else user_by_email
         if bc.check_password_hash(user_to_login.password, in_password):
             login_user(user_to_login)
-            return user_schema.dump(user_to_login)
+            
+            # Creating JWT and Cookies
+            response = jsonify({
+                'msg': 'login successful',
+                'username': user.username,
+            })
+            access_token = create_access_token(identity=user.username)
+            set_access_cookies(response, access_token)
+
+            return response
         else:
             return abort(401, description='Incorrect password')
     else:
@@ -397,3 +408,9 @@ def get_user_character_stats(user):
     return {
         'User Characters': characters
         }
+
+@app.route('/validate_cookies/', methods = ['POST'])
+@jwt_required()
+def validate_cookies():
+    current_user = get_jwt_identity()
+    return jsonify(logged_in_as=current_user)
