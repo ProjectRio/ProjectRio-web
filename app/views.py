@@ -209,7 +209,7 @@ def populate_db():
     away_player = User.query.filter_by(username=request.json['Away Player']).first()
 
     game = Game(
-        game_id = request.json['GameID'],
+        game_id = request.json['GameID'].replace(',', ''),
         away_player_id = away_player.id,
         home_player_id = home_player.id,
         date_time = request.json['Date'],
