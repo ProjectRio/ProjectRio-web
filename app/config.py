@@ -11,8 +11,9 @@ SQLALCHEMY_TRACK_MODIFICATIONS = False
 DEBUG = True
 
 JWT_SECRET_KEY = 'S#perS3crEt_008'
-JWT_TOKEN_LOCATION = ['headers','cookies']
+JWT_TOKEN_LOCATION = ['cookies']
 
 # Must be true in production
 JWT_COOKIE_SECURE = True
 JWT_COOKIE_CSRF_PROTECT = True
+JWT_ACCESS_TOKEN_EXPIRES = 1209600 #2 weeks as seconds
