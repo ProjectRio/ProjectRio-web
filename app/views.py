@@ -1,9 +1,8 @@
 from flask import request, jsonify, abort
-from flask_login import login_user, logout_user, current_user, login_required
 from flask import current_app as app
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, unset_jwt_cookies
 import secrets
-from . import lm, bc
+from . import bc
 from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
@@ -118,20 +117,6 @@ def create_character_tables():
 
 
 # == User Routes ==
-# provide login manager with load_user callback
-@lm.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-# Logout user
-@app.route('/logout/', methods=['POST'])
-def logout():
-    logout_user()
-    
-    response = jsonify({'msg': 'logout successful'})
-    unset_jwt_cookies(response)
-    return response
-
 @app.route('/register/', methods=['POST'])
 def register():    
     in_username = request.json['Username']
@@ -162,7 +147,8 @@ def register():
 
     return user_schema.dump(new_user)
 
-# Authenticate user, login via username or email
+
+# Authenticate user, create new JWTs, login via username or email
 @app.route('/login/', methods=['POST'])
 def login():
     in_username = request.json['Username']
@@ -177,9 +163,7 @@ def login():
 
     if user or user_by_email:
         user_to_login = user if user else user_by_email
-        if bc.check_password_hash(user_to_login.password, in_password):
-            login_user(user_to_login)
-            
+        if bc.check_password_hash(user_to_login.password, in_password):            
             # Creating JWT and Cookies
             response = jsonify({
                 'msg': 'login successful',
@@ -194,19 +178,32 @@ def login():
     else:
         return abort(406, description='User does not exist')
 
+
+# Revoke JWTs
+@app.route('/logout/', methods=['POST'])
+def logout():    
+    response = jsonify({'msg': 'logout successful'})
+    unset_jwt_cookies(response)
+    return response
+
+
 #GET will retreive user key, POST with empty JSON will generate new rio key and return it
 @app.route('/key/', methods=['GET', 'POST'])
-@login_required
+@jwt_required()
 def update_rio_key():
-    if current_user.is_authenticated:
-        # Return Key
-        if request.method == 'GET':
-            return user_schema.dump(current_user)
-        # Generate new key and return it
-        elif request.method == 'POST':
-            current_user.rio_key  = secrets.token_urlsafe(32)            
-            db.session.commit()
-            return user_schema.dump(current_user)
+    current_user_username = get_jwt_identity()
+    current_user = User.query.filter_by(username=current_user_username).first()
+
+    if request.method == 'GET':
+        return jsonify({
+            "key": current_user.rio_key
+        })
+    elif request.method == 'POST':
+        current_user.rio_key = secrets.token_urlsafe(32)
+        db.session.commit()
+        return jsonify({
+            "key": current_user.rio_key
+        })
 
 
 
@@ -398,6 +395,7 @@ def get_characters():
         }
 
 @app.route('/user_characters/<user>', methods = ['GET'])
+@jwt_required()
 def get_user_character_stats(user):
     characters = []
     user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
@@ -409,8 +407,8 @@ def get_user_character_stats(user):
         'User Characters': characters
         }
 
-@app.route('/validate_cookies/', methods = ['POST'])
+@app.route('/validate_cookies/', methods = ['GET'])
 @jwt_required()
 def validate_cookies():
-    current_user = get_jwt_identity()
-    return jsonify(logged_in_as=current_user)
+    current_user_username = get_jwt_identity()
+    return jsonify(logged_in_as=current_user_username)
