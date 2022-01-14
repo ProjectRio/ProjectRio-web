@@ -383,7 +383,17 @@ def populate_db():
 
 
 
-# === Get Characters ===
+# === FRONT END REQUESTS ===
+@app.route('/get_user_info/<user>', methods = ['GET'])
+def get_user_info(user):
+    username_from_arg = request.view_args['user'].lower()
+    user = User.query.filter(db.func.lower(User.username) == username_from_arg).first()
+
+    return {
+        "username": user.username,
+        "private": user.private
+    }
+
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
     characters = []
