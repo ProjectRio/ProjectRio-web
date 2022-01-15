@@ -120,21 +120,22 @@ def create_character_tables():
 @app.route('/register/', methods=['POST'])
 def register():    
     in_username = request.json['Username']
+    username_lowercase = in_username.lower()
     in_password = request.json['Password']
-    in_email    = request.json['Email']
+    in_email    = request.json['Email'].lower()
 
     # filter User out of database through username
-    user = User.query.filter_by(username=in_username).first()
+    user = User.query.filter_by(username_lowercase=username_lowercase).first()
 
     # filter User out of database through email
     user_by_email = User.query.filter_by(email=in_email).first()
 
     if user or user_by_email:
-        return abort(409, description='Username has already been taken')
+        return abort(409, description='Username or Email has already been taken')
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
     else:
-        new_user = User(in_username, in_email, in_password)
+        new_user = User(in_username, username_lowercase, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
 
@@ -145,25 +146,27 @@ def register():
             db.session.add(user_character_stats)
             db.session.commit()
 
-    return user_schema.dump(new_user)
+    return jsonify({
+        'riokey': new_user.rio_key,
+        'username': new_user.username
+    })
 
 
 # Authenticate user, create new JWTs, login via username or email
 @app.route('/login/', methods=['POST'])
 def login():
-    in_username = request.json['Username']
+    in_username = request.json['Username'].lower()
     in_password = request.json['Password']
-    in_email    = request.json['Email']
+    in_email    = request.json['Email'].lower()
 
     # filter User out of database through username
-    user = User.query.filter_by(username=in_username).first()
+    user = User.query.filter_by(username_lowercase=in_username).first()
 
     # filter User out of database through email
     user_by_email = User.query.filter_by(email=in_email).first()
 
-    if user or user_by_email:
-        user_to_login = user if user else user_by_email
-        if bc.check_password_hash(user_to_login.password, in_password):            
+    if user == user_by_email:
+        if bc.check_password_hash(user.password, in_password):            
             # Creating JWT and Cookies
             response = jsonify({
                 'msg': 'login successful',
@@ -176,7 +179,7 @@ def login():
         else:
             return abort(401, description='Incorrect password')
     else:
-        return abort(406, description='User does not exist')
+        return abort(408, description='User does not exist')
 
 
 # Revoke JWTs
@@ -196,13 +199,13 @@ def update_rio_key():
 
     if request.method == 'GET':
         return jsonify({
-            "key": current_user.rio_key
+            "riokey": current_user.rio_key
         })
     elif request.method == 'POST':
         current_user.rio_key = secrets.token_urlsafe(32)
         db.session.commit()
         return jsonify({
-            "key": current_user.rio_key
+            "riokey": current_user.rio_key
         })
 
 
@@ -386,13 +389,16 @@ def populate_db():
 # === FRONT END REQUESTS ===
 @app.route('/get_user_info/<user>', methods = ['GET'])
 def get_user_info(user):
-    username_from_arg = request.view_args['user'].lower()
-    user = User.query.filter(db.func.lower(User.username) == username_from_arg).first()
+    in_username_lowercase = user.lower()
+    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
 
-    return {
-        "username": user.username,
-        "private": user.private
-    }
+    if not user:
+        return abort(408, description='User does not exist')
+    else:
+        return {
+            "username": user.username,
+            "private": user.private
+        }
 
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
@@ -404,21 +410,53 @@ def get_characters():
         'characters': characters
         }
 
-@app.route('/user_characters/<user>', methods = ['GET'])
+@app.route('/get_user_character_stats/<user>', methods = ['GET'])
 @jwt_required()
 def get_user_character_stats(user):
-    characters = []
-    user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
-    
-    for character in user_characters:
-        characters.append(character.to_dict())
-    
-    return {
-        'User Characters': characters
+    current_user = get_jwt_identity()
+
+    in_username_lowercase = user.lower()
+    user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user_to_query:
+        return abort(408, description='User does not exist')
+
+    if user_to_query.private and user_to_query.username != current_user:
+        return {
+            'private': True,
+            'username': user_to_query.username
         }
+
+    if not user_to_query.private or user_to_query.username == current_user:
+        characters = []
+        user_characters = user_to_query.user_character_stats.all()    
+        for character in user_characters:
+            characters.append(character.to_dict())
+        
+        return {
+            'User Characters': characters,
+            'username': user_to_query.username
+            }
 
 @app.route('/validate_cookies/', methods = ['GET'])
 @jwt_required()
 def validate_cookies():
     current_user_username = get_jwt_identity()
     return jsonify(logged_in_as=current_user_username)
+
+@app.route('/set_privacy/', methods = ['GET', 'POST'])
+@jwt_required()
+def set_privacy():
+    current_user_username = get_jwt_identity()
+    current_user = User.query.filter_by(username=current_user_username).first()
+
+    if request.method == 'GET':
+        return jsonify({
+            'private': current_user.private
+        })
+    if request.method == 'POST':
+        current_user.private = not current_user.private
+        db.session.commit()
+        return jsonify({
+            'private': current_user.private
+        })

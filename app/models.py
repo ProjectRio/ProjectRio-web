@@ -129,6 +129,7 @@ class ChemistryTable(db.Model):
 class User(db.Model, UserMixin):
     id       = db.Column(db.Integer,     primary_key=True)
     username = db.Column(db.String(64),  unique = True)
+    username_lowercase = db.Column(db.String(64), unique = True)
     email    = db.Column(db.String(120), unique = True)
     password = db.Column(db.String(500))
     rio_key  = db.Column(db.String(50), unique = True)
@@ -138,8 +139,9 @@ class User(db.Model, UserMixin):
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
 
-    def __init__(self, in_username, in_email, in_password):
+    def __init__(self, in_username, username_lowercase, in_email, in_password):
         self.username = in_username
+        self.username_lowercase = username_lowercase
         self.email    = in_email
         self.password = bc.generate_password_hash(in_password)
         self.rio_key  = secrets.token_urlsafe(32)
