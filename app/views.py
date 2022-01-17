@@ -1,11 +1,13 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
-from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, unset_jwt_cookies
+from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 import secrets
 from . import bc
-from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
+from flask_mailman import EmailMessage
+from .models import db, User, FunStats, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
+from datetime import datetime, timedelta, timezone
 
 # Schemas
 user_schema = UserSchema()
@@ -114,9 +116,43 @@ def create_character_tables():
 
     return 'Characters added...'
 
+@app.route('/create_global_fun_stats_table/', methods = ['POST'])
+def create_global_fun_stats_table():
+    global_fun_stats = FunStats()
+    db.session.add(global_fun_stats)
+    db.session.commit()
+    return 'Global fun stats table created...'
 
+@app.route('/test_mail/')
+def test_mail():
+    msg = EmailMessage(
+        'Test Email 1',
+        'This is a test email',
+        'from@example.com',
+        ['to@example.com'],
+        headers={'Message-ID': 'foo'},
+    )
+    msg.send()
+    return 'Email sent...'
 
 # == User Routes ==
+
+# Refresh any JWT within 1 day of expiring after requests
+@app.after_request
+def refresh_expiring_jwts(response):
+    try:
+        exp_timestamp = get_jwt()['exp']
+        now = datetime.now(timezone.utc)
+        target_timestamp = datetime.timestamp(now + timedelta(days=7))
+        if target_timestamp > exp_timestamp:
+            access_token = create_access_token(identity=get_jwt_identity())
+            set_access_cookies(response, access_token)
+        return response
+    except (RuntimeError, KeyError):
+        # Case where JWT is invalid, return original response
+        return response
+
+
 @app.route('/register/', methods=['POST'])
 def register():    
     in_username = request.json['Username']
@@ -145,6 +181,8 @@ def register():
             user_character_stats = UserCharacterStats(new_user.id, character.char_id)
             db.session.add(user_character_stats)
             db.session.commit()
+
+        # === Create FunStats row ===
 
     return jsonify({
         'riokey': new_user.rio_key,
@@ -179,7 +217,7 @@ def login():
         else:
             return abort(401, description='Incorrect password')
     else:
-        return abort(408, description='User does not exist')
+        return abort(408, description='Incorrect Username or Password')
 
 
 # Revoke JWTs
@@ -233,6 +271,17 @@ def populate_db():
 
     db.session.add(game)
     db.session.commit()
+
+    # === get global FunStats row ===
+    global_fun_stats = FunStats.query.get(1)
+
+    global_fun_stats.num_of_games += 1
+    global_fun_stats.homeruns += (game.away_score + game.home_score)
+    global_fun_stats.innings_played += game.innings_played
+    
+    db.session.add(global_fun_stats)
+    db.session.commit()
+
 
     # === Character Game Summary ===
     player_stats = request.json['Player Stats']
@@ -387,17 +436,26 @@ def populate_db():
 
 
 # === FRONT END REQUESTS ===
-@app.route('/get_user_info/<user>', methods = ['GET'])
-def get_user_info(user):
-    in_username_lowercase = user.lower()
+@app.route('/get_user_info/<username>', methods = ['GET'])
+@jwt_required(optional=True)
+def get_user_info(username):
+    current_user = get_jwt_identity()
+    in_username_lowercase = username.lower()
     user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
 
     if not user:
         return abort(408, description='User does not exist')
+    elif user.username == current_user:
+        return {
+            "username": user.username,
+            "private": user.private,
+            "loggedIn": True
+        }
     else:
         return {
             "username": user.username,
-            "private": user.private
+            "private": user.private,
+            "loggedIn": False
         }
 
 @app.route('/characters/', methods = ['GET'])
@@ -411,7 +469,7 @@ def get_characters():
         }
 
 @app.route('/get_user_character_stats/<user>', methods = ['GET'])
-@jwt_required()
+@jwt_required(optional=True)
 def get_user_character_stats(user):
     current_user = get_jwt_identity()
 
@@ -438,11 +496,14 @@ def get_user_character_stats(user):
             'username': user_to_query.username
             }
 
-@app.route('/validate_cookies/', methods = ['GET'])
-@jwt_required()
-def validate_cookies():
-    current_user_username = get_jwt_identity()
-    return jsonify(logged_in_as=current_user_username)
+@app.route('/validate_JWT/', methods = ['GET'])
+@jwt_required(optional=True)
+def validate_JWT():
+    try:
+        current_user_username = get_jwt_identity()
+        return jsonify(logged_in_as=current_user_username)
+    except:
+        return 'No JWT...'
 
 @app.route('/set_privacy/', methods = ['GET', 'POST'])
 @jwt_required()
