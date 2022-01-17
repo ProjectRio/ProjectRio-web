@@ -126,6 +126,24 @@ class ChemistryTable(db.Model):
 
     character = db.relationship('Character', backref = 'character')
 
+class FunStats(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    num_of_games = db.Column(db.Integer)
+    homeruns = db.Column(db.Integer)
+    innings_played = db.Column(db.Integer)
+
+    def __init__(self):
+        self.num_of_games = 0
+        self.homeruns = 0
+        self.innings_played = 0
+
+    def to_dict(self):
+        return {
+            'num_of_games': self.num_of_games,
+            'homeruns': self.homeruns,
+            'innings_played': self.innings_played
+        }
+
 class User(db.Model, UserMixin):
     id       = db.Column(db.Integer,     primary_key=True)
     username = db.Column(db.String(64),  unique = True)
