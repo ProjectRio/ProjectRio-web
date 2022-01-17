@@ -1,4 +1,5 @@
 from os import path
+from datetime import timedelta
 
 # Get DB_URI for SQLALCHEMY_DATABASE_URI
 BASE_DIR = path.abspath(path.dirname(__file__))
@@ -10,10 +11,12 @@ SECRET_KEY = 'S#perS3crEt_007'
 SQLALCHEMY_TRACK_MODIFICATIONS = False
 DEBUG = True
 
+
 JWT_SECRET_KEY = 'S#perS3crEt_008'
 JWT_TOKEN_LOCATION = ['cookies']
-
-# Must be true in production
 JWT_COOKIE_SECURE = True
 JWT_COOKIE_CSRF_PROTECT = True
-JWT_ACCESS_TOKEN_EXPIRES = 1209600 #2 weeks as seconds
+JWT_ACCESS_TOKEN_EXPIRES = timedelta(weeks=2)
+
+
+MAIL_BACKEND = 'console'
