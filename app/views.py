@@ -488,12 +488,51 @@ def get_user_character_stats(user):
     #for character in user_characters:
     #    characters.append(character.to_dict())
     
-    user = User.query.filter_by(username=user).first()
     #user_games = Game.query.filter((Game.away_player_id==user.id) | (Game.home_player_id==user.id) )
-    print(CharacterGameSummary.query.filter_by(user_id=user.id))
     #user_characters = CharacterGameSummary.query.filter_by(user_id==user.id)
     #print(user_characters)
 
     return {
-        'User Characters': characters
+        # 'User Characters': characters
         }
+
+@app.route('/character_game_summaries/<user>/', methods = ['GET'])
+def get_character_game_summaries(user):
+    user = User.query.filter_by(username=user).first()
+    game_summaries_list = []
+
+
+    game_summaries = user.character_game_summaries
+    for game_summary in game_summaries:
+        game_summaries_list.append(game_summary.to_dict())
+
+    return {
+            'Game Summaries': game_summaries_list,
+        }
+
+
+@app.route('/sum_stats/<username>/<char_id>/', methods = ['GET'])
+def sum_stats(username, char_id):
+    user = User.query.filter_by(username=username).first()
+
+    result = CharacterGameSummary.query.with_entities(
+            db.func.sum(CharacterGameSummary.pitches_thrown).label('sum_pitches_thrown'),
+            db.func.sum(CharacterGameSummary.hits_allowed).label('sum_hits_allowed'),
+            db.func.sum(CharacterGameSummary.batters_walked).label('sum_batters_walked'),
+            db.func.sum(CharacterGameSummary.runs_allowed).label('sum_runs_allowed'),
+            db.func.sum(CharacterGameSummary.inning_appearances).label('sum_inning_appearances'),
+        ).filter_by(
+            user_id=user.id,
+            char_id=char_id,
+        ).first()
+
+    return {
+        'Char Id': char_id,
+        'Sum Pitches': result.sum_pitches_thrown,
+        'Sum Hits Allowed': result.sum_hits_allowed,
+        'Sum Batters Walked': result.sum_batters_walked,
+        'Sum Runs Allowed': result.sum_runs_allowed,
+        'Average Hits allowed per Inning Appearance': result.sum_hits_allowed/result.sum_inning_appearances,
+        'Average Batters Walked per Inning Appearance': result.sum_batters_walked/result.sum_inning_appearances,
+        'Average # Runs allowed per Inning Appearance': result.sum_runs_allowed/result.sum_inning_appearances,
+    }

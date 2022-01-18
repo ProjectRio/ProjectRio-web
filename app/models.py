@@ -135,7 +135,7 @@ class User(db.Model, UserMixin):
     private = db.Column(db.Boolean)
 
     user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user', lazy = 'dynamic')
-    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'character_game_summaries', lazy = 'dynamic')
+    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
 
@@ -320,6 +320,15 @@ class CharacterGameSummary(db.Model):
     batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
     pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
     fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary')
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'game_id': self.game_id,
+            'char_id': self.char_id,
+            "user_id": self.user_id,
+            "team_id": self.team_id
+        }
 
 class PitchSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
