@@ -1,11 +1,14 @@
 from flask import request, jsonify, abort
 from flask_login import login_user, logout_user, current_user, login_required
+#from flask_sqlalchemy import or_
 from flask import current_app as app
 import secrets
 from . import lm, bc
 from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
+
+from .consts import *
 
 # Schemas
 user_schema = UserSchema()
@@ -78,7 +81,7 @@ def create_character_tables():
         db.session.commit()
 
         character = Character(
-            char_id = character['Char Id'],
+            char_id = int(character['Char Id'], 16),
             chemistry_table_id = chemistry_table.id,
             name = character['Char Name'],
             starting_addr = character['Starting Addr'],
@@ -151,13 +154,6 @@ def register():
         db.session.add(new_user)
         db.session.commit()
 
-        # === Create UserCharacterStats tables ===
-        characters = Character.query.all()
-        for character in characters:
-            user_character_stats = UserCharacterStats(new_user.id, character.char_id)
-            db.session.add(user_character_stats)
-            db.session.commit()
-
     return user_schema.dump(new_user)
 
 # Authenticate user, login via username or email
@@ -207,7 +203,7 @@ def populate_db():
     away_player = User.query.filter_by(username=request.json['Away Player']).first()
 
     game = Game(
-        game_id = request.json['GameID'],
+        game_id = int(request.json['GameID'].replace(',', ''), 16),
         away_player_id = away_player.id,
         home_player_id = home_player.id,
         date_time = request.json['Date'],
@@ -236,9 +232,11 @@ def populate_db():
         character_game_summary = CharacterGameSummary(
             game_id = game.game_id,
             team_id = 0 if character['Team'] == 'Home' else 1,
-            char_id = Character.query.filter_by(name=character["Character"]).first().char_id,
+            char_id = character["Character"],
+            user_id = home_player.id if character['Team'] == 'Home' else away_player.id,
             roster_loc = character['RosterID'],
-            superstar = True if character['Is Starred'] == 1 else False,
+            captain = character['Captain'],
+            superstar = character['Superstar'],
             batters_faced = defensive_stats['Batters Faced'],
             runs_allowed = defensive_stats['Runs Allowed'],
             batters_walked = defensive_stats['Batters Walked'],
@@ -248,11 +246,11 @@ def populate_db():
             pitches_thrown = defensive_stats['Pitches Thrown'],
             stamina = defensive_stats['Stamina'],
             was_pitcher = defensive_stats['Was Pitcher'],
-            batter_outs = defensive_stats['Batter Outs'],
             strikeouts_pitched = defensive_stats['Strikeouts'],
             star_pitches_thrown = defensive_stats['Star Pitches Thrown'],
             big_plays = defensive_stats['Big Plays'],
-            innings_pitched = defensive_stats['Innings Pitched'],
+            inning_appearances = defensive_stats['Inning Appearances'],
+            outs_pitched = defensive_stats['Outs Pitched'],
             at_bats = offensive_stats['At Bats'],
             hits = offensive_stats['Hits'],
             singles = offensive_stats['Singles'],
@@ -265,6 +263,17 @@ def populate_db():
             rbi = offensive_stats['RBI'],
             bases_stolen = offensive_stats['Bases Stolen'],
             star_hits = offensive_stats['Star Hits'],
+            offensive_star_swings = 0,
+            offensive_stars_used = 0,
+            offensive_stars_put_in_play = 0,
+            offensive_star_successes = 0,
+            offensive_star_chances = 0,
+            offensive_star_chances_won = 0,
+            defensive_star_pitches = 0,
+            defensive_stars_used = 0,
+            defensive_star_successes = 0,
+            defensive_star_chances = 0,
+            defensive_star_chances_won = 0
         )
 
         db.session.add(character_game_summary)
@@ -276,25 +285,35 @@ def populate_db():
 
         # Update CharacterUserStats
         if character['Team'] == 'Home':
-            user_char_stats = home_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
-            character_game_summary = teams['Home'][character['RosterID']]
+            batter_user_char_stats = home_player.user_character_stats.filter_by(char_id=character["Character"], captain=character['Captain'], superstar=character['Superstar']).first()
+            if (batter_user_char_stats == None):
+                print("Created UserCharStat for batter. Roster Loc:", character['RosterID'])
+                batter_user_char_stats = UserCharacterStats(home_player.id, character["Character"], character['Captain'], character['Superstar'])
+            batting_character_game_summary = teams['Home'][character['RosterID']]
         else: 
-            user_char_stats = away_player.user_character_stats.filter_by(char_id=Character.query.filter_by(name=character["Character"]).first().char_id).first()
-            character_game_summary = teams['Away'][character['RosterID']]
-
-        user_char_stats.num_of_games += 1
-        user_char_stats.at_bats += character_game_summary.at_bats
-        user_char_stats.hits += character_game_summary.hits
-        user_char_stats.walks_bb += character_game_summary.walks_bb
-        user_char_stats.walks_hit += character_game_summary.walks_hit
-        user_char_stats.bases_stolen += character_game_summary.bases_stolen
-        user_char_stats.strikeouts += character_game_summary.strikeouts
-        user_char_stats.innings_pitched += character_game_summary.innings_pitched
-        user_char_stats.batters_faced += character_game_summary.batters_faced
-        user_char_stats.runs_allowed += character_game_summary.runs_allowed
-        user_char_stats.defensive_star_pitches += character_game_summary.star_pitches_thrown       
-
-
+            batter_user_char_stats = away_player.user_character_stats.filter_by(char_id=character["Character"], captain=character['Captain'], superstar=character['Superstar']).first()
+            if (batter_user_char_stats == None):
+                print("Created UserCharStat for batter. Roster Loc:", character['RosterID'])
+                batter_user_char_stats = UserCharacterStats(away_player.id, character["Character"], character['Captain'], character['Superstar'])
+            batting_character_game_summary = teams['Away'][character['RosterID']]
+        
+        batter_user_char_stats.num_of_games += 1
+        batter_user_char_stats.at_bats += batting_character_game_summary.at_bats
+        batter_user_char_stats.hits += batting_character_game_summary.hits
+        batter_user_char_stats.singles += batting_character_game_summary.singles
+        batter_user_char_stats.doubles += batting_character_game_summary.doubles
+        batter_user_char_stats.triples += batting_character_game_summary.triples
+        batter_user_char_stats.homeruns += batting_character_game_summary.homeruns
+        batter_user_char_stats.walks_bb += batting_character_game_summary.walks_bb
+        batter_user_char_stats.walks_hit += batting_character_game_summary.walks_hit
+        batter_user_char_stats.strikeouts += batting_character_game_summary.strikeouts
+        batter_user_char_stats.bases_stolen += batting_character_game_summary.bases_stolen
+        batter_user_char_stats.strikeouts_pitched += batting_character_game_summary.strikeouts_pitched
+        batter_user_char_stats.inning_appearances += batting_character_game_summary.inning_appearances
+        batter_user_char_stats.outs_pitched += batting_character_game_summary.outs_pitched
+        batter_user_char_stats.batters_faced += batting_character_game_summary.batters_faced
+        batter_user_char_stats.runs_allowed += batting_character_game_summary.runs_allowed
+ 
         for pitch in character['Pitch Summary']:
             pitch_summary = PitchSummary(
                 batter_id = teams[character['Team']][character['RosterID']].id,
@@ -306,9 +325,9 @@ def populate_db():
                 balls = pitch['Balls'],
                 strikes = pitch['Strikes'],
                 outs = pitch['Outs'],
-                runner_on_1 = True if pitch['Runners on Base'][2] == 1 else False,
-                runner_on_2 = True if pitch['Runners on Base'][1] == 1 else False,
-                runner_on_3 = True if pitch['Runners on Base'][0] == 1 else False,
+                runner_on_1 = pitch['Runners on Base'][2],
+                runner_on_2 = pitch['Runners on Base'][1],
+                runner_on_3 = pitch['Runners on Base'][0],
                 chem_links_ob = pitch['Chemistry Links on Base'],
                 star_chance = pitch['Star Chance'],
                 batter_stars = pitch['Batter Stars'],
@@ -325,6 +344,82 @@ def populate_db():
                 result_game = pitch['Final Result - Game'],
             )
 
+
+            strike_or_strikeout_or_foul = ((pitch['Final Result - Inferred'] == "Strike-looking")
+                                        or (pitch['Final Result - Inferred'] == "Strike-swing")
+                                        or (pitch['Final Result - Inferred'] == "Strike-bunting")
+                                        or (pitch['Final Result - Inferred'] == "Foul")
+                                        or (pitch['Final Result - Game'] == "1"))
+            
+            # Get pitchers user_char_stats
+            if character['Team'] == 'Home':
+                pitcher_character_game_summary = teams['Away'][pitch['Pitcher Roster Location']]
+                pitcher_user_char_stats = away_player.user_character_stats.filter_by(char_id=pitch["PitcherID"], captain=pitcher_character_game_summary.captain, superstar=pitcher_character_game_summary.superstar).first()
+                if (pitcher_user_char_stats == None):
+                    print("Created UserCharStat for pitcher. Roster Loc:", pitch['Pitcher Roster Location'])
+                    pitcher_user_char_stats = UserCharacterStats(away_player.id, pitch["PitcherID"], pitcher_character_game_summary.captain, pitcher_character_game_summary.superstar)
+            else: 
+                pitcher_character_game_summary = teams['Home'][pitch['Pitcher Roster Location']]
+                pitcher_user_char_stats = home_player.user_character_stats.filter_by(char_id=pitch["PitcherID"], captain=pitcher_character_game_summary.captain, superstar=pitcher_character_game_summary.superstar).first()
+                if (pitcher_user_char_stats == None):
+                    print("Created UserCharStat for pitcher. Roster Loc:", pitch['Pitcher Roster Location'])
+                    pitcher_user_char_stats = UserCharacterStats(home_player.id, pitch["PitcherID"], pitcher_character_game_summary.captain, pitcher_character_game_summary.superstar)
+            
+            # == Offensive Star Use ==
+            star_swing = pitch['Type of Swing'] == 'Star'
+            star_cost = 1
+            is_captainable_char = Character.query.filter_by(char_id = batter_user_char_stats.char_id, captain=1).first()
+            #Star hits/pitches cost two star for captain eligible characters that are not captains when contact is made
+            if ((is_captainable_char is not None) and not batter_user_char_stats.captain and pitch['Contact Summary']):
+                star_cost = 2
+            batting_character_game_summary.offensive_star_swings += star_swing
+            batting_character_game_summary.offensive_stars_used += star_swing * star_cost
+            #Star landed and batter got on base
+            if ((int(pitch['Final Result - Game']) in cPLAY_RESULT_SAFE.keys()) 
+             or (int(pitch['Final Result - Game']) in cPLAY_RESULT_BUNT.keys() and pitch['Number Outs During Play'] == 0)):
+                batting_character_game_summary.offensive_star_successes += star_swing
+                batting_character_game_summary.offensive_star_chances_won += pitch['Star Chance']
+
+            if (int(pitch['Final Result - Game']) in cPLAY_RESULT_OUT.keys()):
+                pitcher_character_game_summary.defensive_star_chances_won += pitch['Star Chance']
+                        
+            batting_character_game_summary.offensive_stars_put_in_play += star_swing and not strike_or_strikeout_or_foul
+
+            batter_user_char_stats.double_plays += int(pitch['Number Outs During Play'] >= 2)
+
+
+            # == Defensive Star Use ==
+            star_pitch = pitch['Star Pitch']
+            star_cost = 1
+            is_captainable_char = Character.query.filter_by(char_id = pitcher_user_char_stats.char_id, captain=1).first()
+            #Star hits/pitches cost two star for captain eligible characters that are not captains
+            if (is_captainable_char and not pitcher_user_char_stats.captain):
+                star_cost = 2
+            pitcher_character_game_summary.defensive_star_pitches += star_pitch
+            pitcher_character_game_summary.defensive_stars_used += star_pitch * star_cost
+            pitcher_character_game_summary.defensive_star_successes += int(star_pitch and strike_or_strikeout_or_foul)
+
+            #Play is over, see if AB was a star chance
+            if int(pitch['Final Result - Game']) not in cPLAY_RESULT_INVLD:
+                batting_character_game_summary.offensive_star_chances += pitch['Star Chance']
+                batter_user_char_stats.offensive_star_chances += batting_character_game_summary.offensive_star_chances
+
+                pitcher_character_game_summary.defensive_star_chances += pitch['Star Chance']
+
+            batter_user_char_stats.offensive_star_swings       += batting_character_game_summary.offensive_star_swings
+            batter_user_char_stats.offensive_stars_used        += batting_character_game_summary.offensive_stars_used
+            batter_user_char_stats.offensive_star_successes    += batting_character_game_summary.offensive_star_successes
+            batter_user_char_stats.offensive_star_chances_won  += batting_character_game_summary.offensive_star_chances_won
+            batter_user_char_stats.offensive_star_chances      += batting_character_game_summary.offensive_star_chances
+            batter_user_char_stats.offensive_stars_put_in_play += batting_character_game_summary.offensive_stars_put_in_play
+            
+            pitcher_user_char_stats.defensive_star_pitches     += pitcher_character_game_summary.defensive_star_pitches
+            pitcher_user_char_stats.defensive_stars_used       += pitcher_character_game_summary.defensive_stars_used
+            pitcher_user_char_stats.defensive_star_successes   += pitcher_character_game_summary.defensive_star_successes
+            pitcher_user_char_stats.defensive_star_chances_won += pitcher_character_game_summary.defensive_star_chances_won
+            pitcher_user_char_stats.defensive_star_chances     += pitcher_character_game_summary.defensive_star_chances
+
+            db.session.add(pitcher_user_char_stats)
             db.session.add(pitch_summary)
             db.session.commit()
 
@@ -347,8 +442,8 @@ def populate_db():
                     ball_x_pos = pitch['Contact Summary'][0]['Ball Acceleration - X'],
                     ball_y_pos = pitch['Contact Summary'][0]['Ball Acceleration - Y'],
                     ball_z_pos = pitch['Contact Summary'][0]['Ball Acceleration - Z'],
-                    ball_x_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact- x'],
-                    ball_y_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact- Y'],
+                    ball_x_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact - x'],
+                    ball_y_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact - Y'],
                 )
 
                 db.session.add(contact_summary)
@@ -367,8 +462,7 @@ def populate_db():
 
                 db.session.add(fielding_summary)
                 db.session.commit()
-
-        db.session.add(user_char_stats)
+        db.session.add(batter_user_char_stats)
         db.session.commit()
 
     return 'Successfully added...'
@@ -389,11 +483,108 @@ def get_characters():
 @app.route('/user_characters/<user>', methods = ['GET'])
 def get_user_character_stats(user):
     characters = []
-    user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
+    #user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
+    #
+    #for character in user_characters:
+    #    characters.append(character.to_dict())
     
-    for character in user_characters:
-        characters.append(character.to_dict())
-    
+    #user_games = Game.query.filter((Game.away_player_id==user.id) | (Game.home_player_id==user.id) )
+    #user_characters = CharacterGameSummary.query.filter_by(user_id==user.id)
+    #print(user_characters)
+
     return {
-        'User Characters': characters
+        # 'User Characters': characters
         }
+
+@app.route('/character_game_summaries/<user>/', methods = ['GET'])
+def get_character_game_summaries(user):
+    user = User.query.filter_by(username=user).first()
+    game_summaries_list = []
+
+
+    game_summaries = user.character_game_summaries
+    for game_summary in game_summaries:
+        game_summaries_list.append(game_summary.to_dict())
+
+    return {
+            'Game Summaries': game_summaries_list,
+        }
+
+
+@app.route('/sum_stats/<username>/<char_id>/', methods = ['GET'])
+def sum_stats(username, char_id):
+    user = User.query.filter_by(username=username).first()
+
+    result = CharacterGameSummary.query.with_entities(
+            db.func.sum(CharacterGameSummary.pitches_thrown).label('sum_pitches_thrown'),
+            db.func.sum(CharacterGameSummary.hits_allowed).label('sum_hits_allowed'),
+            db.func.sum(CharacterGameSummary.batters_walked).label('sum_batters_walked'),
+            db.func.sum(CharacterGameSummary.runs_allowed).label('sum_runs_allowed'),
+            db.func.sum(CharacterGameSummary.inning_appearances).label('sum_inning_appearances'),
+        ).filter_by(
+            user_id=user.id,
+            char_id=char_id,
+        ).first()
+
+    return {
+        'Char Id': char_id,
+        'Sum Pitches': result.sum_pitches_thrown,
+        'Sum Hits Allowed': result.sum_hits_allowed,
+        'Sum Batters Walked': result.sum_batters_walked,
+        'Sum Runs Allowed': result.sum_runs_allowed,
+        'Average Hits allowed per Inning Appearance': result.sum_hits_allowed/result.sum_inning_appearances,
+        'Average Batters Walked per Inning Appearance': result.sum_batters_walked/result.sum_inning_appearances,
+        'Average # Runs allowed per Inning Appearance': result.sum_runs_allowed/result.sum_inning_appearances,
+    }
+
+@app.route('/session_execute_test/<username>/', methods = ['GET'])
+def session_execute_test(username):
+
+    # user_id  sum_pitches_thrown
+    # ______   ___________________
+    #   1              n
+    #   2              n
+
+    user_stats = (
+        'SELECT user_id, sum(pitches_thrown) AS sum_pitches_thrown '
+        'FROM character_game_summary '
+        'GROUP BY user_id'
+    )
+    user_stats_query_result = db.session.execute(user_stats)
+
+    user_stats_list = []
+    for row in user_stats_query_result:
+        user_stats_list.append({
+            'User ID': row.user_id,
+            'Pitches Thrown': row.sum_pitches_thrown,
+        })
+
+
+
+    
+    # user_id       char_id       sum_pitches_thrown
+    # ______       __________     ___________________
+    #   1            0 - 53              n
+    #   2            0 - 53              n
+
+    user_char_stats = (
+        'SELECT user_id, char_id, sum(pitches_thrown) AS sum_pitches_thrown '
+        'FROM character_game_summary '
+        'GROUP BY user_id, char_id'
+    )
+    user_char_stats_query_result = db.session.execute(user_char_stats)
+
+    user_char_stats_list = []
+    for row in user_char_stats_query_result:
+        user_char_stats_list.append({
+            'User ID': row.user_id,
+            'Char ID': row.char_id,
+            'Pitches Thrown': row.sum_pitches_thrown
+        })
+        
+
+
+    return {
+        "User Stats": user_stats_list,
+        "User Char Stats": user_char_stats_list
+    }
