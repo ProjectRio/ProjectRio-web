@@ -3,7 +3,7 @@ from flask_login import UserMixin
 import secrets
 
 class Character(db.Model):
-    char_id = db.Column(db.String(4), primary_key=True)
+    char_id = db.Column(db.Integer, primary_key=True)
     chemistry_table_id = db.Column(db.ForeignKey('chemistry_table.id'), nullable = False)
     name = db.Column(db.String(16))
     starting_addr = db.Column(db.String(16))
@@ -263,7 +263,7 @@ class Game(db.Model):
 class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.String(255), db.ForeignKey('game.game_id'), nullable=False)
-    char_id = db.Column(db.String(4), db.ForeignKey('character.char_id'), nullable=False)
+    char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8
     superstar = db.Column(db.Boolean)
