@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, set_access_cookies, jwt_requ
 import secrets
 from . import bc
 from flask_mailman import EmailMessage
-from .models import db, User, FunStats, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
+from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
@@ -116,13 +116,6 @@ def create_character_tables():
 
     return 'Characters added...'
 
-@app.route('/create_global_fun_stats_table/', methods = ['POST'])
-def create_global_fun_stats_table():
-    global_fun_stats = FunStats()
-    db.session.add(global_fun_stats)
-    db.session.commit()
-    return 'Global fun stats table created...'
-
 @app.route('/test_mail/')
 def test_mail():
     msg = EmailMessage(
@@ -171,18 +164,18 @@ def register():
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
     else:
+        # === Create User row ===
         new_user = User(in_username, username_lowercase, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
 
-        # === Create UserCharacterStats tables ===
+        # === Create UserCharacterStats rows ===
         characters = Character.query.all()
         for character in characters:
             user_character_stats = UserCharacterStats(new_user.id, character.char_id)
             db.session.add(user_character_stats)
             db.session.commit()
 
-        # === Create FunStats row ===
 
     return jsonify({
         'riokey': new_user.rio_key,
@@ -271,17 +264,6 @@ def populate_db():
 
     db.session.add(game)
     db.session.commit()
-
-    # === get global FunStats row ===
-    global_fun_stats = FunStats.query.get(1)
-
-    global_fun_stats.num_of_games += 1
-    global_fun_stats.homeruns += (game.away_score + game.home_score)
-    global_fun_stats.innings_played += game.innings_played
-    
-    db.session.add(global_fun_stats)
-    db.session.commit()
-
 
     # === Character Game Summary ===
     player_stats = request.json['Player Stats']
@@ -495,6 +477,20 @@ def get_user_character_stats(user):
             'User Characters': characters,
             'username': user_to_query.username
             }
+
+@app.route('/get_games/<username>/', methods = ['GET'])
+def get_games(username):
+    in_username_lowercase = username.lower()
+    user_id = User.query.filter_by(username_lowercase=in_username_lowercase).first().id
+    games = Game.query.filter(db.or_(Game.away_player_id == user_id, Game.home_player_id == user_id))
+    
+    games_list = []
+    for game in games:
+        games_list.append(game.to_dict())
+
+    return {
+        'games': games_list,
+    }
 
 @app.route('/validate_JWT/', methods = ['GET'])
 @jwt_required(optional=True)

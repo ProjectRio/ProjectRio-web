@@ -126,13 +126,15 @@ class ChemistryTable(db.Model):
 
     character = db.relationship('Character', backref = 'character')
 
-class FunStats(db.Model):
+class UserStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     num_of_games = db.Column(db.Integer)
     homeruns = db.Column(db.Integer)
     innings_played = db.Column(db.Integer)
 
-    def __init__(self):
+    def __init__(self, user_id):
+        self.user_id = user_id
         self.num_of_games = 0
         self.homeruns = 0
         self.innings_played = 0
@@ -154,8 +156,9 @@ class User(db.Model, UserMixin):
     private = db.Column(db.Boolean)
 
     user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user', lazy = 'dynamic')
-    away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
-    home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
+    away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player', lazy = 'dynamic')
+    home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player', lazy = 'dynamic')
+    user_stats = db.relationship('UserStats', backref = 'user_stats')
 
     def __init__(self, in_username, username_lowercase, in_email, in_password):
         self.username = in_username
@@ -229,6 +232,16 @@ class Game(db.Model):
     quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
+
+    def to_dict(self):
+        return {
+            'game_id': self.game_id,
+            'away_player_id': self.away_player_id,
+            'home_player_id': self.home_player_id,
+            'away_score': self.away_score,
+            'home_score': self.home_score,
+            'innings_played': self.innings_played            
+        }
 
 class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
