@@ -148,7 +148,7 @@ class User(db.Model, UserMixin):
 class UserCharacterStats(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    char_id = db.Column(db.String(4), db.ForeignKey('character.char_id'), nullable=False)
+    char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     num_of_games = db.Column(db.Integer)
     at_bats = db.Column(db.Integer)
     hits = db.Column(db.Integer)
