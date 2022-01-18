@@ -80,7 +80,7 @@ def create_character_tables():
         db.session.commit()
 
         character = Character(
-            char_id = character['Char Id'],
+            char_id = int(character['Char Id'], 16),
             chemistry_table_id = chemistry_table.id,
             name = character['Char Name'],
             starting_addr = character['Starting Addr'],
@@ -238,7 +238,7 @@ def populate_db():
         character_game_summary = CharacterGameSummary(
             game_id = game.game_id,
             team_id = 0 if character['Team'] == 'Home' else 1,
-            char_id = Character.query.filter_by(name=character["Character"]).first().char_id,
+            char_id = Character.query.get(character["Character"]),
             roster_loc = character['RosterID'],
             superstar = True if character['Is Starred'] == 1 else False,
             batters_faced = defensive_stats['Batters Faced'],
