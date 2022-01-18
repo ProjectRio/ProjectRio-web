@@ -232,12 +232,8 @@ def populate_db():
         character_game_summary = CharacterGameSummary(
             game_id = game.game_id,
             team_id = 0 if character['Team'] == 'Home' else 1,
-<<<<<<< HEAD
-            char_id = Character.query.get(character["Character"]),
-=======
             char_id = character["Character"],
             user_id = home_player.id if character['Team'] == 'Home' else away_player.id,
->>>>>>> 47fdda1e1eda41cea2cb35f25438053e3e24c8a8
             roster_loc = character['RosterID'],
             captain = character['Captain'],
             superstar = character['Superstar'],
