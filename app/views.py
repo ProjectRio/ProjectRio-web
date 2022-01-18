@@ -536,3 +536,55 @@ def sum_stats(username, char_id):
         'Average Batters Walked per Inning Appearance': result.sum_batters_walked/result.sum_inning_appearances,
         'Average # Runs allowed per Inning Appearance': result.sum_runs_allowed/result.sum_inning_appearances,
     }
+
+@app.route('/session_execute_test/<username>/', methods = ['GET'])
+def session_execute_test(username):
+
+    # user_id  sum_pitches_thrown
+    # ______   ___________________
+    #   1              n
+    #   2              n
+
+    user_stats = (
+        'SELECT user_id, sum(pitches_thrown) AS sum_pitches_thrown '
+        'FROM character_game_summary '
+        'GROUP BY user_id'
+    )
+    user_stats_query_result = db.session.execute(user_stats)
+
+    user_stats_list = []
+    for row in user_stats_query_result:
+        user_stats_list.append({
+            'User ID': row.user_id,
+            'Pitches Thrown': row.sum_pitches_thrown,
+        })
+
+
+
+    
+    # user_id       char_id       sum_pitches_thrown
+    # ______       __________     ___________________
+    #   1            0 - 53              n
+    #   2            0 - 53              n
+
+    user_char_stats = (
+        'SELECT user_id, char_id, sum(pitches_thrown) AS sum_pitches_thrown '
+        'FROM character_game_summary '
+        'GROUP BY user_id, char_id'
+    )
+    user_char_stats_query_result = db.session.execute(user_char_stats)
+
+    user_char_stats_list = []
+    for row in user_char_stats_query_result:
+        user_char_stats_list.append({
+            'User ID': row.user_id,
+            'Char ID': row.char_id,
+            'Pitches Thrown': row.sum_pitches_thrown
+        })
+        
+
+
+    return {
+        "User Stats": user_stats_list,
+        "User Char Stats": user_char_stats_list
+    }
