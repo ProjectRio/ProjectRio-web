@@ -1,5 +1,6 @@
 from flask import request, jsonify, abort
 from flask_login import login_user, logout_user, current_user, login_required
+#from flask_sqlalchemy import or_
 from flask import current_app as app
 import secrets
 from . import lm, bc
@@ -232,6 +233,7 @@ def populate_db():
             game_id = game.game_id,
             team_id = 0 if character['Team'] == 'Home' else 1,
             char_id = character["Character"],
+            user_id = home_player.id if character['Team'] == 'Home' else away_player.id,
             roster_loc = character['RosterID'],
             captain = character['Captain'],
             superstar = character['Superstar'],
@@ -261,6 +263,17 @@ def populate_db():
             rbi = offensive_stats['RBI'],
             bases_stolen = offensive_stats['Bases Stolen'],
             star_hits = offensive_stats['Star Hits'],
+            offensive_star_swings = 0,
+            offensive_stars_used = 0,
+            offensive_stars_put_in_play = 0,
+            offensive_star_successes = 0,
+            offensive_star_chances = 0,
+            offensive_star_chances_won = 0,
+            defensive_star_pitches = 0,
+            defensive_stars_used = 0,
+            defensive_star_successes = 0,
+            defensive_star_chances = 0,
+            defensive_star_chances_won = 0
         )
 
         db.session.add(character_game_summary)
@@ -300,7 +313,7 @@ def populate_db():
         batter_user_char_stats.outs_pitched += batting_character_game_summary.outs_pitched
         batter_user_char_stats.batters_faced += batting_character_game_summary.batters_faced
         batter_user_char_stats.runs_allowed += batting_character_game_summary.runs_allowed
-
+ 
         for pitch in character['Pitch Summary']:
             pitch_summary = PitchSummary(
                 batter_id = teams[character['Team']][character['RosterID']].id,
@@ -359,18 +372,18 @@ def populate_db():
             #Star hits/pitches cost two star for captain eligible characters that are not captains when contact is made
             if ((is_captainable_char is not None) and not batter_user_char_stats.captain and pitch['Contact Summary']):
                 star_cost = 2
-            batter_user_char_stats.offensive_star_swings += star_swing
-            batter_user_char_stats.offensive_stars_used += star_swing * star_cost
+            batting_character_game_summary.offensive_star_swings += star_swing
+            batting_character_game_summary.offensive_stars_used += star_swing * star_cost
             #Star landed and batter got on base
             if ((int(pitch['Final Result - Game']) in cPLAY_RESULT_SAFE.keys()) 
              or (int(pitch['Final Result - Game']) in cPLAY_RESULT_BUNT.keys() and pitch['Number Outs During Play'] == 0)):
-                batter_user_char_stats.offensive_star_successes += star_swing
-                batter_user_char_stats.offensive_star_chances_won += pitch['Star Chance']
+                batting_character_game_summary.offensive_star_successes += star_swing
+                batting_character_game_summary.offensive_star_chances_won += pitch['Star Chance']
 
             if (int(pitch['Final Result - Game']) in cPLAY_RESULT_OUT.keys()):
-                pitcher_user_char_stats.defensive_star_chances_won += pitch['Star Chance']
+                pitcher_character_game_summary.defensive_star_chances_won += pitch['Star Chance']
                         
-            batter_user_char_stats.offensive_stars_put_in_play += star_swing and not strike_or_strikeout_or_foul
+            batting_character_game_summary.offensive_stars_put_in_play += star_swing and not strike_or_strikeout_or_foul
 
             batter_user_char_stats.double_plays += int(pitch['Number Outs During Play'] >= 2)
 
@@ -382,14 +395,29 @@ def populate_db():
             #Star hits/pitches cost two star for captain eligible characters that are not captains
             if (is_captainable_char and not pitcher_user_char_stats.captain):
                 star_cost = 2
-            pitcher_user_char_stats.defensive_star_pitches   += star_pitch
-            pitcher_user_char_stats.defensive_stars_used     += star_pitch * star_cost
-            pitcher_user_char_stats.defensive_star_successes += int(star_pitch and strike_or_strikeout_or_foul)
+            pitcher_character_game_summary.defensive_star_pitches += star_pitch
+            pitcher_character_game_summary.defensive_stars_used += star_pitch * star_cost
+            pitcher_character_game_summary.defensive_star_successes += int(star_pitch and strike_or_strikeout_or_foul)
 
             #Play is over, see if AB was a star chance
             if int(pitch['Final Result - Game']) not in cPLAY_RESULT_INVLD:
-                batter_user_char_stats.offensive_star_chances += pitch['Star Chance']
-                pitcher_user_char_stats.defensive_star_chances += pitch['Star Chance']
+                batting_character_game_summary.offensive_star_chances += pitch['Star Chance']
+                batter_user_char_stats.offensive_star_chances += batting_character_game_summary.offensive_star_chances
+
+                pitcher_character_game_summary.defensive_star_chances += pitch['Star Chance']
+
+            batter_user_char_stats.offensive_star_swings       += batting_character_game_summary.offensive_star_swings
+            batter_user_char_stats.offensive_stars_used        += batting_character_game_summary.offensive_stars_used
+            batter_user_char_stats.offensive_star_successes    += batting_character_game_summary.offensive_star_successes
+            batter_user_char_stats.offensive_star_chances_won  += batting_character_game_summary.offensive_star_chances_won
+            batter_user_char_stats.offensive_star_chances      += batting_character_game_summary.offensive_star_chances
+            batter_user_char_stats.offensive_stars_put_in_play += batting_character_game_summary.offensive_stars_put_in_play
+            
+            pitcher_user_char_stats.defensive_star_pitches     += pitcher_character_game_summary.defensive_star_pitches
+            pitcher_user_char_stats.defensive_stars_used       += pitcher_character_game_summary.defensive_stars_used
+            pitcher_user_char_stats.defensive_star_successes   += pitcher_character_game_summary.defensive_star_successes
+            pitcher_user_char_stats.defensive_star_chances_won += pitcher_character_game_summary.defensive_star_chances_won
+            pitcher_user_char_stats.defensive_star_chances     += pitcher_character_game_summary.defensive_star_chances
 
             db.session.add(pitcher_user_char_stats)
             db.session.add(pitch_summary)
@@ -455,11 +483,17 @@ def get_characters():
 @app.route('/user_characters/<user>', methods = ['GET'])
 def get_user_character_stats(user):
     characters = []
-    user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
+    #user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
+    #
+    #for character in user_characters:
+    #    characters.append(character.to_dict())
     
-    for character in user_characters:
-        characters.append(character.to_dict())
-    
+    user = User.query.filter_by(username=user).first()
+    #user_games = Game.query.filter((Game.away_player_id==user.id) | (Game.home_player_id==user.id) )
+    print(CharacterGameSummary.query.filter_by(user_id=user.id))
+    #user_characters = CharacterGameSummary.query.filter_by(user_id==user.id)
+    #print(user_characters)
+
     return {
         'User Characters': characters
         }

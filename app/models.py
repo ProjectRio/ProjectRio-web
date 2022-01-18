@@ -135,6 +135,7 @@ class User(db.Model, UserMixin):
     private = db.Column(db.Boolean)
 
     user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user', lazy = 'dynamic')
+    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'character_game_summaries', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
 
@@ -273,6 +274,7 @@ class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
     char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8
     captain = db.Column(db.Boolean)
@@ -303,6 +305,17 @@ class CharacterGameSummary(db.Model):
     rbi = db.Column(db.Integer)
     bases_stolen = db.Column(db.Integer)
     star_hits = db.Column(db.Integer)
+    offensive_star_swings = db.Column(db.Integer)
+    offensive_stars_used = db.Column(db.Integer)
+    offensive_stars_put_in_play = db.Column(db.Integer)
+    offensive_star_successes = db.Column(db.Integer)
+    offensive_star_chances = db.Column(db.Integer)
+    offensive_star_chances_won = db.Column(db.Integer)
+    defensive_star_pitches = db.Column(db.Integer)
+    defensive_stars_used = db.Column(db.Integer)
+    defensive_star_successes = db.Column(db.Integer)
+    defensive_star_chances = db.Column(db.Integer)
+    defensive_star_chances_won = db.Column(db.Integer)
 
     batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
     pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
