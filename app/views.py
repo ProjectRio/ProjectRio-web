@@ -132,7 +132,7 @@ def test_mail():
 
 # == User Routes ==
 
-# Refresh any JWT within 1 day of expiring after requests
+# Refresh any JWT within 7 days of expiration after requests
 @app.after_request
 def refresh_expiring_jwts(response):
     try:
@@ -175,6 +175,73 @@ def register():
         'riokey': new_user.rio_key,
         'username': new_user.username
     })
+
+@app.route('/retire_account/', methods=[''])
+@jwt_required()
+def retire_account():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Remove email
+    # Remove discord
+    # Set Private to true
+    # Set Retired to true
+
+    return {
+        'Account Retired...'
+    }
+
+
+@app.route('/request_email_change/', methods=['GET'])
+@jwt_required()
+def request_email_change():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Create secret code for link when changing email
+    # Add secret link to table for short period of time
+    # Send out email for email validation w link
+
+    return {
+        'Link emailed...'
+    }
+
+
+@app.route('/change_email/<secretcode>/', methods=['POST'])
+@jwt_required()
+def remove_email(secretcode):
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Check for valid secretlink related to logged in user
+    # Use user input to switch email to a new email
+
+    return {
+        'Email changed...'
+    }
+
+
+@app.route('/request_password_change/', methods=['GET'])
+@jwt_required()
+def request_password_change():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Create secret code for link to go to to change password
+    # Add secret link to table for short period of time
+    # return link to email address
+
+    return {
+        'Link emailed...'
+    }
+
+
+@app.route('/change_password/<secretcode>/', methods=['POST'])
+@jwt_required()
+def change_password():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Check for valid secretlink related to logged in user
+    # Use user input to switch password to a new password
+    return {
+        'Password changed...'
+    }
 
 
 # Authenticate user, create new JWTs, login via username or email
@@ -532,6 +599,7 @@ def get_user_info(username):
             "loggedIn": False
         }
 
+
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
     characters = []
@@ -541,6 +609,7 @@ def get_characters():
     return {
         'characters': characters
         }
+
 
 @app.route('/get_user_character_stats/<user>', methods = ['GET'])
 @jwt_required(optional=True)
@@ -570,6 +639,7 @@ def get_user_character_stats(user):
             'username': user_to_query.username
             }
 
+
 @app.route('/get_games/<username>/', methods = ['GET'])
 def get_games(username):
     in_username_lowercase = username.lower()
@@ -584,6 +654,7 @@ def get_games(username):
         'games': games_list,
     }
 
+
 @app.route('/validate_JWT/', methods = ['GET'])
 @jwt_required(optional=True)
 def validate_JWT():
@@ -592,6 +663,7 @@ def validate_JWT():
         return jsonify(logged_in_as=current_user_username)
     except:
         return 'No JWT...'
+
 
 @app.route('/set_privacy/', methods = ['GET', 'POST'])
 @jwt_required()
@@ -609,19 +681,7 @@ def set_privacy():
         return jsonify({
             'private': current_user.private
         })
-    characters = []
-    #user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
-    #
-    #for character in user_characters:
-    #    characters.append(character.to_dict())
-    
-    #user_games = Game.query.filter((Game.away_player_id==user.id) | (Game.home_player_id==user.id) )
-    #user_characters = CharacterGameSummary.query.filter_by(user_id==user.id)
-    #print(user_characters)
 
-    return {
-        # 'User Characters': characters
-        }
 
 @app.route('/character_game_summaries/<user>/', methods = ['GET'])
 def get_character_game_summaries(user):
@@ -638,40 +698,14 @@ def get_character_game_summaries(user):
         }
 
 
-@app.route('/sum_stats/<username>/<char_id>/', methods = ['GET'])
-def sum_stats(username, char_id):
-    user = User.query.filter_by(username=username).first()
 
-    result = CharacterGameSummary.query.with_entities(
-            db.func.sum(CharacterGameSummary.pitches_thrown).label('sum_pitches_thrown'),
-            db.func.sum(CharacterGameSummary.hits_allowed).label('sum_hits_allowed'),
-            db.func.sum(CharacterGameSummary.batters_walked).label('sum_batters_walked'),
-            db.func.sum(CharacterGameSummary.runs_allowed).label('sum_runs_allowed'),
-            db.func.sum(CharacterGameSummary.inning_appearances).label('sum_inning_appearances'),
-        ).filter_by(
-            user_id=user.id,
-            char_id=char_id,
-        ).first()
+# user_id  sum_pitches_thrown
+# ______   ___________________
+#   1              n
+#   2              n
 
-    return {
-        'Char Id': char_id,
-        'Sum Pitches': result.sum_pitches_thrown,
-        'Sum Hits Allowed': result.sum_hits_allowed,
-        'Sum Batters Walked': result.sum_batters_walked,
-        'Sum Runs Allowed': result.sum_runs_allowed,
-        'Average Hits allowed per Inning Appearance': result.sum_hits_allowed/result.sum_inning_appearances,
-        'Average Batters Walked per Inning Appearance': result.sum_batters_walked/result.sum_inning_appearances,
-        'Average # Runs allowed per Inning Appearance': result.sum_runs_allowed/result.sum_inning_appearances,
-    }
-
-@app.route('/session_execute_test/<username>/', methods = ['GET'])
-def session_execute_test(username):
-
-    # user_id  sum_pitches_thrown
-    # ______   ___________________
-    #   1              n
-    #   2              n
-
+@app.route('/user_stats/', methods = ['GET'])
+def sum_stats():
     user_stats = (
         'SELECT user_id, sum(pitches_thrown) AS sum_pitches_thrown '
         'FROM character_game_summary '
@@ -686,14 +720,19 @@ def session_execute_test(username):
             'Pitches Thrown': row.sum_pitches_thrown,
         })
 
+    return {
+        "User Stats": user_stats_list,
+    }
 
 
-    
-    # user_id       char_id       sum_pitches_thrown
-    # ______       __________     ___________________
-    #   1            0 - 53              n
-    #   2            0 - 53              n
 
+# user_id       char_id       sum_pitches_thrown
+# ______       __________     ___________________
+#   1            0 - 53              n
+#   2            0 - 53              n
+
+@app.route('/user_char_stats/', methods = ['GET'])
+def session_execute_test():
     user_char_stats = (
         'SELECT user_id, char_id, sum(pitches_thrown) AS sum_pitches_thrown '
         'FROM character_game_summary '
@@ -709,9 +748,6 @@ def session_execute_test(username):
             'Pitches Thrown': row.sum_pitches_thrown
         })
         
-
-
     return {
-        "User Stats": user_stats_list,
         "User Char Stats": user_char_stats_list
     }
