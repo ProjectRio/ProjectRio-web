@@ -139,6 +139,7 @@ class User(db.Model, UserMixin):
     character_game_summaries = db.relationship('CharacterGameSummary', backref = 'user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
+    password_reset = db.relationship('PasswordReset', backref = 'user')
 
     def __init__(self, in_username, username_lowercase, in_email, in_password):
         self.username = in_username
@@ -293,7 +294,10 @@ class FieldingSummary(db.Model):
     fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)
 
-
+class PasswordReset(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    reset_token = db.Column(db.String(32), nullable=False)
 
 
 
