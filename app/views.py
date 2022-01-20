@@ -6,7 +6,7 @@ import ssl
 import secrets
 from . import bc
 from flask_mailman import EmailMessage
-from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, PasswordReset
+from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, PasswordReset, EmailVerification
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
@@ -145,10 +145,7 @@ def register():
     in_password = request.json['Password']
     in_email    = request.json['Email'].lower()
 
-    # filter User out of database through username
     user = User.query.filter_by(username_lowercase=username_lowercase).first()
-
-    # filter User out of database through email
     user_by_email = User.query.filter_by(email=in_email).first()
 
     if user or user_by_email:
@@ -161,10 +158,73 @@ def register():
         db.session.add(new_user)
         db.session.commit()
 
+        # === Create EmailVerification Row ===
+        secret_key = secrets.token_urlsafe(32)
+        create_email_verification_row(new_user, secret_key)
+
+        try:
+            send_verify_account_email(in_username, in_email, secret_key)
+        except:
+            return abort(502, 'Sending email failed')
+        
     return jsonify({
-        'riokey': new_user.rio_key,
         'username': new_user.username
     })
+
+def create_email_verification_row(user, secret_key):
+    email_verification = EmailVerification(
+        user_id = user.id,
+        secret_key = secret_key,
+    )
+
+    db.session.add(email_verification)
+    db.session.commit()
+    return
+
+def send_verify_account_email(receiver_username, receiver_email, secret_key):
+    port = 465
+    smtp_server = 'smtp.gmail.com'
+    sender_email = 'projectrio.webtest@gmail.com'
+    password = input('projectrio.webtest password: ')
+
+    message = (
+        'Subject: Verify your Project Rio Account\n'
+        'Dear {0},\n'
+        '\n'
+        'Please click the following link to verify your email address and get your Rio Key.\n'
+        '{1}'
+        '\n'
+        'Happy Hitting!\n'
+        'Project Rio Web Team'
+    ).format(
+        receiver_username,
+        secret_key
+    )
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        server.login(sender_email, password)
+        server.sendmail(sender_email, receiver_email, message)
+
+    return
+
+
+@app.route('/verify_email/<secret_key>/', methods=['POST'])
+def verify_email(secret_key):
+    email_verification = EmailVerification.query.filter_by(secret_key=secret_key).first()
+    if email_verification:
+        user = email_verification.user
+        user.verified = True
+
+        db.session.delete(email_verification)
+        db.session.add(user)
+        db.session.commit()
+        return {
+            'Rio Key': user.rio_key,
+        }, 200
+
+    return abort(422, 'Invalid Key')
+
 
 @app.route('/retire_account/', methods=[''])
 @jwt_required()
@@ -252,22 +312,23 @@ def send_password_reset_email(user, reset_token):
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
     receiver_email = user.email
+    receiver_username = user.username
      # Will be saved securely on server on roll out    
     password = input('projectrio.webtest password: ')
 
     message = (
-        'Subject: Project Rio Test Email\n'
+        'Subject: Project Rio Password Reset\n'
 
         'Dear {0},\n'
         '\n'
         'We received a password reset request. If you did not make this request, please ignore this email.\n'
         'Otherwise, follow this link to reset your account\n'
-        '{1}.\n'
+        '{1}\n'
         '\n'
         'Happy hitting!\n'
         'Project Rio Web Team'
     ).format(
-            receiver_email, 
+            receiver_username, 
             reset_token
         )
     
@@ -296,12 +357,9 @@ def change_password():
 
         return {
             'msg': 'Password changed...'
-        }
+        }, 200
     except:
-        return {
-            'msg': 'Error resetting password'
-        }
-
+        return abort(422, 'Invalid Key')
 
 # Authenticate user, create new JWTs, login via username or email
 @app.route('/login/', methods=['POST'])
