@@ -5,7 +5,6 @@ import smtplib
 import ssl
 import secrets
 from . import bc
-from flask_mailman import EmailMessage
 from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
