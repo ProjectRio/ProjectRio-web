@@ -1,10 +1,12 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
+import smtplib
+import ssl
 import secrets
 from . import bc
 from flask_mailman import EmailMessage
-from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
+from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, PasswordReset
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
@@ -118,18 +120,6 @@ def create_character_tables():
 
     return 'Characters added...'
 
-@app.route('/test_mail/')
-def test_mail():
-    msg = EmailMessage(
-        'Test Email 1',
-        'This is a test email',
-        'from@example.com',
-        ['to@example.com'],
-        headers={'Message-ID': 'foo'},
-    )
-    msg.send()
-    return 'Email sent...'
-
 # == User Routes ==
 
 # Refresh any JWT within 7 days of expiration after requests
@@ -187,7 +177,7 @@ def retire_account():
     # Set Retired to true
 
     return {
-        'Account Retired...'
+        'msg': 'Account Retired...'
     }
 
 
@@ -201,47 +191,116 @@ def request_email_change():
     # Send out email for email validation w link
 
     return {
-        'Link emailed...'
+       'msg': 'Link emailed...'
     }
 
 
 @app.route('/change_email/<secretcode>/', methods=['POST'])
 @jwt_required()
-def remove_email(secretcode):
+def change_email(secretcode):
     # Check for valid JWT
     # Get User using valid JWT
     # Check for valid secretlink related to logged in user
     # Use user input to switch email to a new email
 
     return {
-        'Email changed...'
+        'msg': 'Email changed...'
     }
 
 
-@app.route('/request_password_change/', methods=['GET'])
-@jwt_required()
+@app.route('/request_password_change/', methods=['POST'])
 def request_password_change():
-    # Check for valid JWT
-    # Get User using valid JWT
-    # Create secret code for link to go to to change password
-    # Add secret link to table for short period of time
-    # return link to email address
+    try:
+        user = get_user_requesting_reset()
+        reset_token = secrets.token_urlsafe(32)
+        create_password_reset_row(user, reset_token)
+        send_password_reset_email(user, reset_token)
+        return {
+            'msg': 'Link emailed...'
+        }
+    except: 
+        return {
+            'msg': 'Error requesting password reset'
+        }
 
-    return {
-        'Link emailed...'
-    }
+def get_user_requesting_reset():
+    if '@' in request.json['username or email']:
+        email_lowercase = request.json['username or email'].lower()
+        user = User.query.filter_by(email=email_lowercase).first()
+    else:
+        username_lower = request.json['username or email'].lower()
+        user = User.query.filter_by(username_lowercase=username_lower).first()
+    
+    return user
+    
+def create_password_reset_row(user, reset_token):
+    if user.password_reset:
+        password_reset = user.password_reset[0]
+        password_reset.reset_token = reset_token 
+    else:
+        password_reset = PasswordReset(
+            user_id = user.id,
+            reset_token = reset_token,
+        )
+        
+    db.session.add(password_reset)
+    db.session.commit()
+    return
+
+def send_password_reset_email(user, reset_token):
+    port = 465   
+    smtp_server = 'smtp.gmail.com'
+    sender_email = 'projectrio.webtest@gmail.com'
+    receiver_email = user.email
+     # Will be saved securely on server on roll out    
+    password = input('projectrio.webtest password: ')
+
+    message = (
+        'Subject: Project Rio Test Email\n'
+
+        'Dear {0},\n'
+        '\n'
+        'We received a password reset request. If you did not make this request, please ignore this email.\n'
+        'Otherwise, follow this link to reset your account\n'
+        '{1}.\n'
+        '\n'
+        'Happy hitting!\n'
+        'Project Rio Web Team'
+    ).format(
+            receiver_email, 
+            reset_token
+        )
+    
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        server.login(sender_email, password)
+        server.sendmail(sender_email, receiver_email, message)
+
+    return
 
 
-@app.route('/change_password/<secretcode>/', methods=['POST'])
-@jwt_required()
+
+@app.route('/change_password/', methods=['POST'])
 def change_password():
-    # Check for valid JWT
-    # Get User using valid JWT
-    # Check for valid secretlink related to logged in user
-    # Use user input to switch password to a new password
-    return {
-        'Password changed...'
-    }
+    try:
+        reset_token = request.json['reset_token']
+        password = request.json['password']
+
+        password_reset = PasswordReset.query.filter_by(reset_token=reset_token).first()
+        user = password_reset.user
+        user.password = bc.generate_password_hash(password)
+
+        db.session.delete(password_reset)
+        db.session.add(user)
+        db.session.commit()
+
+        return {
+            'msg': 'Password changed...'
+        }
+    except:
+        return {
+            'msg': 'Error resetting password'
+        }
 
 
 # Authenticate user, create new JWTs, login via username or email
@@ -699,6 +758,8 @@ def get_character_game_summaries(user):
 
 
 
+
+# 1 row per User with the sum of all pitches by all Characters
 # user_id  sum_pitches_thrown
 # ______   ___________________
 #   1              n
@@ -725,20 +786,20 @@ def sum_stats():
     }
 
 
-
+# 1 row per Character per User with the sum of all pitches thrown
 # user_id       char_id       sum_pitches_thrown
 # ______       __________     ___________________
 #   1            0 - 53              n
 #   2            0 - 53              n
 
 @app.route('/user_char_stats/', methods = ['GET'])
-def session_execute_test():
-    user_char_stats = (
+def user_char_stats():
+    user_char_stats_query = (
         'SELECT user_id, char_id, sum(pitches_thrown) AS sum_pitches_thrown '
         'FROM character_game_summary '
         'GROUP BY user_id, char_id'
     )
-    user_char_stats_query_result = db.session.execute(user_char_stats)
+    user_char_stats_query_result = db.session.execute(user_char_stats_query)
 
     user_char_stats_list = []
     for row in user_char_stats_query_result:
