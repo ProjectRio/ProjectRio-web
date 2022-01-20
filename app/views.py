@@ -6,7 +6,7 @@ import ssl
 import secrets
 from . import bc
 from flask_mailman import EmailMessage
-from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, PasswordReset, EmailVerification
+from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
@@ -158,30 +158,16 @@ def register():
         db.session.add(new_user)
         db.session.commit()
 
-        # === Create EmailVerification Row ===
-        secret_key = secrets.token_urlsafe(32)
-        create_email_verification_row(new_user, secret_key)
-
         try:
-            send_verify_account_email(in_username, in_email, secret_key)
+            send_verify_account_email(in_username, in_email, new_user.active_url)
         except:
-            return abort(502, 'Sending email failed')
+            return abort(502, 'Failed to send email')
         
     return jsonify({
         'username': new_user.username
     })
 
-def create_email_verification_row(user, secret_key):
-    email_verification = EmailVerification(
-        user_id = user.id,
-        secret_key = secret_key,
-    )
-
-    db.session.add(email_verification)
-    db.session.commit()
-    return
-
-def send_verify_account_email(receiver_username, receiver_email, secret_key):
+def send_verify_account_email(receiver_username, receiver_email, active_url):
     port = 465
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
@@ -198,7 +184,7 @@ def send_verify_account_email(receiver_username, receiver_email, secret_key):
         'Project Rio Web Team'
     ).format(
         receiver_username,
-        secret_key
+        active_url
     )
 
     context = ssl.create_default_context()
@@ -209,21 +195,21 @@ def send_verify_account_email(receiver_username, receiver_email, secret_key):
     return
 
 
-@app.route('/verify_email/<secret_key>/', methods=['POST'])
-def verify_email(secret_key):
-    email_verification = EmailVerification.query.filter_by(secret_key=secret_key).first()
-    if email_verification:
-        user = email_verification.user
+@app.route('/verify_email/', methods=['POST'])
+def verify_email():
+    try:
+        active_url = request.json['active_url']
+        user = User.query.filter_by(active_url=active_url).first()
         user.verified = True
+        user.active_url = None
 
-        db.session.delete(email_verification)
         db.session.add(user)
         db.session.commit()
         return {
             'Rio Key': user.rio_key,
         }, 200
-
-    return abort(422, 'Invalid Key')
+    except:
+        return abort(422, 'Invalid Key')
 
 
 @app.route('/retire_account/', methods=[''])
@@ -270,49 +256,40 @@ def change_email(secretcode):
 
 @app.route('/request_password_change/', methods=['POST'])
 def request_password_change():
-    try:
-        user = get_user_requesting_reset()
-        reset_token = secrets.token_urlsafe(32)
-        create_password_reset_row(user, reset_token)
-        send_password_reset_email(user, reset_token)
-        return {
-            'msg': 'Link emailed...'
-        }
-    except: 
-        return {
-            'msg': 'Error requesting password reset'
-        }
-
-def get_user_requesting_reset():
     if '@' in request.json['username or email']:
         email_lowercase = request.json['username or email'].lower()
         user = User.query.filter_by(email=email_lowercase).first()
     else:
         username_lower = request.json['username or email'].lower()
         user = User.query.filter_by(username_lowercase=username_lower).first()
-    
-    return user
-    
-def create_password_reset_row(user, reset_token):
-    if user.password_reset:
-        password_reset = user.password_reset[0]
-        password_reset.reset_token = reset_token 
-    else:
-        password_reset = PasswordReset(
-            user_id = user.id,
-            reset_token = reset_token,
-        )
-        
-    db.session.add(password_reset)
-    db.session.commit()
-    return
 
-def send_password_reset_email(user, reset_token):
+    if not user:
+        abort(408, 'Corresponding user does not exist')
+
+    if user.verified == False:
+        abort(401, 'Email unverified')
+
+    active_url = secrets.token_urlsafe(32)
+    user.active_url = active_url
+    db.session.add(user)
+    db.session.commit()
+
+    try:
+        send_password_reset_email(user)
+    except:
+        abort(502, 'Failed to send email')
+
+    return {
+        'msg': 'Link emailed...'
+    }
+
+def send_password_reset_email(user):
     port = 465   
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
     receiver_email = user.email
     receiver_username = user.username
+    active_url = user.active_url
      # Will be saved securely on server on roll out    
     password = input('projectrio.webtest password: ')
 
@@ -329,7 +306,7 @@ def send_password_reset_email(user, reset_token):
         'Project Rio Web Team'
     ).format(
             receiver_username, 
-            reset_token
+            active_url
         )
     
     context = ssl.create_default_context()
@@ -343,23 +320,25 @@ def send_password_reset_email(user, reset_token):
 
 @app.route('/change_password/', methods=['POST'])
 def change_password():
-    try:
-        reset_token = request.json['reset_token']
-        password = request.json['password']
+    active_url = request.json['active_url']
+    password = request.json['password']
 
-        password_reset = PasswordReset.query.filter_by(reset_token=reset_token).first()
-        user = password_reset.user
-        user.password = bc.generate_password_hash(password)
+    user = User.query.filter_by(active_url=active_url).first()
 
-        db.session.delete(password_reset)
-        db.session.add(user)
-        db.session.commit()
-
-        return {
-            'msg': 'Password changed...'
-        }, 200
-    except:
+    if not user:
         return abort(422, 'Invalid Key')
+
+    if user.verified == False:
+        return abort(401, 'Email unverified')
+
+    user.password = bc.generate_password_hash(password)
+    user.active_url = None
+    db.session.add(user)
+    db.session.commit()
+
+    return {
+        'msg': 'Password changed...'
+    }, 200
 
 # Authenticate user, create new JWTs, login via username or email
 @app.route('/login/', methods=['POST'])
