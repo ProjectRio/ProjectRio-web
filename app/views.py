@@ -860,6 +860,7 @@ def get_user_sums(user_id):
     )
 
     result = db.session.execute(query)
+    # There is only one row in this result, but it must be called this way to access it as dict
     for row in result:
         user_sums = {
             "pitches_thrown": row.pitches_thrown,
@@ -874,7 +875,7 @@ def get_user_sums(user_id):
 
     return user_sums
 
-
+# CASE operates similar to an if, else if, else statement
 def get_game_sums(user_id):
     query = (
         'SELECT '
@@ -894,6 +895,7 @@ def get_game_sums(user_id):
     )
 
     result = db.session.execute(query)
+    # There is only one row in this result, but it must be called this way to access it as dict
     for row in result:
         game_sums = {
             "games": row.games,
