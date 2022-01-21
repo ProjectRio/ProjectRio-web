@@ -795,34 +795,6 @@ def get_character_game_summaries(user):
 
 
 
-# 1 row per User with the sum of all pitches by all Characters
-# user_id  sum_pitches_thrown
-# ______   ___________________
-#   1              n
-#   2              n
-
-@app.route('/user_stats/', methods = ['GET'])
-def sum_stats():
-    user_stats = (
-        'SELECT user_id, sum(pitches_thrown) AS sum_pitches_thrown '
-        'FROM character_game_summary '
-        'GROUP BY user_id'
-    )
-    user_stats_query_result = db.session.execute(user_stats)
-
-    user_stats_list = []
-    for row in user_stats_query_result:
-        user_stats_list.append({
-            'User ID': row.user_id,
-            'Pitches Thrown': row.sum_pitches_thrown,
-        })
-
-    return {
-        "User Stats": user_stats_list,
-    }
-
-
-
 @app.route('/<username>/stats/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats(username):
