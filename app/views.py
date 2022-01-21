@@ -822,6 +822,89 @@ def sum_stats():
     }
 
 
+
+@app.route('/<username>/stats/', methods = ['GET'])
+@jwt_required(optional=True)
+def user_stats(username):
+    in_username_lowercase = username.lower()
+    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+    user_sums = get_user_sums(user.id)
+    game_sums = get_game_sums(user.id)
+
+    return {
+        "user_sums": user_sums,
+        "game_sums": game_sums
+    }
+
+def get_user_sums(user_id):
+    query = (
+        'SELECT '
+        'character_game_summary.char_id, '
+        'SUM(character_game_summary.pitches_thrown) AS pitches_thrown, '
+        'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, '
+        'SUM(character_game_summary.hits) AS hits, '
+        'SUM(character_game_summary.at_bats) AS at_bats, '
+        'SUM(character_game_summary.walks_bb) AS walks_bb, '
+        'SUM(character_game_summary.walks_hit) AS walks_hit, '
+        'AVG(character_game_summary.rbi) AS rbi, '
+        'SUM(character_game_summary.singles) AS singles, '
+        'SUM(character_game_summary.doubles) AS doubles, '
+        'SUM(character_game_summary.triples) AS triples, '
+        'SUM(character_game_summary.homeruns) AS homeruns '
+        'FROM character_game_summary '
+        'LEFT JOIN user '
+        'ON character_game_summary.user_id = user.id '
+        'WHERE user.id = {0} '
+    ).format(
+        user_id,
+    )
+
+    result = db.session.execute(query)
+    for row in result:
+        user_sums = {
+            "pitches_thrown": row.pitches_thrown,
+            "strikeouts_pitched": row.strikeouts_pitched,
+            "hits": row.hits,
+            "at_bats": row.at_bats,
+            "batting_average": row.hits/row.at_bats,
+            "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
+            "rbi": row.rbi,
+            "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
+        }
+
+    return user_sums
+
+
+def get_game_sums(user_id):
+    query = (
+        'SELECT '
+        'COUNT(game_id) as games, '
+        'SUM(CASE '
+            'WHEN (game.away_player_id = {0} AND game.away_score > game.home_score) THEN 1 '
+            'ELSE 0 '
+            'END) AS away_wins, '
+        'SUM(CASE '
+            'WHEN (game.home_player_id = {0} AND game.home_score > game.away_score) THEN 1 '
+            'ELSE 0 '
+            'END) AS home_wins '
+        'FROM game '
+        'WHERE game.away_player_id = {0} OR game.home_player_id = {0}'
+    ).format(
+        user_id
+    )
+
+    result = db.session.execute(query)
+    for row in result:
+        game_sums = {
+            "games": row.games,
+            "away_wins": row.away_wins,
+            "home_wins": row.home_wins,
+            "winrate": (row.away_wins + row.home_wins)/row.games,
+        }
+
+    return game_sums
+
+
 # 1 row per Character per User with the sum of all pitches thrown
 # user_id       char_id       sum_pitches_thrown
 # ______       __________     ___________________
