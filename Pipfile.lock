@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "9b59129193e1f915b6192af252ad0ccc715af433ed4e1fc176fdc2c5273eaafe"
+            "sha256": "877485621f227e07ff72d19347897b2b11074e0fb219cc4f641bfefa913fa70a"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -110,6 +110,14 @@
             "index": "pypi",
             "version": "==0.7.1"
         },
+        "flask-jwt-extended": {
+            "hashes": [
+                "sha256:ad6977b07c54e51c13b5981afc246868b9901a46715d9b9827898bfd916aae88",
+                "sha256:c82c9e505bc96f4a5186de31c05262dbcde6fa10581e9aa46df8f99ca04be2c3"
+            ],
+            "index": "pypi",
+            "version": "==4.3.1"
+        },
         "flask-login": {
             "hashes": [
                 "sha256:6d33aef15b5bcead780acc339464aae8a6e28f13c90d8b1cf9de8b549d1c0b4b",
@@ -117,6 +125,14 @@
             ],
             "index": "pypi",
             "version": "==0.5.0"
+        },
+        "flask-mailman": {
+            "hashes": [
+                "sha256:323700baff52ad3ab27c49f8bf38ca63d4f436dce89ff307a3ef0a65e084b25d",
+                "sha256:faa945585a985e475393f83b210b32b3577400233b0584dd9a32f1d13e152ba8"
+            ],
+            "index": "pypi",
+            "version": "==0.3.0"
         },
         "flask-marshmallow": {
             "hashes": [
@@ -302,12 +318,28 @@
             "index": "pypi",
             "version": "==0.26.1"
         },
+        "mkdocs-material-extensions": {
+            "hashes": [
+                "sha256:a82b70e533ce060b2a5d9eb2bc2e1be201cf61f901f93704b4acf6e3d5983a44",
+                "sha256:bfd24dfdef7b41c312ede42648f9eb83476ea168ec163b613f9abd12bbfddba2"
+            ],
+            "markers": "python_version >= '3.6'",
+            "version": "==1.0.3"
+        },
         "pycparser": {
             "hashes": [
                 "sha256:8ee45429555515e1f6b185e78100aea234072576aa43ab53aefcae078162fca9",
                 "sha256:e644fdec12f7872f86c58ff790da456218b10f863970249516d60a5eaca77206"
             ],
             "version": "==2.21"
+        },
+        "pyjwt": {
+            "hashes": [
+                "sha256:b888b4d56f06f6dcd777210c334e69c737be74755d3e5e9ee3fe67dc18a0ee41",
+                "sha256:e0c4bb8d9f0af0c7f5b1ec4c5036309617d03d56932877f2f7a0beeb5318322f"
+            ],
+            "markers": "python_version >= '3.6'",
+            "version": "==2.3.0"
         },
         "python-decouple": {
             "hashes": [

@@ -1,15 +1,17 @@
 from decouple import config
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
 from flask_bcrypt import Bcrypt
 from flask_marshmallow import Marshmallow
+from flask_jwt_extended import JWTManager
+from flask_mailman import Mail
 
 # Globally accessible libraries
 db = SQLAlchemy()
-lm = LoginManager()
 bc = Bcrypt()
 ma = Marshmallow()
+jwt = JWTManager()
+mail = Mail()
 
 def init_app():
     # Construct core application
@@ -18,9 +20,10 @@ def init_app():
 
     # Initialize Plugins
     db.init_app(app)
-    lm.init_app(app)
     bc.init_app(app)
     ma.init_app(app)
+    jwt.init_app(app)
+    mail.init_app(app)
 
     with app.app_context():
         #import routes

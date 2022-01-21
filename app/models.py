@@ -7,30 +7,30 @@ class Character(db.Model):
     chemistry_table_id = db.Column(db.ForeignKey('chemistry_table.id'), nullable = False)
     name = db.Column(db.String(16))
     starting_addr = db.Column(db.String(16))
-    curve_ball_speed = db.Column(db.String(3))
-    fast_ball_speed = db.Column(db.String(3))
-    curve = db.Column(db.String(2))
-    fielding_arm = db.Column(db.String(1))
-    batting_stance = db.Column(db.String(1))
-    nice_contact_spot_size = db.Column(db.String(3))
-    perfect_contact_spot_size = db.Column(db.String(3))
-    slap_hit_power = db.Column(db.String(2))
-    charge_hit_power = db.Column(db.String(3))
-    bunting = db.Column(db.String(2))
-    hit_trajectory_mpp = db.Column(db.String(2))
-    hit_trajectory_mhl = db.Column(db.String(2))
-    speed = db.Column(db.String(3))
-    throwing_arm = db.Column(db.String(3))
-    character_class = db.Column(db.String(3))
-    weight = db.Column(db.String(3))
-    captain = db.Column(db.String(1))
-    captain_star_hit_or_pitch = db.Column(db.String(1))
-    non_captain_star_swing = db.Column(db.String(1))
-    non_captain_star_pitch = db.Column(db.String(1))
-    batting_stat_bar = db.Column(db.String(1))
-    pitching_stat_bar = db.Column(db.String(1))
-    running_stat_bar = db.Column(db.String(1))
-    fielding_stat_bar = db.Column(db.String(1))
+    curve_ball_speed = db.Column(db.Integer)
+    fast_ball_speed = db.Column(db.Integer)
+    curve = db.Column(db.Integer)
+    fielding_arm = db.Column(db.Integer)
+    batting_stance = db.Column(db.Integer)
+    nice_contact_spot_size = db.Column(db.Integer)
+    perfect_contact_spot_size = db.Column(db.Integer)
+    slap_hit_power = db.Column(db.Integer)
+    charge_hit_power = db.Column(db.Integer)
+    bunting = db.Column(db.Integer)
+    hit_trajectory_mpp = db.Column(db.Integer)
+    hit_trajectory_mhl = db.Column(db.Integer)
+    speed = db.Column(db.Integer)
+    throwing_arm = db.Column(db.Integer)
+    character_class = db.Column(db.Integer)
+    weight = db.Column(db.Integer)
+    captain = db.Column(db.Integer)
+    captain_star_hit_or_pitch = db.Column(db.Integer)
+    non_captain_star_swing = db.Column(db.Integer)
+    non_captain_star_pitch = db.Column(db.Integer)
+    batting_stat_bar = db.Column(db.Integer)
+    pitching_stat_bar = db.Column(db.Integer)
+    running_stat_bar = db.Column(db.Integer)
+    fielding_stat_bar = db.Column(db.Integer)
     
     user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_character')
     character_game_summary = db.relationship('CharacterGameSummary', backref = 'character_game_summary_from_character')
@@ -69,66 +69,67 @@ class Character(db.Model):
 
 class ChemistryTable(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    mario = db.Column(db.String(3))
-    luigi = db.Column(db.String(3))
-    dk = db.Column(db.String(3))
-    diddy = db.Column(db.String(3))
-    peach = db.Column(db.String(3))
-    daisy = db.Column(db.String(3))
-    yoshi = db.Column(db.String(3))
-    baby_mario = db.Column(db.String(3))
-    baby_luigi = db.Column(db.String(3))
-    bowser = db.Column(db.String(3))
-    wario = db.Column(db.String(3))
-    waluigi = db.Column(db.String(3))
-    koopa_r = db.Column(db.String(3))
-    toad_r = db.Column(db.String(3))
-    boo = db.Column(db.String(3))
-    toadette = db.Column(db.String(3))
-    shy_guy_r = db.Column(db.String(3))
-    birdo = db.Column(db.String(3))
-    monty = db.Column(db.String(3))
-    bowser_jr = db.Column(db.String(3))
-    paratroopa_r = db.Column(db.String(3))
-    pianta_b = db.Column(db.String(3))
-    pianta_r = db.Column(db.String(3))
-    pianta_y = db.Column(db.String(3))
-    noki_b = db.Column(db.String(3))
-    noki_r = db.Column(db.String(3))
-    noki_g = db.Column(db.String(3))
-    bro_h = db.Column(db.String(3))
-    toadsworth = db.Column(db.String(3))
-    toad_b = db.Column(db.String(3))
-    toad_y = db.Column(db.String(3))
-    toad_g = db.Column(db.String(3))
-    toad_p = db.Column(db.String(3))
-    magikoopa_b = db.Column(db.String(3))
-    magikoopa_r = db.Column(db.String(3))
-    magikoopa_g = db.Column(db.String(3))
-    magikoopa_y = db.Column(db.String(3))
-    king_boo = db.Column(db.String(3))
-    petey = db.Column(db.String(3))
-    dixie = db.Column(db.String(3))
-    goomba = db.Column(db.String(3))
-    paragoomba = db.Column(db.String(3))
-    koopa_g = db.Column(db.String(3))
-    paratroopa_g = db.Column(db.String(3))
-    shy_guy_b = db.Column(db.String(3))
-    shy_guy_y = db.Column(db.String(3))
-    shy_guy_g = db.Column(db.String(3))
-    shy_guy_bk = db.Column(db.String(3))
-    dry_bones_gy = db.Column(db.String(3))
-    dry_bones_g = db.Column(db.String(3))
-    dry_bones_r = db.Column(db.String(3))
-    dry_bones_b = db.Column(db.String(3))
-    bro_f = db.Column(db.String(3))
-    bro_b = db.Column(db.String(3))
+    mario = db.Column(db.Integer)
+    luigi = db.Column(db.Integer)
+    dk = db.Column(db.Integer)
+    diddy = db.Column(db.Integer)
+    peach = db.Column(db.Integer)
+    daisy = db.Column(db.Integer)
+    yoshi = db.Column(db.Integer)
+    baby_mario = db.Column(db.Integer)
+    baby_luigi = db.Column(db.Integer)
+    bowser = db.Column(db.Integer)
+    wario = db.Column(db.Integer)
+    waluigi = db.Column(db.Integer)
+    koopa_r = db.Column(db.Integer)
+    toad_r = db.Column(db.Integer)
+    boo = db.Column(db.Integer)
+    toadette = db.Column(db.Integer)
+    shy_guy_r = db.Column(db.Integer)
+    birdo = db.Column(db.Integer)
+    monty = db.Column(db.Integer)
+    bowser_jr = db.Column(db.Integer)
+    paratroopa_r = db.Column(db.Integer)
+    pianta_b = db.Column(db.Integer)
+    pianta_r = db.Column(db.Integer)
+    pianta_y = db.Column(db.Integer)
+    noki_b = db.Column(db.Integer)
+    noki_r = db.Column(db.Integer)
+    noki_g = db.Column(db.Integer)
+    bro_h = db.Column(db.Integer)
+    toadsworth = db.Column(db.Integer)
+    toad_b = db.Column(db.Integer)
+    toad_y = db.Column(db.Integer)
+    toad_g = db.Column(db.Integer)
+    toad_p = db.Column(db.Integer)
+    magikoopa_b = db.Column(db.Integer)
+    magikoopa_r = db.Column(db.Integer)
+    magikoopa_g = db.Column(db.Integer)
+    magikoopa_y = db.Column(db.Integer)
+    king_boo = db.Column(db.Integer)
+    petey = db.Column(db.Integer)
+    dixie = db.Column(db.Integer)
+    goomba = db.Column(db.Integer)
+    paragoomba = db.Column(db.Integer)
+    koopa_g = db.Column(db.Integer)
+    paratroopa_g = db.Column(db.Integer)
+    shy_guy_b = db.Column(db.Integer)
+    shy_guy_y = db.Column(db.Integer)
+    shy_guy_g = db.Column(db.Integer)
+    shy_guy_bk = db.Column(db.Integer)
+    dry_bones_gy = db.Column(db.Integer)
+    dry_bones_g = db.Column(db.Integer)
+    dry_bones_r = db.Column(db.Integer)
+    dry_bones_b = db.Column(db.Integer)
+    bro_f = db.Column(db.Integer)
+    bro_b = db.Column(db.Integer)
 
     character = db.relationship('Character', backref = 'character')
 
 class User(db.Model, UserMixin):
     id       = db.Column(db.Integer,     primary_key=True)
     username = db.Column(db.String(64),  unique = True)
+    username_lowercase = db.Column(db.String(64), unique = True)
     email    = db.Column(db.String(120), unique = True)
     password = db.Column(db.String(500))
     rio_key  = db.Column(db.String(50), unique = True)
@@ -139,121 +140,13 @@ class User(db.Model, UserMixin):
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
 
-    def __init__(self, in_username, in_email, in_password):
+    def __init__(self, in_username, username_lowercase, in_email, in_password):
         self.username = in_username
+        self.username_lowercase = username_lowercase
         self.email    = in_email
         self.password = bc.generate_password_hash(in_password)
         self.rio_key  = secrets.token_urlsafe(32)
         self.private = True
-
-class UserCharacterStats(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
-    captain = db.Column(db.Integer)
-    superstar = db.Column(db.Integer)
-    num_of_games = db.Column(db.Integer)
-    at_bats = db.Column(db.Integer)
-    hits = db.Column(db.Integer)
-    singles = db.Column(db.Integer)
-    doubles = db.Column(db.Integer)
-    triples = db.Column(db.Integer)
-    homeruns = db.Column(db.Integer)
-    walks_bb = db.Column(db.Integer)
-    walks_hit = db.Column(db.Integer)
-    strikeouts = db.Column(db.Integer)
-    bases_stolen = db.Column(db.Integer)
-    double_plays = db.Column(db.Integer)
-    offensive_star_swings = db.Column(db.Integer)
-    offensive_stars_used = db.Column(db.Integer)
-    offensive_stars_put_in_play = db.Column(db.Integer)
-    offensive_star_successes = db.Column(db.Integer)
-    offensive_star_chances = db.Column(db.Integer)
-    offensive_star_chances_won = db.Column(db.Integer)
-    strikeouts_pitched = db.Column(db.Integer)
-    outs_pitched = db.Column(db.Integer)
-    inning_appearances = db.Column(db.Integer)
-    batters_faced = db.Column(db.Integer)
-    runs_allowed = db.Column(db.Integer)
-    defensive_star_pitches = db.Column(db.Integer)
-    defensive_stars_used = db.Column(db.Integer)
-    defensive_star_successes = db.Column(db.Integer)
-    defensive_star_chances = db.Column(db.Integer)
-    defensive_star_chances_won = db.Column(db.Integer)
-
-    def __init__(self, user_id, char_id, captain, superstar):
-        self.user_id = user_id
-        self.char_id = char_id
-        self.captain = captain
-        self.superstar = superstar
-        self.num_of_games = 0
-        self.at_bats = 0
-        self.hits = 0
-        self.singles = 0
-        self.doubles = 0
-        self.triples = 0
-        self.homeruns = 0
-        self.walks_bb = 0
-        self.walks_hit = 0
-        self.strikeouts = 0
-        self.bases_stolen = 0
-        self.double_plays = 0
-        self.offensive_star_swings = 0
-        self.offensive_stars_used = 0
-        self.offensive_stars_put_in_play = 0
-        self.offensive_star_successes = 0
-        self.offensive_star_chances = 0
-        self.offensive_star_chances_won = 0
-        self.strikeouts_pitched = 0
-        self.outs_pitched = 0
-        self.inning_appearances = 0
-        self.batters_faced = 0
-        self.runs_allowed = 0
-        self.defensive_star_pitches = 0
-        self.defensive_stars_used = 0
-        self.defensive_star_successes = 0
-        self.defensive_star_chances = 0
-        self.defensive_star_chances_won = 0
-
-    def to_dict(self): 
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'char_id': self.char_id,
-            'captain': self.captain,
-            'superstar': self.superstar,
-            'num_of_games': self.num_of_games,
-            'at_bats': self.at_bats,
-            'hits': self.hits,
-            'singles': self.singles,
-            'doubles': self.doubles,
-            'triples': self.triples,
-            'homeruns': self.homeruns,
-            'walks_bb': self.walks_bb,
-            'walks_hit': self.walks_hit,
-            'strikeouts': self.strikeouts,
-            'bases_stolen': self.bases_stolen,
-            'double_plays': self.double_plays,
-            'offensive_star_swings': self.offensive_star_swings,
-            'offensive_stars_used': self.offensive_stars_used,
-            'offensive_stars_put_in_play': self.offensive_stars_put_in_play,
-            'offensive_star_successes': self.offensive_star_successes,
-            'offensive_star_chances': self.offensive_star_chances,
-            'offensive_star_chances_won': self.offensive_star_chances_won,
-            'strikeouts_pitched': self.strikeouts,
-            "outs_pitched": self.outs_pitched,
-            'inning_appearances': self.inning_appearances,
-            'batters_faced': self.batters_faced,
-            'runs_allowed': self.runs_allowed,
-            'defensive_star_pitches': self.defensive_star_pitches,
-            'defensive_stars_used': self.defensive_stars_used,
-            'defensive_star_successes': self.defensive_star_successes,
-            'defensive_star_chances': self.defensive_star_chances,
-            'defensive_stars_chance_won': self.defensive_star_chances_won
-
-            #TODO Add calculated stats
-        }
-        
 
 class Game(db.Model):
     game_id = db.Column(db.Integer, primary_key = True)
@@ -269,6 +162,16 @@ class Game(db.Model):
     quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
+
+    def to_dict(self):
+        return {
+            'game_id': self.game_id,
+            'away_player_id': self.away_player_id,
+            'home_player_id': self.home_player_id,
+            'away_score': self.away_score,
+            'home_score': self.home_score,
+            'innings_played': self.innings_played            
+        }
 
 class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -389,3 +292,138 @@ class FieldingSummary(db.Model):
     contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=False)
     fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)
+
+
+
+
+
+# Depreciated
+
+class UserStats(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    num_of_games = db.Column(db.Integer)
+    homeruns = db.Column(db.Integer)
+    innings_played = db.Column(db.Integer)
+
+    def __init__(self, user_id):
+        self.user_id = user_id
+        self.num_of_games = 0
+        self.homeruns = 0
+        self.innings_played = 0
+
+    def to_dict(self):
+        return {
+            'num_of_games': self.num_of_games,
+            'homeruns': self.homeruns,
+            'innings_played': self.innings_played
+        }
+
+class UserCharacterStats(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    captain = db.Column(db.Integer)
+    superstar = db.Column(db.Integer)
+    num_of_games = db.Column(db.Integer)
+    at_bats = db.Column(db.Integer)
+    hits = db.Column(db.Integer)
+    singles = db.Column(db.Integer)
+    doubles = db.Column(db.Integer)
+    triples = db.Column(db.Integer)
+    homeruns = db.Column(db.Integer)
+    walks_bb = db.Column(db.Integer)
+    walks_hit = db.Column(db.Integer)
+    strikeouts = db.Column(db.Integer)
+    bases_stolen = db.Column(db.Integer)
+    double_plays = db.Column(db.Integer)
+    offensive_star_swings = db.Column(db.Integer)
+    offensive_stars_used = db.Column(db.Integer)
+    offensive_stars_put_in_play = db.Column(db.Integer)
+    offensive_star_successes = db.Column(db.Integer)
+    offensive_star_chances = db.Column(db.Integer)
+    offensive_star_chances_won = db.Column(db.Integer)
+    strikeouts_pitched = db.Column(db.Integer)
+    outs_pitched = db.Column(db.Integer)
+    inning_appearances = db.Column(db.Integer)
+    batters_faced = db.Column(db.Integer)
+    runs_allowed = db.Column(db.Integer)
+    defensive_star_pitches = db.Column(db.Integer)
+    defensive_stars_used = db.Column(db.Integer)
+    defensive_star_successes = db.Column(db.Integer)
+    defensive_star_chances = db.Column(db.Integer)
+    defensive_star_chances_won = db.Column(db.Integer)
+
+    def __init__(self, user_id, char_id, captain, superstar):
+        self.user_id = user_id
+        self.char_id = char_id
+        self.captain = captain
+        self.superstar = superstar
+        self.num_of_games = 0
+        self.at_bats = 0
+        self.hits = 0
+        self.singles = 0
+        self.doubles = 0
+        self.triples = 0
+        self.homeruns = 0
+        self.walks_bb = 0
+        self.walks_hit = 0
+        self.strikeouts = 0
+        self.bases_stolen = 0
+        self.double_plays = 0
+        self.offensive_star_swings = 0
+        self.offensive_stars_used = 0
+        self.offensive_stars_put_in_play = 0
+        self.offensive_star_successes = 0
+        self.offensive_star_chances = 0
+        self.offensive_star_chances_won = 0
+        self.strikeouts_pitched = 0
+        self.outs_pitched = 0
+        self.inning_appearances = 0
+        self.batters_faced = 0
+        self.runs_allowed = 0
+        self.defensive_star_pitches = 0
+        self.defensive_stars_used = 0
+        self.defensive_star_successes = 0
+        self.defensive_star_chances = 0
+        self.defensive_star_chances_won = 0
+
+    def to_dict(self): 
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'char_id': self.char_id,
+            'captain': self.captain,
+            'superstar': self.superstar,
+            'num_of_games': self.num_of_games,
+            'at_bats': self.at_bats,
+            'hits': self.hits,
+            'singles': self.singles,
+            'doubles': self.doubles,
+            'triples': self.triples,
+            'homeruns': self.homeruns,
+            'walks_bb': self.walks_bb,
+            'walks_hit': self.walks_hit,
+            'strikeouts': self.strikeouts,
+            'bases_stolen': self.bases_stolen,
+            'double_plays': self.double_plays,
+            'offensive_star_swings': self.offensive_star_swings,
+            'offensive_stars_used': self.offensive_stars_used,
+            'offensive_stars_put_in_play': self.offensive_stars_put_in_play,
+            'offensive_star_successes': self.offensive_star_successes,
+            'offensive_star_chances': self.offensive_star_chances,
+            'offensive_star_chances_won': self.offensive_star_chances_won,
+            'strikeouts_pitched': self.strikeouts,
+            "outs_pitched": self.outs_pitched,
+            'inning_appearances': self.inning_appearances,
+            'batters_faced': self.batters_faced,
+            'runs_allowed': self.runs_allowed,
+            'defensive_star_pitches': self.defensive_star_pitches,
+            'defensive_stars_used': self.defensive_stars_used,
+            'defensive_star_successes': self.defensive_star_successes,
+            'defensive_star_chances': self.defensive_star_chances,
+            'defensive_stars_chance_won': self.defensive_star_chances_won
+
+            #TODO Add calculated stats
+        }
+        

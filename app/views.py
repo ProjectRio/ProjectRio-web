@@ -1,12 +1,13 @@
 from flask import request, jsonify, abort
-from flask_login import login_user, logout_user, current_user, login_required
-#from flask_sqlalchemy import or_
 from flask import current_app as app
+from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 import secrets
-from . import lm, bc
+from . import bc
+from flask_mailman import EmailMessage
 from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
+from datetime import datetime, timedelta, timezone
 
 from .consts import *
 
@@ -117,81 +118,187 @@ def create_character_tables():
 
     return 'Characters added...'
 
-
+@app.route('/test_mail/')
+def test_mail():
+    msg = EmailMessage(
+        'Test Email 1',
+        'This is a test email',
+        'from@example.com',
+        ['to@example.com'],
+        headers={'Message-ID': 'foo'},
+    )
+    msg.send()
+    return 'Email sent...'
 
 # == User Routes ==
-# provide login manager with load_user callback
-@lm.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
 
-# Logout user
-@app.route('/logout/')
-def logout():
-    logout_user()
-    
-    resp = jsonify(success=True)
-    return resp
+# Refresh any JWT within 7 days of expiration after requests
+@app.after_request
+def refresh_expiring_jwts(response):
+    try:
+        exp_timestamp = get_jwt()['exp']
+        now = datetime.now(timezone.utc)
+        target_timestamp = datetime.timestamp(now + timedelta(days=7))
+        if target_timestamp > exp_timestamp:
+            access_token = create_access_token(identity=get_jwt_identity())
+            set_access_cookies(response, access_token)
+        return response
+    except (RuntimeError, KeyError):
+        # Case where JWT is invalid, return original response
+        return response
+
 
 @app.route('/register/', methods=['POST'])
 def register():    
     in_username = request.json['Username']
+    username_lowercase = in_username.lower()
     in_password = request.json['Password']
-    in_email    = request.json['Email']
+    in_email    = request.json['Email'].lower()
 
     # filter User out of database through username
-    user = User.query.filter_by(username=in_username).first()
+    user = User.query.filter_by(username_lowercase=username_lowercase).first()
 
     # filter User out of database through email
     user_by_email = User.query.filter_by(email=in_email).first()
 
     if user or user_by_email:
-        return abort(409, description='Username has already been taken')
+        return abort(409, description='Username or Email has already been taken')
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
     else:
-        new_user = User(in_username, in_email, in_password)
+        # === Create User row ===
+        new_user = User(in_username, username_lowercase, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
 
-    return user_schema.dump(new_user)
+    return jsonify({
+        'riokey': new_user.rio_key,
+        'username': new_user.username
+    })
 
-# Authenticate user, login via username or email
+@app.route('/retire_account/', methods=[''])
+@jwt_required()
+def retire_account():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Remove email
+    # Remove discord
+    # Set Private to true
+    # Set Retired to true
+
+    return {
+        'Account Retired...'
+    }
+
+
+@app.route('/request_email_change/', methods=['GET'])
+@jwt_required()
+def request_email_change():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Create secret code for link when changing email
+    # Add secret link to table for short period of time
+    # Send out email for email validation w link
+
+    return {
+        'Link emailed...'
+    }
+
+
+@app.route('/change_email/<secretcode>/', methods=['POST'])
+@jwt_required()
+def remove_email(secretcode):
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Check for valid secretlink related to logged in user
+    # Use user input to switch email to a new email
+
+    return {
+        'Email changed...'
+    }
+
+
+@app.route('/request_password_change/', methods=['GET'])
+@jwt_required()
+def request_password_change():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Create secret code for link to go to to change password
+    # Add secret link to table for short period of time
+    # return link to email address
+
+    return {
+        'Link emailed...'
+    }
+
+
+@app.route('/change_password/<secretcode>/', methods=['POST'])
+@jwt_required()
+def change_password():
+    # Check for valid JWT
+    # Get User using valid JWT
+    # Check for valid secretlink related to logged in user
+    # Use user input to switch password to a new password
+    return {
+        'Password changed...'
+    }
+
+
+# Authenticate user, create new JWTs, login via username or email
 @app.route('/login/', methods=['POST'])
 def login():
-    in_username = request.json['Username']
+    in_username = request.json['Username'].lower()
     in_password = request.json['Password']
-    in_email    = request.json['Email']
+    in_email    = request.json['Email'].lower()
 
     # filter User out of database through username
-    user = User.query.filter_by(username=in_username).first()
+    user = User.query.filter_by(username_lowercase=in_username).first()
 
     # filter User out of database through email
     user_by_email = User.query.filter_by(email=in_email).first()
 
-    if user or user_by_email:
-        user_to_login = user if user else user_by_email
-        if bc.check_password_hash(user_to_login.password, in_password):
-            login_user(user_to_login)
-            return user_schema.dump(user_to_login)
+    if user == user_by_email:
+        if bc.check_password_hash(user.password, in_password):            
+            # Creating JWT and Cookies
+            response = jsonify({
+                'msg': 'login successful',
+                'username': user.username,
+            })
+            access_token = create_access_token(identity=user.username)
+            set_access_cookies(response, access_token)
+
+            return response
         else:
             return abort(401, description='Incorrect password')
     else:
-        return abort(406, description='User does not exist')
+        return abort(408, description='Incorrect Username or Password')
+
+
+# Revoke JWTs
+@app.route('/logout/', methods=['POST'])
+def logout():    
+    response = jsonify({'msg': 'logout successful'})
+    unset_jwt_cookies(response)
+    return response
+
 
 #GET will retreive user key, POST with empty JSON will generate new rio key and return it
 @app.route('/key/', methods=['GET', 'POST'])
-@login_required
+@jwt_required()
 def update_rio_key():
-    if current_user.is_authenticated:
-        # Return Key
-        if request.method == 'GET':
-            return user_schema.dump(current_user)
-        # Generate new key and return it
-        elif request.method == 'POST':
-            current_user.rio_key  = secrets.token_urlsafe(32)            
-            db.session.commit()
-            return user_schema.dump(current_user)
+    current_user_username = get_jwt_identity()
+    current_user = User.query.filter_by(username=current_user_username).first()
+
+    if request.method == 'GET':
+        return jsonify({
+            "riokey": current_user.rio_key
+        })
+    elif request.method == 'POST':
+        current_user.rio_key = secrets.token_urlsafe(32)
+        db.session.commit()
+        return jsonify({
+            "riokey": current_user.rio_key
+        })
 
 
 
@@ -469,7 +576,30 @@ def populate_db():
 
 
 
-# === Get Characters ===
+# === FRONT END REQUESTS ===
+@app.route('/get_user_info/<username>', methods = ['GET'])
+@jwt_required(optional=True)
+def get_user_info(username):
+    current_user = get_jwt_identity()
+    in_username_lowercase = username.lower()
+    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user:
+        return abort(408, description='User does not exist')
+    elif user.username == current_user:
+        return {
+            "username": user.username,
+            "private": user.private,
+            "loggedIn": True
+        }
+    else:
+        return {
+            "username": user.username,
+            "private": user.private,
+            "loggedIn": False
+        }
+
+
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
     characters = []
@@ -480,21 +610,78 @@ def get_characters():
         'characters': characters
         }
 
-@app.route('/user_characters/<user>', methods = ['GET'])
+
+@app.route('/get_user_character_stats/<user>', methods = ['GET'])
+@jwt_required(optional=True)
 def get_user_character_stats(user):
-    characters = []
-    #user_characters = User.query.filter_by(username=user).first().user_character_stats.all()
-    #
-    #for character in user_characters:
-    #    characters.append(character.to_dict())
+    current_user = get_jwt_identity()
+
+    in_username_lowercase = user.lower()
+    user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user_to_query:
+        return abort(408, description='User does not exist')
+
+    if user_to_query.private and user_to_query.username != current_user:
+        return {
+            'private': True,
+            'username': user_to_query.username
+        }
+
+    if not user_to_query.private or user_to_query.username == current_user:
+        characters = []
+        user_characters = user_to_query.user_character_stats.all()    
+        for character in user_characters:
+            characters.append(character.to_dict())
+        
+        return {
+            'User Characters': characters,
+            'username': user_to_query.username
+            }
+
+
+@app.route('/get_games/<username>/', methods = ['GET'])
+def get_games(username):
+    in_username_lowercase = username.lower()
+    user_id = User.query.filter_by(username_lowercase=in_username_lowercase).first().id
+    games = Game.query.filter(db.or_(Game.away_player_id == user_id, Game.home_player_id == user_id))
     
-    #user_games = Game.query.filter((Game.away_player_id==user.id) | (Game.home_player_id==user.id) )
-    #user_characters = CharacterGameSummary.query.filter_by(user_id==user.id)
-    #print(user_characters)
+    games_list = []
+    for game in games:
+        games_list.append(game.to_dict())
 
     return {
-        # 'User Characters': characters
-        }
+        'games': games_list,
+    }
+
+
+@app.route('/validate_JWT/', methods = ['GET'])
+@jwt_required(optional=True)
+def validate_JWT():
+    try:
+        current_user_username = get_jwt_identity()
+        return jsonify(logged_in_as=current_user_username)
+    except:
+        return 'No JWT...'
+
+
+@app.route('/set_privacy/', methods = ['GET', 'POST'])
+@jwt_required()
+def set_privacy():
+    current_user_username = get_jwt_identity()
+    current_user = User.query.filter_by(username=current_user_username).first()
+
+    if request.method == 'GET':
+        return jsonify({
+            'private': current_user.private
+        })
+    if request.method == 'POST':
+        current_user.private = not current_user.private
+        db.session.commit()
+        return jsonify({
+            'private': current_user.private
+        })
+
 
 @app.route('/character_game_summaries/<user>/', methods = ['GET'])
 def get_character_game_summaries(user):
@@ -511,40 +698,14 @@ def get_character_game_summaries(user):
         }
 
 
-@app.route('/sum_stats/<username>/<char_id>/', methods = ['GET'])
-def sum_stats(username, char_id):
-    user = User.query.filter_by(username=username).first()
 
-    result = CharacterGameSummary.query.with_entities(
-            db.func.sum(CharacterGameSummary.pitches_thrown).label('sum_pitches_thrown'),
-            db.func.sum(CharacterGameSummary.hits_allowed).label('sum_hits_allowed'),
-            db.func.sum(CharacterGameSummary.batters_walked).label('sum_batters_walked'),
-            db.func.sum(CharacterGameSummary.runs_allowed).label('sum_runs_allowed'),
-            db.func.sum(CharacterGameSummary.inning_appearances).label('sum_inning_appearances'),
-        ).filter_by(
-            user_id=user.id,
-            char_id=char_id,
-        ).first()
+# user_id  sum_pitches_thrown
+# ______   ___________________
+#   1              n
+#   2              n
 
-    return {
-        'Char Id': char_id,
-        'Sum Pitches': result.sum_pitches_thrown,
-        'Sum Hits Allowed': result.sum_hits_allowed,
-        'Sum Batters Walked': result.sum_batters_walked,
-        'Sum Runs Allowed': result.sum_runs_allowed,
-        'Average Hits allowed per Inning Appearance': result.sum_hits_allowed/result.sum_inning_appearances,
-        'Average Batters Walked per Inning Appearance': result.sum_batters_walked/result.sum_inning_appearances,
-        'Average # Runs allowed per Inning Appearance': result.sum_runs_allowed/result.sum_inning_appearances,
-    }
-
-@app.route('/session_execute_test/<username>/', methods = ['GET'])
-def session_execute_test(username):
-
-    # user_id  sum_pitches_thrown
-    # ______   ___________________
-    #   1              n
-    #   2              n
-
+@app.route('/user_stats/', methods = ['GET'])
+def sum_stats():
     user_stats = (
         'SELECT user_id, sum(pitches_thrown) AS sum_pitches_thrown '
         'FROM character_game_summary '
@@ -559,14 +720,19 @@ def session_execute_test(username):
             'Pitches Thrown': row.sum_pitches_thrown,
         })
 
+    return {
+        "User Stats": user_stats_list,
+    }
 
 
-    
-    # user_id       char_id       sum_pitches_thrown
-    # ______       __________     ___________________
-    #   1            0 - 53              n
-    #   2            0 - 53              n
 
+# user_id       char_id       sum_pitches_thrown
+# ______       __________     ___________________
+#   1            0 - 53              n
+#   2            0 - 53              n
+
+@app.route('/user_char_stats/', methods = ['GET'])
+def session_execute_test():
     user_char_stats = (
         'SELECT user_id, char_id, sum(pitches_thrown) AS sum_pitches_thrown '
         'FROM character_game_summary '
@@ -582,9 +748,6 @@ def session_execute_test(username):
             'Pitches Thrown': row.sum_pitches_thrown
         })
         
-
-
     return {
-        "User Stats": user_stats_list,
         "User Char Stats": user_char_stats_list
     }

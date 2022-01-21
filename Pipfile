@@ -20,6 +20,8 @@ Werkzeug = "==2.0.2"
 flask-login = "*"
 flask-bcrypt = "*"
 python-decouple = "*"
+flask-jwt-extended = "*"
+flask-mailman = "*"
 
 [dev-packages]
 
