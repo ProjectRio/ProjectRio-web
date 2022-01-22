@@ -851,36 +851,93 @@ def user_char_stats():
         "User Char Stats": user_char_stats_list
     }
 
+
 # Description: Return 20 most recent games for all users
 @app.route('/games/recent/', methods = ['GET'])
 def recent_games(user_id = None):
-    recent_games = list()
-    #TODO I feel like this join isn't working the way I think it should be
-    games = Game.query.limit(20)
-    for game in games:
-        away_player = User.query.filter_by(id = game.away_player_id).first()
-        home_player = User.query.filter_by(id = game.home_player_id).first()
-        captains = dict()
-        for captain in game.character_game_summary:
-            if (captain.captain):
-                captains[captain.team_id] = captain.char_id
-        game_overview = (
-            f'Id: {game.game_id} Datetime: {datetime.fromtimestamp(game.date_time)} ' 
-            f'{away_player.username} [{captains[0]}] {game.away_score} vs ' 
-            f'{game.home_score} {home_player.username} [{captains[1]}] '
-            f'Innings Played ({game.innings_played}/{game.innings_selected})'
-        )
-        print(game_overview)
+    query = (
+        'SELECT '
+        'game.game_id AS game_id, '
+        'game.date_time AS date_time, '
+        'game.away_score AS away_score, '
+        'game.home_score AS home_score, '
+        'game.innings_played AS innings_played, '
+        'game.innings_selected AS innings_selected, '
+        'away_player.username AS away_player, '
+        'home_player.username AS home_player, '
+        'away_character_game_summary.char_id AS away_captain, '
+        'home_character_game_summary.char_id AS home_captain '    
+        'FROM game '
+        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
+        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
+        'LEFT JOIN character_game_summary AS away_character_game_summary '
+            'ON game.game_id = away_character_game_summary.game_id '
+            'AND away_character_game_summary.user_id = away_player.id '
+            'AND away_character_game_summary.captain = True '
+        'LEFT JOIN character_game_summary AS home_character_game_summary '
+            'ON game.game_id = home_character_game_summary.game_id '
+            'AND home_character_game_summary.user_id = home_player.id '
+            'AND home_character_game_summary.captain = True '
+        'LIMIT 20'
+    )
+
+    results = db.session.execute(query)
+    
+    recent_games = []
+    for game in results:
         recent_games.append({
             'Id': game.game_id,
             'Datetime': datetime.fromtimestamp(game.date_time),
-            'Away User': away_player.username,
-            'Away Captain': Character.query.filter_by(char_id=captains[0]).first().name,
+            'Away User': game.away_player,
+            'Away Captain': game.away_captain,
             'Away Score': game.away_score,
-            'Home User': home_player.username,
-            'Home Captain': Character.query.filter_by(char_id=captains[1]).first().name,
+            'Home User': game.home_player,
+            'Home Captain': game.home_captain,
             'Home Score': game.home_score,
             'Innings Played': game.innings_played,
             'Innings Selected': game.innings_selected
         })
-    return { 'Recent Games': recent_games }
+
+    return {'recent_games': recent_games}
+
+# def recent_games(user_id = None):
+#     query = (
+#         'SELECT '
+#         'game.game_id AS game_id, '
+#         'game.date_time AS date_time, '
+#         'game.away_score AS away_score, '
+#         'game.home_score AS home_score, '
+#         'game.innings_played AS innings_played, '
+#         'game.innings_selected AS innings_selected, '
+#         'away_player.username AS away_player, '
+#         'home_player.username AS home_player, '
+#         'away_character_game_summary.char_id AS away_captain, '
+#         'home_character_game_summary.char_id AS home_captain '    
+#         'FROM game '
+#         'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
+#         'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
+#         'LEFT JOIN character_game_summary AS away_character_game_summary '
+#             'ON game.game_id = away_character_game_summary.game_id '
+#             'AND away_character_game_summary.user_id = away_player.id '
+#             'AND away_character_game_summary.captain = True '
+#         'LEFT JOIN character_game_summary AS home_character_game_summary '
+#             'ON game.game_id = home_character_game_summary.game_id '
+#             'AND home_character_game_summary.user_id = home_player.id '
+#             'AND home_character_game_summary.captain = True '
+#         'LIMIT 20'
+#     )
+
+#     results = db.session.execute(query)
+    
+#     recent_games = []
+#     for game in results:
+#         recent_games.append({
+#             'Id': game.game_id,
+#             'Datetime': datetime.fromtimestamp(game.date_time),
+#             'Away User': game.away_player,
+#             'Away Captain': game.away_captain,
+#             'Away Score': game.away_score,
+#             'Home User': game.home_player,
+#             'Home Captain': game.home_captain,
+
+#     return {'Recent Games': recent_games}
