@@ -170,7 +170,10 @@ def send_verify_account_email(receiver_username, receiver_email, active_url):
     port = 465
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
-    password = input('projectrio.webtest password: ')
+    # 
+    # A new password will be stored securely on deploy
+    # 
+    password = 'PRWT1234!'
 
     message = (
         'Subject: Verify your Project Rio Account\n'
@@ -289,8 +292,10 @@ def send_password_reset_email(user):
     receiver_email = user.email
     receiver_username = user.username
     active_url = user.active_url
-     # Will be saved securely on server on roll out    
-    password = input('projectrio.webtest password: ')
+    # 
+    # A new password will be stored securely on deploy
+    #   
+    password = 'PRWT1234!'
 
     message = (
         'Subject: Project Rio Password Reset\n'
