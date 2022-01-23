@@ -852,9 +852,23 @@ def user_char_stats():
     }
 
 
-# Description: Return 20 most recent games for all users
-@app.route('/games/recent/', methods = ['GET'])
-def recent_games(user_id = None):
+# Description: Return all games. Probably shouldn't be used in its raw form
+@app.route('/games/', methods = ['GET'])
+def games(recent = None, user_id = None):
+    limit = str()
+    if (recent == None or type(recent) != int):
+        limit = ''
+    else:
+        limit = 'LIMIT {}'.format(recent)
+
+    #Decide if we want a specific user and build SQL statement
+    where_user = str()
+    if (user_id == None or type(user_id) != int):
+        where_user = ''
+    else:
+        where_user = f'WHERE game.away_player_id = {user_id} OR game.home_player_id = {user_id}'
+
+    #Construct Query
     query = (
         'SELECT '
         'game.game_id AS game_id, '
@@ -878,7 +892,8 @@ def recent_games(user_id = None):
             'ON game.game_id = home_character_game_summary.game_id '
             'AND home_character_game_summary.user_id = home_player.id '
             'AND home_character_game_summary.captain = True '
-        'LIMIT 20'
+        f'{where_user} '
+        f'{limit} '
     )
 
     results = db.session.execute(query)
@@ -899,6 +914,23 @@ def recent_games(user_id = None):
         })
 
     return {'recent_games': recent_games}
+
+# Description: Return 20 most recent games for all users
+@app.route('/games/recent/', methods = ['GET'])
+def recent_games(user_id = None):
+    #TODO handle exceptions
+    return games(recent=20)
+
+# Description: Return 20 most recent games for single
+@app.route('/games/recent/<user_id>', methods = ['GET'])
+def recent_games_user(user_id):
+    #TODO handle exceptions
+    return games(recent=20, user_id=int(user_id))
+
+@app.route('/games/<user_id>', methods = ['GET'])
+def all_games_user(user_id):
+    #TODO handle exceptions
+    return games(recent=None, user_id=int(user_id))
 
 # def recent_games(user_id = None):
 #     query = (
