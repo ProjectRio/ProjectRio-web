@@ -1,9 +1,10 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
+import smtplib
+import ssl
 import secrets
 from . import bc
-from flask_mailman import EmailMessage
 from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
@@ -118,18 +119,6 @@ def create_character_tables():
 
     return 'Characters added...'
 
-@app.route('/test_mail/')
-def test_mail():
-    msg = EmailMessage(
-        'Test Email 1',
-        'This is a test email',
-        'from@example.com',
-        ['to@example.com'],
-        headers={'Message-ID': 'foo'},
-    )
-    msg.send()
-    return 'Email sent...'
-
 # == User Routes ==
 
 # Refresh any JWT within 7 days of expiration after requests
@@ -155,10 +144,7 @@ def register():
     in_password = request.json['Password']
     in_email    = request.json['Email'].lower()
 
-    # filter User out of database through username
     user = User.query.filter_by(username_lowercase=username_lowercase).first()
-
-    # filter User out of database through email
     user_by_email = User.query.filter_by(email=in_email).first()
 
     if user or user_by_email:
@@ -171,10 +157,59 @@ def register():
         db.session.add(new_user)
         db.session.commit()
 
+        try:
+            send_verify_account_email(in_username, in_email, new_user.active_url)
+        except:
+            return abort(502, 'Failed to send email')
+        
     return jsonify({
-        'riokey': new_user.rio_key,
         'username': new_user.username
     })
+
+def send_verify_account_email(receiver_username, receiver_email, active_url):
+    port = 465
+    smtp_server = 'smtp.gmail.com'
+    sender_email = 'projectrio.webtest@gmail.com'
+    password = input('projectrio.webtest password: ')
+
+    message = (
+        'Subject: Verify your Project Rio Account\n'
+        'Dear {0},\n'
+        '\n'
+        'Please click the following link to verify your email address and get your Rio Key.\n'
+        '{1}'
+        '\n'
+        'Happy Hitting!\n'
+        'Project Rio Web Team'
+    ).format(
+        receiver_username,
+        active_url
+    )
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        server.login(sender_email, password)
+        server.sendmail(sender_email, receiver_email, message)
+
+    return
+
+
+@app.route('/verify_email/', methods=['POST'])
+def verify_email():
+    try:
+        active_url = request.json['active_url']
+        user = User.query.filter_by(active_url=active_url).first()
+        user.verified = True
+        user.active_url = None
+
+        db.session.add(user)
+        db.session.commit()
+        return {
+            'Rio Key': user.rio_key,
+        }, 200
+    except:
+        return abort(422, 'Invalid Key')
+
 
 @app.route('/retire_account/', methods=[''])
 @jwt_required()
@@ -187,7 +222,7 @@ def retire_account():
     # Set Retired to true
 
     return {
-        'Account Retired...'
+        'msg': 'Account Retired...'
     }
 
 
@@ -201,48 +236,108 @@ def request_email_change():
     # Send out email for email validation w link
 
     return {
-        'Link emailed...'
+       'msg': 'Link emailed...'
     }
 
 
 @app.route('/change_email/<secretcode>/', methods=['POST'])
 @jwt_required()
-def remove_email(secretcode):
+def change_email(secretcode):
     # Check for valid JWT
     # Get User using valid JWT
     # Check for valid secretlink related to logged in user
     # Use user input to switch email to a new email
 
     return {
-        'Email changed...'
+        'msg': 'Email changed...'
     }
 
 
-@app.route('/request_password_change/', methods=['GET'])
-@jwt_required()
+@app.route('/request_password_change/', methods=['POST'])
 def request_password_change():
-    # Check for valid JWT
-    # Get User using valid JWT
-    # Create secret code for link to go to to change password
-    # Add secret link to table for short period of time
-    # return link to email address
+    if '@' in request.json['username or email']:
+        email_lowercase = request.json['username or email'].lower()
+        user = User.query.filter_by(email=email_lowercase).first()
+    else:
+        username_lower = request.json['username or email'].lower()
+        user = User.query.filter_by(username_lowercase=username_lower).first()
+
+    if not user:
+        abort(408, 'Corresponding user does not exist')
+
+    if user.verified == False:
+        abort(401, 'Email unverified')
+
+    active_url = secrets.token_urlsafe(32)
+    user.active_url = active_url
+    db.session.add(user)
+    db.session.commit()
+
+    try:
+        send_password_reset_email(user)
+    except:
+        abort(502, 'Failed to send email')
 
     return {
-        'Link emailed...'
+        'msg': 'Link emailed...'
     }
 
+def send_password_reset_email(user):
+    port = 465   
+    smtp_server = 'smtp.gmail.com'
+    sender_email = 'projectrio.webtest@gmail.com'
+    receiver_email = user.email
+    receiver_username = user.username
+    active_url = user.active_url
+     # Will be saved securely on server on roll out    
+    password = input('projectrio.webtest password: ')
 
-@app.route('/change_password/<secretcode>/', methods=['POST'])
-@jwt_required()
+    message = (
+        'Subject: Project Rio Password Reset\n'
+
+        'Dear {0},\n'
+        '\n'
+        'We received a password reset request. If you did not make this request, please ignore this email.\n'
+        'Otherwise, follow this link to reset your account\n'
+        '{1}\n'
+        '\n'
+        'Happy hitting!\n'
+        'Project Rio Web Team'
+    ).format(
+            receiver_username, 
+            active_url
+        )
+    
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(smtp_server, port, context=context) as server:
+        server.login(sender_email, password)
+        server.sendmail(sender_email, receiver_email, message)
+
+    return
+
+
+
+@app.route('/change_password/', methods=['POST'])
 def change_password():
-    # Check for valid JWT
-    # Get User using valid JWT
-    # Check for valid secretlink related to logged in user
-    # Use user input to switch password to a new password
-    return {
-        'Password changed...'
-    }
+    active_url = request.json['active_url']
+    password = request.json['password']
 
+    user = User.query.filter_by(active_url=active_url).first()
+
+    if not user:
+        return abort(422, 'Invalid Key')
+
+    if user.verified == False:
+        return abort(401, 'Email unverified')
+
+    user.password = bc.generate_password_hash(password)
+    user.active_url = None
+    db.session.add(user)
+    db.session.commit()
+
+    return {
+        'msg': 'Password changed...'
+    }, 200
 
 # Authenticate user, create new JWTs, login via username or email
 @app.route('/login/', methods=['POST'])
@@ -392,35 +487,10 @@ def populate_db():
 
         # Update CharacterUserStats
         if character['Team'] == 'Home':
-            batter_user_char_stats = home_player.user_character_stats.filter_by(char_id=character["Character"], captain=character['Captain'], superstar=character['Superstar']).first()
-            if (batter_user_char_stats == None):
-                print("Created UserCharStat for batter. Roster Loc:", character['RosterID'])
-                batter_user_char_stats = UserCharacterStats(home_player.id, character["Character"], character['Captain'], character['Superstar'])
             batting_character_game_summary = teams['Home'][character['RosterID']]
         else: 
-            batter_user_char_stats = away_player.user_character_stats.filter_by(char_id=character["Character"], captain=character['Captain'], superstar=character['Superstar']).first()
-            if (batter_user_char_stats == None):
-                print("Created UserCharStat for batter. Roster Loc:", character['RosterID'])
-                batter_user_char_stats = UserCharacterStats(away_player.id, character["Character"], character['Captain'], character['Superstar'])
             batting_character_game_summary = teams['Away'][character['RosterID']]
-        
-        batter_user_char_stats.num_of_games += 1
-        batter_user_char_stats.at_bats += batting_character_game_summary.at_bats
-        batter_user_char_stats.hits += batting_character_game_summary.hits
-        batter_user_char_stats.singles += batting_character_game_summary.singles
-        batter_user_char_stats.doubles += batting_character_game_summary.doubles
-        batter_user_char_stats.triples += batting_character_game_summary.triples
-        batter_user_char_stats.homeruns += batting_character_game_summary.homeruns
-        batter_user_char_stats.walks_bb += batting_character_game_summary.walks_bb
-        batter_user_char_stats.walks_hit += batting_character_game_summary.walks_hit
-        batter_user_char_stats.strikeouts += batting_character_game_summary.strikeouts
-        batter_user_char_stats.bases_stolen += batting_character_game_summary.bases_stolen
-        batter_user_char_stats.strikeouts_pitched += batting_character_game_summary.strikeouts_pitched
-        batter_user_char_stats.inning_appearances += batting_character_game_summary.inning_appearances
-        batter_user_char_stats.outs_pitched += batting_character_game_summary.outs_pitched
-        batter_user_char_stats.batters_faced += batting_character_game_summary.batters_faced
-        batter_user_char_stats.runs_allowed += batting_character_game_summary.runs_allowed
- 
+         
         for pitch in character['Pitch Summary']:
             pitch_summary = PitchSummary(
                 batter_id = teams[character['Team']][character['RosterID']].id,
@@ -461,23 +531,15 @@ def populate_db():
             # Get pitchers user_char_stats
             if character['Team'] == 'Home':
                 pitcher_character_game_summary = teams['Away'][pitch['Pitcher Roster Location']]
-                pitcher_user_char_stats = away_player.user_character_stats.filter_by(char_id=pitch["PitcherID"], captain=pitcher_character_game_summary.captain, superstar=pitcher_character_game_summary.superstar).first()
-                if (pitcher_user_char_stats == None):
-                    print("Created UserCharStat for pitcher. Roster Loc:", pitch['Pitcher Roster Location'])
-                    pitcher_user_char_stats = UserCharacterStats(away_player.id, pitch["PitcherID"], pitcher_character_game_summary.captain, pitcher_character_game_summary.superstar)
             else: 
                 pitcher_character_game_summary = teams['Home'][pitch['Pitcher Roster Location']]
-                pitcher_user_char_stats = home_player.user_character_stats.filter_by(char_id=pitch["PitcherID"], captain=pitcher_character_game_summary.captain, superstar=pitcher_character_game_summary.superstar).first()
-                if (pitcher_user_char_stats == None):
-                    print("Created UserCharStat for pitcher. Roster Loc:", pitch['Pitcher Roster Location'])
-                    pitcher_user_char_stats = UserCharacterStats(home_player.id, pitch["PitcherID"], pitcher_character_game_summary.captain, pitcher_character_game_summary.superstar)
             
             # == Offensive Star Use ==
             star_swing = pitch['Type of Swing'] == 'Star'
             star_cost = 1
-            is_captainable_char = Character.query.filter_by(char_id = batter_user_char_stats.char_id, captain=1).first()
+            is_captainable_char = Character.query.filter_by(char_id = batting_character_game_summary.char_id, captain=1).first()
             #Star hits/pitches cost two star for captain eligible characters that are not captains when contact is made
-            if ((is_captainable_char is not None) and not batter_user_char_stats.captain and pitch['Contact Summary']):
+            if ((is_captainable_char is not None) and not batting_character_game_summary.captain and pitch['Contact Summary']):
                 star_cost = 2
             batting_character_game_summary.offensive_star_swings += star_swing
             batting_character_game_summary.offensive_stars_used += star_swing * star_cost
@@ -492,15 +554,12 @@ def populate_db():
                         
             batting_character_game_summary.offensive_stars_put_in_play += star_swing and not strike_or_strikeout_or_foul
 
-            batter_user_char_stats.double_plays += int(pitch['Number Outs During Play'] >= 2)
-
-
             # == Defensive Star Use ==
             star_pitch = pitch['Star Pitch']
             star_cost = 1
-            is_captainable_char = Character.query.filter_by(char_id = pitcher_user_char_stats.char_id, captain=1).first()
+            is_captainable_char = Character.query.filter_by(char_id = pitcher_character_game_summary.char_id, captain=1).first()
             #Star hits/pitches cost two star for captain eligible characters that are not captains
-            if (is_captainable_char and not pitcher_user_char_stats.captain):
+            if (is_captainable_char and not pitcher_character_game_summary.captain):
                 star_cost = 2
             pitcher_character_game_summary.defensive_star_pitches += star_pitch
             pitcher_character_game_summary.defensive_stars_used += star_pitch * star_cost
@@ -509,24 +568,8 @@ def populate_db():
             #Play is over, see if AB was a star chance
             if int(pitch['Final Result - Game']) not in cPLAY_RESULT_INVLD:
                 batting_character_game_summary.offensive_star_chances += pitch['Star Chance']
-                batter_user_char_stats.offensive_star_chances += batting_character_game_summary.offensive_star_chances
-
                 pitcher_character_game_summary.defensive_star_chances += pitch['Star Chance']
 
-            batter_user_char_stats.offensive_star_swings       += batting_character_game_summary.offensive_star_swings
-            batter_user_char_stats.offensive_stars_used        += batting_character_game_summary.offensive_stars_used
-            batter_user_char_stats.offensive_star_successes    += batting_character_game_summary.offensive_star_successes
-            batter_user_char_stats.offensive_star_chances_won  += batting_character_game_summary.offensive_star_chances_won
-            batter_user_char_stats.offensive_star_chances      += batting_character_game_summary.offensive_star_chances
-            batter_user_char_stats.offensive_stars_put_in_play += batting_character_game_summary.offensive_stars_put_in_play
-            
-            pitcher_user_char_stats.defensive_star_pitches     += pitcher_character_game_summary.defensive_star_pitches
-            pitcher_user_char_stats.defensive_stars_used       += pitcher_character_game_summary.defensive_stars_used
-            pitcher_user_char_stats.defensive_star_successes   += pitcher_character_game_summary.defensive_star_successes
-            pitcher_user_char_stats.defensive_star_chances_won += pitcher_character_game_summary.defensive_star_chances_won
-            pitcher_user_char_stats.defensive_star_chances     += pitcher_character_game_summary.defensive_star_chances
-
-            db.session.add(pitcher_user_char_stats)
             db.session.add(pitch_summary)
             db.session.commit()
 
@@ -569,9 +612,6 @@ def populate_db():
 
                 db.session.add(fielding_summary)
                 db.session.commit()
-        db.session.add(batter_user_char_stats)
-        db.session.commit()
-
     return 'Successfully added...'
 
 
@@ -699,46 +739,105 @@ def get_character_game_summaries(user):
 
 
 
-# user_id  sum_pitches_thrown
-# ______   ___________________
-#   1              n
-#   2              n
 
-@app.route('/user_stats/', methods = ['GET'])
-def sum_stats():
-    user_stats = (
-        'SELECT user_id, sum(pitches_thrown) AS sum_pitches_thrown '
-        'FROM character_game_summary '
-        'GROUP BY user_id'
-    )
-    user_stats_query_result = db.session.execute(user_stats)
-
-    user_stats_list = []
-    for row in user_stats_query_result:
-        user_stats_list.append({
-            'User ID': row.user_id,
-            'Pitches Thrown': row.sum_pitches_thrown,
-        })
+@app.route('/<username>/stats/', methods = ['GET'])
+@jwt_required(optional=True)
+def user_stats(username):
+    in_username_lowercase = username.lower()
+    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+    user_sums = get_user_sums(user.id)
+    game_sums = get_game_sums(user.id)
 
     return {
-        "User Stats": user_stats_list,
+        "user_sums": user_sums,
+        "game_sums": game_sums
     }
 
+def get_user_sums(user_id):
+    query = (
+        'SELECT '
+        'character_game_summary.char_id, '
+        'SUM(character_game_summary.pitches_thrown) AS pitches_thrown, '
+        'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, '
+        'SUM(character_game_summary.hits) AS hits, '
+        'SUM(character_game_summary.at_bats) AS at_bats, '
+        'SUM(character_game_summary.walks_bb) AS walks_bb, '
+        'SUM(character_game_summary.walks_hit) AS walks_hit, '
+        'AVG(character_game_summary.rbi) AS rbi, '
+        'SUM(character_game_summary.singles) AS singles, '
+        'SUM(character_game_summary.doubles) AS doubles, '
+        'SUM(character_game_summary.triples) AS triples, '
+        'SUM(character_game_summary.homeruns) AS homeruns '
+        'FROM character_game_summary '
+        'LEFT JOIN user '
+        'ON character_game_summary.user_id = user.id '
+        'WHERE user.id = {0} '
+    ).format(
+        user_id,
+    )
+
+    result = db.session.execute(query)
+    # There is only one row in this result, but it must be called this way to access it as dict
+    for row in result:
+        user_sums = {
+            "pitches_thrown": row.pitches_thrown,
+            "strikeouts_pitched": row.strikeouts_pitched,
+            "hits": row.hits,
+            "at_bats": row.at_bats,
+            "batting_average": row.hits/row.at_bats,
+            "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
+            "rbi": row.rbi,
+            "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
+        }
+
+    return user_sums
+
+# CASE operates similar to an if, else if, else statement
+def get_game_sums(user_id):
+    query = (
+        'SELECT '
+        'COUNT(game_id) as games, '
+        'SUM(CASE '
+            'WHEN (game.away_player_id = {0} AND game.away_score > game.home_score) THEN 1 '
+            'ELSE 0 '
+            'END) AS away_wins, '
+        'SUM(CASE '
+            'WHEN (game.home_player_id = {0} AND game.home_score > game.away_score) THEN 1 '
+            'ELSE 0 '
+            'END) AS home_wins '
+        'FROM game '
+        'WHERE game.away_player_id = {0} OR game.home_player_id = {0}'
+    ).format(
+        user_id
+    )
+
+    result = db.session.execute(query)
+    # There is only one row in this result, but it must be called this way to access it as dict
+    for row in result:
+        game_sums = {
+            "games": row.games,
+            "away_wins": row.away_wins,
+            "home_wins": row.home_wins,
+            "winrate": (row.away_wins + row.home_wins)/row.games,
+        }
+
+    return game_sums
 
 
+# 1 row per Character per User with the sum of all pitches thrown
 # user_id       char_id       sum_pitches_thrown
 # ______       __________     ___________________
 #   1            0 - 53              n
 #   2            0 - 53              n
 
 @app.route('/user_char_stats/', methods = ['GET'])
-def session_execute_test():
-    user_char_stats = (
+def user_char_stats():
+    user_char_stats_query = (
         'SELECT user_id, char_id, sum(pitches_thrown) AS sum_pitches_thrown '
         'FROM character_game_summary '
         'GROUP BY user_id, char_id'
     )
-    user_char_stats_query_result = db.session.execute(user_char_stats)
+    user_char_stats_query_result = db.session.execute(user_char_stats_query)
 
     user_char_stats_list = []
     for row in user_char_stats_query_result:
@@ -751,3 +850,126 @@ def session_execute_test():
     return {
         "User Char Stats": user_char_stats_list
     }
+
+
+# Description: Return all games. Probably shouldn't be used in its raw form
+@app.route('/games/', methods = ['GET'])
+def games(recent = None, user_id = None):
+    limit = str()
+    if (recent == None or type(recent) != int):
+        limit = ''
+    else:
+        limit = 'LIMIT {}'.format(recent)
+
+    #Decide if we want a specific user and build SQL statement
+    where_user = str()
+    if (user_id == None or type(user_id) != int):
+        where_user = ''
+    else:
+        where_user = f'WHERE game.away_player_id = {user_id} OR game.home_player_id = {user_id}'
+
+    #Construct Query
+    query = (
+        'SELECT '
+        'game.game_id AS game_id, '
+        'game.date_time AS date_time, '
+        'game.away_score AS away_score, '
+        'game.home_score AS home_score, '
+        'game.innings_played AS innings_played, '
+        'game.innings_selected AS innings_selected, '
+        'away_player.username AS away_player, '
+        'home_player.username AS home_player, '
+        'away_character_game_summary.char_id AS away_captain, '
+        'home_character_game_summary.char_id AS home_captain '    
+        'FROM game '
+        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
+        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
+        'LEFT JOIN character_game_summary AS away_character_game_summary '
+            'ON game.game_id = away_character_game_summary.game_id '
+            'AND away_character_game_summary.user_id = away_player.id '
+            'AND away_character_game_summary.captain = True '
+        'LEFT JOIN character_game_summary AS home_character_game_summary '
+            'ON game.game_id = home_character_game_summary.game_id '
+            'AND home_character_game_summary.user_id = home_player.id '
+            'AND home_character_game_summary.captain = True '
+        f'{where_user} '
+        f'{limit} '
+    )
+
+    results = db.session.execute(query)
+    
+    recent_games = []
+    for game in results:
+        recent_games.append({
+            'Id': game.game_id,
+            'Datetime': datetime.fromtimestamp(game.date_time),
+            'Away User': game.away_player,
+            'Away Captain': game.away_captain,
+            'Away Score': game.away_score,
+            'Home User': game.home_player,
+            'Home Captain': game.home_captain,
+            'Home Score': game.home_score,
+            'Innings Played': game.innings_played,
+            'Innings Selected': game.innings_selected
+        })
+
+    return {'recent_games': recent_games}
+
+# Description: Return 20 most recent games for all users
+@app.route('/games/recent/', methods = ['GET'])
+def recent_games(user_id = None):
+    #TODO handle exceptions
+    return games(recent=20)
+
+# Description: Return 20 most recent games for single
+@app.route('/games/recent/<user_id>', methods = ['GET'])
+def recent_games_user(user_id):
+    #TODO handle exceptions
+    return games(recent=20, user_id=int(user_id))
+
+@app.route('/games/<user_id>', methods = ['GET'])
+def all_games_user(user_id):
+    #TODO handle exceptions
+    return games(recent=None, user_id=int(user_id))
+
+# def recent_games(user_id = None):
+#     query = (
+#         'SELECT '
+#         'game.game_id AS game_id, '
+#         'game.date_time AS date_time, '
+#         'game.away_score AS away_score, '
+#         'game.home_score AS home_score, '
+#         'game.innings_played AS innings_played, '
+#         'game.innings_selected AS innings_selected, '
+#         'away_player.username AS away_player, '
+#         'home_player.username AS home_player, '
+#         'away_character_game_summary.char_id AS away_captain, '
+#         'home_character_game_summary.char_id AS home_captain '    
+#         'FROM game '
+#         'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
+#         'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
+#         'LEFT JOIN character_game_summary AS away_character_game_summary '
+#             'ON game.game_id = away_character_game_summary.game_id '
+#             'AND away_character_game_summary.user_id = away_player.id '
+#             'AND away_character_game_summary.captain = True '
+#         'LEFT JOIN character_game_summary AS home_character_game_summary '
+#             'ON game.game_id = home_character_game_summary.game_id '
+#             'AND home_character_game_summary.user_id = home_player.id '
+#             'AND home_character_game_summary.captain = True '
+#         'LIMIT 20'
+#     )
+
+#     results = db.session.execute(query)
+    
+#     recent_games = []
+#     for game in results:
+#         recent_games.append({
+#             'Id': game.game_id,
+#             'Datetime': datetime.fromtimestamp(game.date_time),
+#             'Away User': game.away_player,
+#             'Away Captain': game.away_captain,
+#             'Away Score': game.away_score,
+#             'Home User': game.home_player,
+#             'Home Captain': game.home_captain,
+
+#     return {'Recent Games': recent_games}

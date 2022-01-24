@@ -134,6 +134,8 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(500))
     rio_key  = db.Column(db.String(50), unique = True)
     private = db.Column(db.Boolean)
+    verified = db.Column(db.Boolean)
+    active_url = db.Column(db.String(32), unique = True)
 
     user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user', lazy = 'dynamic')
     character_game_summaries = db.relationship('CharacterGameSummary', backref = 'user', lazy = 'dynamic')
@@ -147,6 +149,8 @@ class User(db.Model, UserMixin):
         self.password = bc.generate_password_hash(in_password)
         self.rio_key  = secrets.token_urlsafe(32)
         self.private = True
+        self.verified = False
+        self.active_url = secrets.token_urlsafe(32)
 
 class Game(db.Model):
     game_id = db.Column(db.Integer, primary_key = True)
@@ -292,9 +296,6 @@ class FieldingSummary(db.Model):
     contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=False)
     fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)
-
-
-
 
 
 # Depreciated

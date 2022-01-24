@@ -21,7 +21,6 @@ flask-login = "*"
 flask-bcrypt = "*"
 python-decouple = "*"
 flask-jwt-extended = "*"
-flask-mailman = "*"
 
 [dev-packages]
 
