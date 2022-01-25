@@ -609,8 +609,8 @@ def populate_db():
                         fielder_character_game_summary_id = teams[fielder_team][fielder_roster_location].id,
                         position = pitch['Contact Summary'][0]['Fielding Summary'][0]['Fielder Position'],
                     )
-
-                db.session.add(fielding_summary)
+                    db.session.add(fielding_summary)
+                    
                 db.session.commit()
     return 'Successfully added...\n'
 
