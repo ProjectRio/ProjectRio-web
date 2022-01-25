@@ -18,7 +18,7 @@ user_schema = UserSchema()
 # === Initalize Character Tables ===
 @app.route('/create_character_tables/', methods = ['POST'])
 def create_character_tables():
-    f = open('./json/MSB_Stats_dec.json')
+    f = open('./json/characters.json')
     character_list = json.load(f)["Characters"]
 
     for character in character_list:
@@ -117,7 +117,7 @@ def create_character_tables():
 
     db.session.commit()
 
-    return 'Characters added...'
+    return 'Characters added...\n'
 
 # == User Routes ==
 
@@ -170,7 +170,7 @@ def send_verify_account_email(receiver_username, receiver_email, active_url):
     port = 465
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
-    password = input('projectrio.webtest password: ')
+    password = 'PRWT1234!'
 
     message = (
         'Subject: Verify your Project Rio Account\n'
@@ -290,7 +290,7 @@ def send_password_reset_email(user):
     receiver_username = user.username
     active_url = user.active_url
      # Will be saved securely on server on roll out    
-    password = input('projectrio.webtest password: ')
+    password = 'PRWT1234!'
 
     message = (
         'Subject: Project Rio Password Reset\n'
@@ -592,7 +592,7 @@ def populate_db():
                     ball_x_pos = pitch['Contact Summary'][0]['Ball Acceleration - X'],
                     ball_y_pos = pitch['Contact Summary'][0]['Ball Acceleration - Y'],
                     ball_z_pos = pitch['Contact Summary'][0]['Ball Acceleration - Z'],
-                    ball_x_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact - x'],
+                    ball_x_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact - X'],
                     ball_y_pos_upon_hit = pitch['Contact Summary'][0]['Ball Position Upon Contact - Y'],
                 )
 
@@ -609,10 +609,10 @@ def populate_db():
                         fielder_character_game_summary_id = teams[fielder_team][fielder_roster_location].id,
                         position = pitch['Contact Summary'][0]['Fielding Summary'][0]['Fielder Position'],
                     )
-
-                db.session.add(fielding_summary)
+                    db.session.add(fielding_summary)
+                    
                 db.session.commit()
-    return 'Successfully added...'
+    return 'Successfully added...\n'
 
 
 
