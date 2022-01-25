@@ -747,10 +747,12 @@ def user_stats(username):
     user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
     user_sums = get_user_sums(user.id)
     game_sums = get_game_sums(user.id)
+    char_sums = get_char_sums(user.id)
 
     return {
         "user_sums": user_sums,
-        "game_sums": game_sums
+        "game_sums": game_sums,
+        "char_sums": char_sums
     }
 
 def get_user_sums(user_id):
@@ -822,6 +824,49 @@ def get_game_sums(user_id):
         }
 
     return game_sums
+
+
+def get_char_sums(user_id):
+    query = (
+        'SELECT '
+        'char_id, '
+        'COUNT(game_id) as games_played, '
+        'SUM(pitches_thrown) AS pitches_thrown, '
+        'SUM(strikeouts_pitched) AS strikeouts_pitched, '
+        'SUM(hits) AS hits, '
+        'SUM(at_bats) AS at_bats, '
+        'SUM(walks_bb) AS walks_bb, '
+        'SUM(walks_hit) AS walks_hit, '
+        'AVG(rbi) AS rbi, '
+        'SUM(singles) AS singles, '
+        'SUM(doubles) AS doubles, '
+        'SUM(triples) AS triples, '
+        'SUM(homeruns) AS homeruns '
+        'FROM character_game_summary '
+        'WHERE user_id = {0} '
+        'GROUP BY char_id'
+    ).format(
+        user_id
+    )
+
+    result = db.session.execute(query)
+    char_sums = []
+    for row in result:
+        char_sums.append({
+            "games_played": row.games_played,
+            "char_id": row.char_id,
+            "pitches_thrown": row.pitches_thrown,
+            "strikeouts_pitched": row.strikeouts_pitched,
+            "hits": row.hits,
+            "at_bats": row.at_bats,
+            "batting_average": row.hits/row.at_bats,
+            "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
+            "rbi": row.rbi,
+            "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
+        })
+
+    return char_sums
+
 
 
 # 1 row per Character per User with the sum of all pitches thrown
@@ -931,45 +976,3 @@ def recent_games_user(user_id):
 def all_games_user(user_id):
     #TODO handle exceptions
     return games(recent=None, user_id=int(user_id))
-
-# def recent_games(user_id = None):
-#     query = (
-#         'SELECT '
-#         'game.game_id AS game_id, '
-#         'game.date_time AS date_time, '
-#         'game.away_score AS away_score, '
-#         'game.home_score AS home_score, '
-#         'game.innings_played AS innings_played, '
-#         'game.innings_selected AS innings_selected, '
-#         'away_player.username AS away_player, '
-#         'home_player.username AS home_player, '
-#         'away_character_game_summary.char_id AS away_captain, '
-#         'home_character_game_summary.char_id AS home_captain '    
-#         'FROM game '
-#         'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
-#         'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
-#         'LEFT JOIN character_game_summary AS away_character_game_summary '
-#             'ON game.game_id = away_character_game_summary.game_id '
-#             'AND away_character_game_summary.user_id = away_player.id '
-#             'AND away_character_game_summary.captain = True '
-#         'LEFT JOIN character_game_summary AS home_character_game_summary '
-#             'ON game.game_id = home_character_game_summary.game_id '
-#             'AND home_character_game_summary.user_id = home_player.id '
-#             'AND home_character_game_summary.captain = True '
-#         'LIMIT 20'
-#     )
-
-#     results = db.session.execute(query)
-    
-#     recent_games = []
-#     for game in results:
-#         recent_games.append({
-#             'Id': game.game_id,
-#             'Datetime': datetime.fromtimestamp(game.date_time),
-#             'Away User': game.away_player,
-#             'Away Captain': game.away_captain,
-#             'Away Score': game.away_score,
-#             'Home User': game.home_player,
-#             'Home Captain': game.home_captain,
-
-#     return {'Recent Games': recent_games}
