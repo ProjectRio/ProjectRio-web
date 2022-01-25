@@ -41,7 +41,7 @@ for file_path in os.listdir("./json/games/"):
         players = random.sample(users["Users"], 2)
         away_player = players[0]['Username']
         home_player = players[1]['Username']
-        print(away_player + ' vs ' + home_player)
+        print(file_path + ': ' + away_player + ' vs ' + home_player)
 
         # Replace game user names with demo users
         file = open("./json/games/" + file_path)
