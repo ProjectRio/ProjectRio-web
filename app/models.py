@@ -164,6 +164,7 @@ class Game(db.Model):
     innings_selected = db.Column(db.Integer)
     innings_played = db.Column(db.Integer)
     quitter = db.Column(db.Integer) #0=None, 1=Away, 2=Home
+    valid = db.Column(db.Boolean)
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
 
