@@ -5,7 +5,7 @@ import smtplib
 import ssl
 import secrets
 from . import bc
-from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
+from .models import db, User, Character, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
