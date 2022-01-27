@@ -932,6 +932,176 @@ def all_games_user(user_id):
     #TODO handle exceptions
     return games(recent=None, user_id=int(user_id))
 
+
+# Description: Return data used for a box score (game summary page), given a game ID
+@app.route('/games/boxscore/<game_id>', methods = ['GET'])
+def generate_box_score(game_id):
+    game_query = (
+        'SELECT '
+        'game.game_id AS game_id, '
+        'game.date_time AS date_time, '
+        'game.away_score AS away_score, '
+        'game.home_score AS home_score, '
+        'game.innings_played AS innings_played, '
+        'game.innings_selected AS innings_selected, '
+        'away_player.username AS away_player, '
+        'home_player.username AS home_player, '
+        'away_character_game_summary.char_id AS away_captain, '
+        'home_character_game_summary.char_id AS home_captain '
+        'FROM game '
+        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
+        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
+        'LEFT JOIN character_game_summary AS away_character_game_summary '
+            'ON game.game_id = away_character_game_summary.game_id '
+            'AND away_character_game_summary.user_id = away_player.id '
+            'AND away_character_game_summary.captain = True '
+        'LEFT JOIN character_game_summary AS home_character_game_summary '
+            'ON game.game_id = home_character_game_summary.game_id '
+            'AND home_character_game_summary.user_id = home_player.id '
+            'AND home_character_game_summary.captain = True '
+        'WHERE game.game_id='f'{game_id}')
+    game_data = {}
+    print(game_query)
+    game_results = db.session.execute(game_query)
+    for game in game_results:
+        game_data = {
+            'Id': game.game_id,
+            'Datetime': datetime.fromtimestamp(game.date_time),
+            'Away User': game.away_player,
+            'Away Captain': game.away_captain,
+            'Away Score': game.away_score,
+            'Home User': game.home_player,
+            'Home Captain': game.home_captain,
+            'Home Score': game.home_score,
+            'Innings Played': game.innings_played,
+            'Innings Selected': game.innings_selected
+        }
+
+    character_game_summary_query = (
+        'SELECT '
+        'cgs.id AS cgs_id, '
+        'cgs.char_id AS character_id, '
+        'cgs.team_id AS team_id, '
+        'cgs.roster_loc AS batting_order_spot, '
+        'cgs.captain AS captain, '
+        'cgs.superstar AS superstar, '
+        'cgs.batters_faced AS batters_faced, '
+        'cgs.runs_allowed AS runs_allowed, '
+        'cgs.batters_walked AS batters_walked, '
+        'cgs.batters_hit AS batters_hit, '
+        'cgs.hits_allowed AS hits_allowed, '
+        'cgs.homeruns_allowed as homeruns_allowed, '
+        'cgs.pitches_thrown as pitches_thrown, '
+        'cgs.strikeouts_pitched as strikeouts_pitched, '
+        'cgs.star_pitches_thrown as star_pitches, '
+        'cgs.outs_pitched as outs_pitched, '
+        'cgs.at_bats as at_bats, '
+        'cgs.singles as singles, '
+        'cgs.doubles as doubles, '
+        'cgs.triples as triples, '
+        'cgs.homeruns as homeruns, '
+        'cgs.strikeouts as strikeouts, '
+        'cgs.walks_bb as walks, '
+        'cgs.walks_hit as hbp, '
+        'cgs.rbi as rbi, '
+        'cgs.bases_stolen as bases_stolen, '
+        'cgs.star_hits as star_hits, '
+        'cgs.offensive_star_chances as offensive_star_chances, '
+        'cgs.defensive_star_chances as defensive_star_chances, '
+        'cgs.offensive_star_chances_won as offensive_stars_won, '
+        'cgs.defensive_star_chances_won as defensive_stars_won, '
+        'character.name AS character_name '
+        'FROM character_game_summary AS cgs '
+        'LEFT JOIN character AS character '
+        'ON character_id = character.char_id '
+        'WHERE cgs.game_id='f'{game_id}'
+    )
+    cgs_results = db.session.execute(character_game_summary_query)
+    cgs_data = {"Away Batters": [], "Away Pitchers": [], "Home Batters": [], "Home Pitchers": []}
+    for cgs in cgs_results:
+        batter_stats = {
+            # 'Character Game Summary ID': cgs.cgs_id,
+            'Character Name': cgs.character_name,
+            # 'Character ID': cgs.character_id,
+            'Batting Order': cgs.batting_order_spot + 1,
+            'Plate Appearances': cgs.at_bats + cgs.walks + cgs.hbp,
+            'At Bats': cgs.at_bats,
+            'Hits': cgs.singles + cgs.doubles + cgs.triples + cgs.homeruns,
+            'Doubles': cgs.doubles,
+            'Triples': cgs.triples,
+            'Homeruns': cgs.homeruns,
+            'Strikeouts': cgs.strikeouts,
+            'Walks/HBP': cgs.walks + cgs.hbp,
+            'RBI': cgs.rbi,
+            'Stolen Bases': cgs.bases_stolen,
+            'Star Hits': cgs.star_hits
+        }
+
+        pitcher_stats = {
+            'Character Name': cgs.character_name,
+            # 'Character Game Summary ID': cgs.cgs_id,
+            'Innings Pitched': str((cgs.outs_pitched // 3) + ((cgs.outs_pitched % 3) * 0.1)),
+            'Batters Faced': cgs.batters_faced,
+            'Runs Allowed': cgs.runs_allowed,
+            'Walks/HBP': cgs.batters_walked + cgs.batters_hit,
+            'Homeruns Allowed': cgs.homeruns_allowed,
+            'Strikeouts': cgs.strikeouts_pitched,
+            'Star Pitches': cgs.star_pitches
+        }
+
+        if cgs.team_id == 0:
+            cgs_data["Home Batters"].append(batter_stats)
+        elif cgs.team_id == 1:
+            cgs_data["Away Batters"].append(batter_stats)
+
+        if cgs.batters_faced > 0 and cgs.team_id == 0:
+            cgs_data["Home Pitchers"].append(pitcher_stats)
+        elif cgs.batters_faced > 0 and cgs.team_id == 1:
+            cgs_data["Away Pitchers"].append(pitcher_stats)
+
+    cgs_data["Home Batters"] = sorted(cgs_data["Home Batters"], key=lambda x: x["Batting Order"])
+    cgs_data["Away Batters"] = sorted(cgs_data["Away Batters"], key=lambda x: x["Batting Order"])
+    cgs_data["Home Pitchers"] = sorted(cgs_data["Home Pitchers"], key=lambda x: x["Innings Pitched"])
+    cgs_data["Away Pitchers"] = sorted(cgs_data["Away Pitchers"], key=lambda x: x["Innings Pitched"])
+
+    ps_query = (
+        'SELECT '
+        'ps.id, '
+        'ps.batter_score, '
+        'ps.pitcher_score, '
+        'ps.rbi, '
+        'ps.inning, '
+        'ps.half_inning, '
+        'ps.batter_id '
+        'FROM pitch_summary AS ps '
+        'LEFT JOIN character_game_summary as cgs '
+        'ON ps.batter_id = cgs.id '
+        'WHERE cgs.game_id = 'f'{game_id}'
+    )
+    ps_results = db.session.execute(ps_query)
+    ps_data = []
+    for ps in ps_results:
+        ps_data.append({
+            'Pitch ID': ps.id,
+            'Pitcher Score': ps.pitcher_score,
+            'Batter Score': ps.batter_score,
+            'RBI': ps.rbi,
+            'Inning': ps.inning,
+            'Half Inning': ps.half_inning
+        })
+    # return {"ps_data": ps_data}
+    ps_data = sorted(ps_data, key=lambda x: x["Pitch ID"])
+    line_score = {}
+    inning = 1
+    for pitch in ps_data:
+        break
+    print(game_data | cgs_data)
+    line_score = {
+        "Away": [0, 0, 0],
+        "Home": [5, 4, 2]
+    }
+    return game_data | {"Character Stats": cgs_data} | {"Line Score": line_score}
+
 # def recent_games(user_id = None):
 #     query = (
 #         'SELECT '
