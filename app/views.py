@@ -687,11 +687,13 @@ def user_stats(username):
         }
 
     if not user_to_query.private or user_to_query.username == logged_in_user:   
-        user_query = create_query(user_to_query.id, False)
-        char_query = create_query(user_to_query.id, True)
+        user_query = create_query(user_to_query.id, cUser)
+        char_query = create_query(user_to_query.id, cCharacters)
+        captain_query = create_query(user_to_query.id, cCaptains)
 
         user_totals = get_user_totals(user_to_query.id, user_query)
         char_totals = get_per_char_totals(user_to_query.id, char_query)
+        captain_totals = get_captain_totals(user_to_query.id, captain_query)
 
         recent_games = recent_games_user(user_to_query.id)
 
@@ -699,6 +701,7 @@ def user_stats(username):
             "username": user_to_query.username,
             "user_totals": user_totals,
             "top_characters": char_totals,
+            "top_captains": captain_totals,
             "recent_games": recent_games
         }
 
@@ -725,28 +728,28 @@ def get_top_batters(user_id):
 
     return top_batters
 
-def create_query(user_id, per_character):
+def create_query(user_id, query_subject):
     left_join_character_statement = str()
     group_by_statement = str()
     character_name_statement = str()
-    captain_statement = str()
+    where_captain_statement = str()
 
     # Construct query to return 1 row for every character or 1 row with totals from all characters
-    if per_character:
+    if query_subject is cCharacters:
         left_join_character_statement = 'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
         group_by_statement = 'GROUP BY character_game_summary.char_id'
         character_name_statement = 'character.name as name, '
-        captain_statement = 'character_game_summary.captain AS captain, '
-    else:
-        left_join_character_statement = ''
+    elif query_subject is cUser:
         group_by_statement = 'GROUP BY character_game_summary.user_id'
-        character_name_statement = ''
-        captain_statement = ''
+    elif query_subject is cCaptains:
+        left_join_character_statement = 'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
+        group_by_statement = 'GROUP BY character_game_summary.char_id'
+        character_name_statement = 'character.name as name, '
+        where_captain_statement = 'AND character_game_summary.captain = 1 '
 
     query = (
         'SELECT '
         f'{character_name_statement}'
-        f'{captain_statement}'
         'SUM(CASE '
             f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
             f'WHEN game.home_player_id = {user_id} AND game.home_score > game.away_score THEN 1 '
@@ -773,6 +776,7 @@ def create_query(user_id, per_character):
         'LEFT JOIN game ON character_game_summary.game_id = game.game_id '
         f'{left_join_character_statement}'
         f'WHERE character_game_summary.user_id = {user_id} '
+        f'{where_captain_statement}'
         f'{group_by_statement}'
     )
     
@@ -792,40 +796,51 @@ def get_user_totals(user_id, query):
             "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
             "rbi": row.rbi,
             "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
-            "runs_allowed": row.runs_allowed,
-            "outs_pitched": row.outs_pitched,
             "era": calculate_era(row.runs_allowed, row.outs_pitched)
         }
     
     return user_totals
 
+def get_captain_totals(user_id, query):
+    result = db.session.execute(query).all()
+
+    # Get top 3 captains
+    sorted_captains = sorted(result, key=lambda captain: captain.wins/captain.games, reverse=True)[0:3]
+
+    top_captains = []
+    for captain in sorted_captains: 
+        top_captains.append({
+            "name": captain.name,
+            "wins": captain.wins,
+            "losses": captain.losses,
+            "homeruns": captain.homeruns,
+            "batting_average": captain.hits/captain.at_bats,
+            "obp": (captain.hits + captain.walks_bb + captain.walks_hit)/(captain.at_bats + captain.walks_bb + captain.walks_hit),
+            "rbi": captain.rbi,
+            "slg": (captain.singles + (captain.doubles * 2) + (captain.triples * 3) + (captain.homeruns * 4))/captain.at_bats,
+            "era": calculate_era(captain.runs_allowed, captain.outs_pitched),
+        })
+
+    return top_captains
+
 def get_per_char_totals(user_id, query):
     result = db.session.execute(query).all()
 
-    # Get top 6 pitchers
+    # Get top 6 batter by rbi
     batters = sorted(result, key=lambda batter: batter.rbi, reverse=True)
-    top_batters = [batter.name for batter in batters][0:6]
+    top_batters = [batter.name for batter in batters if batter.at_bats > 20][0:6]
 
-    # Get top 6 pitchers
-    pitchers = sorted(result, key=lambda pitcher: calculate_era(pitcher.runs_allowed, pitcher.outs_pitched), reverse=True)
-    top_pitchers = [pitcher.name for pitcher in pitchers][0:6]
-
-    # Get top 3 captains
-    captains = []
-    for row in result:
-        if row.captain:
-            captains.append(row)
-    sorted_captains = sorted(captains, key=lambda captain: captain.wins/captain.losses if captain.losses > 0 else 1, reverse=True)
-    top_captains = [captain.name for captain in sorted_captains][0:3]
+    # Get top 6 pitchers by era
+    pitchers = sorted(result, key=lambda pitcher: calculate_era(pitcher.runs_allowed, pitcher.outs_pitched))
+    top_pitchers = [pitcher.name for pitcher in pitchers if pitcher.outs_pitched > 135][0:6]
 
     top_characters = {
         "top_pitchers": top_pitchers,
         "top_batters": top_batters,
-        "top_captains": top_captains,
         "character_values": {}
     }
     for row in result:
-        if row.name in top_batters or row.name in top_pitchers or row.name in top_captains:
+        if row.name in top_batters or row.name in top_pitchers:
             top_characters["character_values"][row.name] = {
                 "games": row.games,
                 "wins": row.wins,
@@ -835,8 +850,6 @@ def get_per_char_totals(user_id, query):
                 "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
                 "rbi": row.rbi,
                 "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
-                "runs_allowed": row.runs_allowed,
-                "outs_pitched": row.outs_pitched,
                 "era": calculate_era(row.runs_allowed, row.outs_pitched),
             }
     
