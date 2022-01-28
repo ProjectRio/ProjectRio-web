@@ -37,18 +37,20 @@ for user in users["Users"]:
 print('Uploading Game data:')
 for file_path in os.listdir("./json/games/"):
     if file_path != '.DS_Store':
-        # Choose two random players for this game
-        players = random.sample(users["Users"], 2)
-        away_player = players[0]['Username']
-        home_player = players[1]['Username']
-        print(file_path + ': ' + away_player + ' vs ' + home_player)
-
-        # Replace game user names with demo users
         file = open("./json/games/" + file_path)
         game_data = json.load(file)
+
+        # Replace players with demo players
+        demo_players = random.sample(users["Users"], 2)
+        away_player = demo_players[0]['Username']
+        home_player = demo_players[1]['Username']
         game_data['Away Player'] = away_player
         game_data['Home Player'] = home_player
 
+
+        print(file_path + ': ' + game_data["GameID"] + ' Players: ' + away_player + ' vs ' + home_player)
+
+        
         # send POST request with editted game data
         # Output suppressed to clearly see which users were selected. 
         # View statuses on the Localhost pipenv terminal.
