@@ -400,9 +400,19 @@ def update_rio_key():
 # === Upload Game Data ===
 @app.route('/upload_game_data/', methods = ['POST'])
 def populate_db():
-    #get players from db User table
+    # Get players from db User table
     home_player = User.query.filter_by(username=request.json['Home Player']).first()
     away_player = User.query.filter_by(username=request.json['Away Player']).first()
+
+    # Check if players exist
+    if home_player is None or away_player is None:
+        abort(400, 'Invalid Username')
+
+    # Detect invalid games
+    innings_selected = request.json['Innings Selected']
+    innings_played = request.json['Innings Played']
+    score_difference = abs(request.json['Home Score'] - request.json['Away Score'])
+    is_valid = False if innings_played < innings_selected and score_difference < 10 else True
 
     game = Game(
         game_id = int(request.json['GameID'].replace(',', ''), 16),
@@ -416,6 +426,7 @@ def populate_db():
         innings_selected = request.json['Innings Selected'],
         innings_played = request.json['Innings Played'],
         quitter = request.json['Quitter Team'],
+        valid = is_valid,
     )
 
     db.session.add(game)
