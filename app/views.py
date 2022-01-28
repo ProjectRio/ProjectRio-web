@@ -5,7 +5,7 @@ import smtplib
 import ssl
 import secrets
 from . import bc
-from .models import db, User, Character, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
+from .models import db, User, Character, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, Tag, GameTag
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
@@ -15,8 +15,8 @@ from .consts import *
 # Schemas
 user_schema = UserSchema()
 
-# === Initalize Character Tables ===
-@app.route('/create_character_tables/', methods = ['POST'])
+# === Initalize Character Tables And Ranked/Superstar Tags ===
+@app.route('/create_character_table/', methods = ['POST'])
 def create_character_tables():
     f = open('./json/characters.json')
     character_list = json.load(f)["Characters"]
@@ -118,6 +118,25 @@ def create_character_tables():
     db.session.commit()
 
     return 'Characters added...\n'
+
+
+@app.route('/create_tag_table/', methods =['POST'])
+def create_default_tags():
+    ranked_tag = Tag(
+        name = "Ranked",
+        desc = "Tag for Ranked games"
+    )
+
+    superstar_tag = Tag(
+        name = "Superstar",
+        desc = "Tag for Superstar games"
+    )
+
+    db.session.add(ranked_tag)
+    db.session.add(superstar_tag)
+    db.session.commit()
+
+    return 'Tags created... \n'
 
 # == User Routes ==
 
@@ -400,6 +419,10 @@ def update_rio_key():
 # === Upload Game Data ===
 @app.route('/upload_game_data/', methods = ['POST'])
 def populate_db():
+    # Boolean to check if a game has superstar tag
+    is_superstar_game = False
+    tags = []
+
     # Get players from db User table
     home_player = User.query.filter_by(username=request.json['Home Player']).first()
     away_player = User.query.filter_by(username=request.json['Away Player']).first()
@@ -623,6 +646,26 @@ def populate_db():
                     db.session.add(fielding_summary)
                     
                 db.session.commit()
+
+        # Check if its a superstar game or not
+        if character['Superstar'] == True:
+            is_superstar_game == True 
+
+    if game.ranked == True:
+        tags.append('Ranked')
+    if is_superstar_game == True:
+        tags.append('Superstar')
+    
+    for name in tags:
+        tag = Tag.query.filter_by(name=name).first()
+        if tag:
+            game_tag = GameTag(
+                game_id = game.game_id,
+                tag_id = tag.id
+            )
+            db.session.add(game_tag)
+
+    db.session.commit()
     return 'Successfully added...\n'
 
 

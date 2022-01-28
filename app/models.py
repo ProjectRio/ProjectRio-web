@@ -165,6 +165,8 @@ class Game(db.Model):
     valid = db.Column(db.Boolean)
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
+    game_tag = db.relationship('GameTag', backref='game_from_game_tag')
+
 
     def to_dict(self):
         return {
@@ -295,3 +297,16 @@ class FieldingSummary(db.Model):
     contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=False)
     fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)
+
+class GameTag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.ForeignKey('game.game_id'), nullable=False)
+    tag_id = db.Column(db.ForeignKey('tag.id'), nullable=False)
+
+class Tag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(32))
+    tag_type = db.Column(db.String(16))
+    desc = db.Column(db.String(120))
+
+    game_tag = db.relationship('GameTag', backref='tag')
