@@ -713,63 +713,65 @@ def set_privacy():
 @app.route('/<username>/stats/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats(username):
-    # Check if user is logged in
-    logged_in_user = get_jwt_identity()
+    # # Check if user is logged in
+    # logged_in_user = get_jwt_identity()
     
-    # Get User row
+    # # Get User row
     in_username_lowercase = username.lower()
     user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
 
     if not user_to_query:
         return abort(408, description='User does not exist')
 
-    if user_to_query.private and user_to_query.username != logged_in_user:
-        return {
-            'private': True,
-            'username': user_to_query.username
-        }
+    # if user_to_query.private and user_to_query.username != logged_in_user:
+    #     return {
+    #         'private': True,
+    #         'username': user_to_query.username
+    #     }
 
-    if not user_to_query.private or user_to_query.username == logged_in_user:   
-        user_query = create_query(user_to_query.id, cUser)
-        char_query = create_query(user_to_query.id, cCharacters)
-        captain_query = create_query(user_to_query.id, cCaptains)
+    # if not user_to_query.private or user_to_query.username == logged_in_user: 
 
-        user_totals = get_user_totals(user_to_query.id, user_query)
-        char_totals = get_per_char_totals(user_to_query.id, char_query)
-        captain_totals = get_captain_totals(user_to_query.id, captain_query)
+    user_totals_by_tags(user_to_query.id, 1)
 
-        recent_games = recent_games_user(user_to_query.id)
+    user_query = create_query(user_to_query.id, cUser)
+    char_query = create_query(user_to_query.id, cCharacters)
+    captain_query = create_query(user_to_query.id, cCaptains)
 
-        return {
-            "username": user_to_query.username,
-            "user_totals": user_totals,
-            "top_characters": char_totals,
-            "top_captains": captain_totals,
-            "recent_games": recent_games
-        }
+    user_totals = get_user_totals(user_to_query.id, user_query)
+    char_totals = get_per_char_totals(user_to_query.id, char_query)
+    captain_totals = get_captain_totals(user_to_query.id, captain_query)
 
-def get_top_batters(user_id):
+    recent_games = recent_games_user(user_to_query.id)
+
+    return {
+        "username": user_to_query.username,
+        "user_totals": user_totals,
+        "top_characters": char_totals,
+        "top_captains": captain_totals,
+        "recent_games": recent_games
+    }
+
+
+# Work in progress
+def user_totals_by_tags(user_id, tag_id):
     query = (
         'SELECT '
-        'character.name AS name, '
-        'AVG(character_game_summary.rbi) AS rbi '
-        'FROM character_game_summary '
-        'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
+        'COUNT(game.game_id)/9 as games '
+        'FROM game '
+        f'LEFT JOIN user ON game.away_player_id = {user_id} OR game.home_player_id = {user_id} '
+        'LEFT JOIN character_game_summary ON user.id = character_game_summary.user_id '
+        'LEFT JOIN game_tag ON game_tag.game_id = game.game_id '
+        'LEFT JOIN tag ON game_tag.tag_id = tag.id '
         f'WHERE character_game_summary.user_id = {user_id} '
-        'GROUP BY character_game_summary.char_id '
-        'ORDER BY rbi DESC '
-        'LIMIT 6'
+        f'AND tag.id = {tag_id}'
     )
 
-    result = db.session.execute(query)
-    top_batters = []
-    for row in result:
-        top_batters.append({
-            "name": row.name,
-            "rbi": row.rbi
-        })
+    result = db.session.execute(query).all()
 
-    return top_batters
+    for row in result:
+        print(row.games)
+
+    return
 
 def create_query(user_id, query_subject):
     left_join_character_statement = str()
