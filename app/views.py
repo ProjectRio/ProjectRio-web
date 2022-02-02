@@ -9,8 +9,9 @@ from .models import db, User, Character, Game, CharacterGameSummary, PitchSummar
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
-
 from .consts import *
+
+from pprint import pprint
 
 # Schemas
 user_schema = UserSchema()
@@ -730,9 +731,6 @@ def user_stats(username):
     #     }
 
     # if not user_to_query.private or user_to_query.username == logged_in_user: 
-
-    user_totals_by_tags(user_to_query.id, 1)
-
     user_query = create_query(user_to_query.id, cUser)
     char_query = create_query(user_to_query.id, cCharacters)
     captain_query = create_query(user_to_query.id, cCaptains)
@@ -743,6 +741,8 @@ def user_stats(username):
 
     recent_games = recent_games_user(user_to_query.id)
 
+    games_by_tags([1,2], user_to_query.id)
+
     return {
         "username": user_to_query.username,
         "user_totals": user_totals,
@@ -750,28 +750,6 @@ def user_stats(username):
         "top_captains": captain_totals,
         "recent_games": recent_games
     }
-
-
-# Work in progress
-def user_totals_by_tags(user_id, tag_id):
-    query = (
-        'SELECT '
-        'COUNT(game.game_id)/9 as games '
-        'FROM game '
-        f'LEFT JOIN user ON game.away_player_id = {user_id} OR game.home_player_id = {user_id} '
-        'LEFT JOIN character_game_summary ON user.id = character_game_summary.user_id '
-        'LEFT JOIN game_tag ON game_tag.game_id = game.game_id '
-        'LEFT JOIN tag ON game_tag.tag_id = tag.id '
-        f'WHERE character_game_summary.user_id = {user_id} '
-        f'AND tag.id = {tag_id}'
-    )
-
-    result = db.session.execute(query).all()
-
-    for row in result:
-        print(row.games)
-
-    return
 
 def create_query(user_id, query_subject):
     left_join_character_statement = str()
@@ -833,9 +811,9 @@ def get_user_totals(user_id, query):
     user_totals = []
     for row in result:
         user_totals = {
-            "games": row.games,
-            "wins": row.wins,
-            "losses": row.losses,
+            "games": row.games/9,
+            "wins": row.wins/9,
+            "losses": row.losses/9,
             "homeruns": row.homeruns,
             "batting_average": row.hits/row.at_bats,
             "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
@@ -908,11 +886,19 @@ def calculate_era(runs_allowed, outs_pitched):
     else:
         return 0
 
-# Description: Return all games. Probably shouldn't be used in its raw form
+# http://127.0.0.1:5000/games/?recent=20&user_id=4&tag=1&tag=2
+# To add, exact_match, head_to_head
 @app.route('/games/', methods = ['GET'])
-def games(recent = None, user_id = None):
+def games():
+    try:
+        tags = request.args.getlist('tag')
+        user_id = int(request.args.get('user_id')) if request.args.get('user_id') is not None else None
+        recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
+    except:
+        abort('Invalid parameters', 408)
+
     limit = str()
-    if (recent == None or type(recent) != int):
+    if (recent == None):
         limit = ''
     else:
         limit = 'LIMIT {}'.format(recent)
@@ -922,12 +908,20 @@ def games(recent = None, user_id = None):
     if (user_id == None or type(user_id) != int):
         where_user = ''
     else:
-        where_user = f'WHERE game.away_player_id = {user_id} OR game.home_player_id = {user_id}'
+        where_user = f'WHERE (game.away_player_id = {user_id} OR game.home_player_id = {user_id})'
+
+    where_tag = str()
+    group_by = str()
+    if tags:
+        where_tag = f'AND (tag.id IN {tuple(tags)})'
+        group_by = 'GROUP BY game.game_id, tag.id'
+        print(where_tag)
 
     #Construct Query
     query = (
         'SELECT '
         'game.game_id AS game_id, '
+        'tag.id AS tag_id, '
         'game.date_time AS date_time, '
         'game.away_score AS away_score, '
         'game.home_score AS home_score, '
@@ -938,6 +932,8 @@ def games(recent = None, user_id = None):
         'away_character_game_summary.char_id AS away_captain, '
         'home_character_game_summary.char_id AS home_captain '    
         'FROM game '
+        'LEFT JOIN game_tag ON game_tag.game_id = game.game_id '
+        'LEFT JOIN tag ON tag.id = game_tag.tag_id '
         'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
         'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
         'LEFT JOIN character_game_summary AS away_character_game_summary '
@@ -949,27 +945,34 @@ def games(recent = None, user_id = None):
             'AND home_character_game_summary.user_id = home_player.id '
             'AND home_character_game_summary.captain = True '
         f'{where_user} '
+        f'{where_tag} '
+        f'{group_by} '
         f'{limit} '
     )
 
     results = db.session.execute(query)
     
-    recent_games = []
+    games = {}
     for game in results:
-        recent_games.append({
-            'Id': game.game_id,
-            'Datetime': datetime.fromtimestamp(game.date_time),
-            'Away User': game.away_player,
-            'Away Captain': game.away_captain,
-            'Away Score': game.away_score,
-            'Home User': game.home_player,
-            'Home Captain': game.home_captain,
-            'Home Score': game.home_score,
-            'Innings Played': game.innings_played,
-            'Innings Selected': game.innings_selected
-        })
+        print(game.tag_id)
+        if game.game_id not in games:
+            games[game.game_id] = {
+                'Id': game.game_id,
+                'Datetime': datetime.fromtimestamp(game.date_time),
+                'Away User': game.away_player,
+                'Away Captain': game.away_captain,
+                'Away Score': game.away_score,
+                'Home User': game.home_player,
+                'Home Captain': game.home_captain,
+                'Home Score': game.home_score,
+                'Innings Played': game.innings_played,
+                'Innings Selected': game.innings_selected,
+                'Tags': [game.tag_id]
+            }
+        else:
+            games[game.game_id]['Tags'].append(game.tag_id)
 
-    return {'recent_games': recent_games}
+    return {'games': games}
 
 # Description: Return 20 most recent games for all users
 @app.route('/games/recent/', methods = ['GET'])
@@ -987,3 +990,102 @@ def recent_games_user(user_id):
 def all_games_user(user_id):
     #TODO handle exceptions
     return games(recent=None, user_id=int(user_id))
+
+
+# Format: http://127.0.0.1:5000/games/?recent=20&user_id=4&tag=1&tag=2
+@app.route('/arg_test/', methods = ['GET'])
+def arg_test():
+    try:
+        tags = request.args.getlist('tag')
+        user_id = int(request.args.get('user_id')) if request.args.get('user_id') is not None else None
+        recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
+    except:
+        abort('Invalid parameters', 408)
+
+    if (recent == None):
+        limit = ''
+    else:
+        limit = 'LIMIT {}'.format(recent)
+
+    where_user = str()
+    if (user_id == None or type(user_id) != int):
+        where_user = ''
+    else:
+        where_user = f'WHERE (game.away_player_id = {user_id} OR game.home_player_id = {user_id})'
+
+    tag_cases = str()
+    having_tags = str()
+    join_tags = str()
+    group_by = str()
+    if tags:
+        join_tags = (
+            'LEFT JOIN game_tag ON game.game_id = game_tag.game_id '
+            'LEFT JOIN tag ON game_tag.tag_id = tag.id '
+        )
+        for index, tag_id in enumerate(tags):
+            tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {tag_id} THEN 1 END) AS tag_{index}, '
+            having_tags += f'HAVING tag_{index} ' if index == 0 else f'AND tag_{index} '
+
+        group_by = 'GROUP BY game_tag.game_id'
+
+    #Construct Query
+    query = (
+        'SELECT '
+        'game.game_id AS game_id, '
+        f'{tag_cases}'
+        'game.date_time AS date_time, '
+        'game.away_score AS away_score, '
+        'game.home_score AS home_score, '
+        'game.innings_played AS innings_played, '
+        'game.innings_selected AS innings_selected, '
+        'away_player.username AS away_player, '
+        'home_player.username AS home_player, '
+        'away_captain.name AS away_captain, '
+        'home_captain.name AS home_captain '   
+        'FROM game '
+        f'{join_tags} '
+        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
+        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
+        'LEFT JOIN character_game_summary AS away_character_game_summary '
+            'ON game.game_id = away_character_game_summary.game_id '
+            'AND away_character_game_summary.user_id = away_player.id '
+            'AND away_character_game_summary.captain = True '
+        'LEFT JOIN character_game_summary AS home_character_game_summary '
+            'ON game.game_id = home_character_game_summary.game_id '
+            'AND home_character_game_summary.user_id = home_player.id '
+            'AND home_character_game_summary.captain = True '
+        'LEFT JOIN character AS away_captain ON away_character_game_summary.char_id = away_captain.char_id '
+        'LEFT JOIN character AS home_captain ON home_character_game_summary.char_id = home_captain.char_id '
+        f'{where_user} '
+        f'{group_by} '
+        f'{having_tags} '
+        f'{limit}'
+    )
+
+    results = db.session.execute(query).all()
+    
+    games = []
+    for game in results:
+        list_of_tags = []
+        if tags:
+            for index, tag_id in enumerate(tags):
+                if game[f'tag_{index}'] != 0:
+                    list_of_tags.append(tag_id)
+
+        games.append({
+            'Id': game.game_id,
+            'Datetime': game.date_time,
+            'Away User': game.away_player,
+            'Away Captain': game.away_captain,
+            'Away Score': game.away_score,
+            'Home User': game.home_player,
+            'Home Captain': game.home_captain,
+            'Home Score': game.home_score,
+            'Innings Played': game.innings_played,
+            'Innings Selected': game.innings_selected,
+            'Tags': list_of_tags
+        })
+
+
+
+    return {'games': games}
