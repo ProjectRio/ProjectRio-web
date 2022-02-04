@@ -123,24 +123,36 @@ def create_character_tables():
 
 @app.route('/create_tag_table/', methods =['POST'])
 def create_default_tags():
-    ranked_tag = Tag(
+    ranked = Tag(
         name = "Ranked",
         desc = "Tag for Ranked games"
     )
 
-    superstar_tag = Tag(
-        name = "Superstar",
-        desc = "Tag for Superstar games"
+    unranked = Tag(
+        name = "Unranked",
+        desc = "Tag for Unranked games"
     )
 
-    db.session.add(ranked_tag)
-    db.session.add(superstar_tag)
+    superstar = Tag(
+        name = "Superstar",
+        desc = "Tag for Stars On"
+    )
+
+    normal = Tag(
+        name = "Normal",
+        desc = "Tag for Stars Off"
+    )
+
+    db.session.add(ranked)
+    db.session.add(unranked)
+    db.session.add(superstar)
+    db.session.add(normal)
     db.session.commit()
 
     return 'Tags created... \n'
 
-# == User Routes ==
 
+# == User Routes ==
 # Refresh any JWT within 7 days of expiration after requests
 @app.after_request
 def refresh_expiring_jwts(response):
@@ -654,8 +666,13 @@ def populate_db():
 
     if game.ranked == True:
         tags.append('Ranked')
+    else:
+        tags.append('Unranked')
+
     if is_superstar_game == True:
         tags.append('Superstar')
+    else:
+        tags.append('Normal')
     
     for name in tags:
         tag = Tag.query.filter_by(name=name).first()
@@ -739,9 +756,6 @@ def user_stats(username):
     char_totals = get_per_char_totals(user_to_query.id, char_query)
     captain_totals = get_captain_totals(user_to_query.id, captain_query)
 
-    recent_games = recent_games_user(user_to_query.id)
-
-    games_by_tags([1,2], user_to_query.id)
 
     return {
         "username": user_to_query.username,
@@ -886,115 +900,10 @@ def calculate_era(runs_allowed, outs_pitched):
     else:
         return 0
 
-# http://127.0.0.1:5000/games/?recent=20&user_id=4&tag=1&tag=2
+# http://127.0.0.1:5000/games/?recent=20&user_id=1&tag=1&tag=2
 # To add, exact_match, head_to_head
 @app.route('/games/', methods = ['GET'])
 def games():
-    try:
-        tags = request.args.getlist('tag')
-        user_id = int(request.args.get('user_id')) if request.args.get('user_id') is not None else None
-        recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
-    except:
-        abort('Invalid parameters', 408)
-
-    limit = str()
-    if (recent == None):
-        limit = ''
-    else:
-        limit = 'LIMIT {}'.format(recent)
-
-    #Decide if we want a specific user and build SQL statement
-    where_user = str()
-    if (user_id == None or type(user_id) != int):
-        where_user = ''
-    else:
-        where_user = f'WHERE (game.away_player_id = {user_id} OR game.home_player_id = {user_id})'
-
-    where_tag = str()
-    group_by = str()
-    if tags:
-        where_tag = f'AND (tag.id IN {tuple(tags)})'
-        group_by = 'GROUP BY game.game_id, tag.id'
-        print(where_tag)
-
-    #Construct Query
-    query = (
-        'SELECT '
-        'game.game_id AS game_id, '
-        'tag.id AS tag_id, '
-        'game.date_time AS date_time, '
-        'game.away_score AS away_score, '
-        'game.home_score AS home_score, '
-        'game.innings_played AS innings_played, '
-        'game.innings_selected AS innings_selected, '
-        'away_player.username AS away_player, '
-        'home_player.username AS home_player, '
-        'away_character_game_summary.char_id AS away_captain, '
-        'home_character_game_summary.char_id AS home_captain '    
-        'FROM game '
-        'LEFT JOIN game_tag ON game_tag.game_id = game.game_id '
-        'LEFT JOIN tag ON tag.id = game_tag.tag_id '
-        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
-        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
-        'LEFT JOIN character_game_summary AS away_character_game_summary '
-            'ON game.game_id = away_character_game_summary.game_id '
-            'AND away_character_game_summary.user_id = away_player.id '
-            'AND away_character_game_summary.captain = True '
-        'LEFT JOIN character_game_summary AS home_character_game_summary '
-            'ON game.game_id = home_character_game_summary.game_id '
-            'AND home_character_game_summary.user_id = home_player.id '
-            'AND home_character_game_summary.captain = True '
-        f'{where_user} '
-        f'{where_tag} '
-        f'{group_by} '
-        f'{limit} '
-    )
-
-    results = db.session.execute(query)
-    
-    games = {}
-    for game in results:
-        print(game.tag_id)
-        if game.game_id not in games:
-            games[game.game_id] = {
-                'Id': game.game_id,
-                'Datetime': datetime.fromtimestamp(game.date_time),
-                'Away User': game.away_player,
-                'Away Captain': game.away_captain,
-                'Away Score': game.away_score,
-                'Home User': game.home_player,
-                'Home Captain': game.home_captain,
-                'Home Score': game.home_score,
-                'Innings Played': game.innings_played,
-                'Innings Selected': game.innings_selected,
-                'Tags': [game.tag_id]
-            }
-        else:
-            games[game.game_id]['Tags'].append(game.tag_id)
-
-    return {'games': games}
-
-# Description: Return 20 most recent games for all users
-@app.route('/games/recent/', methods = ['GET'])
-def recent_games(user_id = None):
-    #TODO handle exceptions
-    return games(recent=20)
-
-# Description: Return 20 most recent games for single
-@app.route('/games/recent/<user_id>', methods = ['GET'])
-def recent_games_user(user_id):
-    #TODO handle exceptions
-    return games(recent=20, user_id=int(user_id))
-
-@app.route('/games/<user_id>', methods = ['GET'])
-def all_games_user(user_id):
-    #TODO handle exceptions
-    return games(recent=None, user_id=int(user_id))
-
-
-# Format: http://127.0.0.1:5000/games/?recent=20&user_id=4&tag=1&tag=2
-@app.route('/arg_test/', methods = ['GET'])
-def arg_test():
     try:
         tags = request.args.getlist('tag')
         user_id = int(request.args.get('user_id')) if request.args.get('user_id') is not None else None
@@ -1028,7 +937,6 @@ def arg_test():
 
         group_by = 'GROUP BY game_tag.game_id'
 
-    #Construct Query
     query = (
         'SELECT '
         'game.game_id AS game_id, '
@@ -1065,12 +973,9 @@ def arg_test():
     results = db.session.execute(query).all()
     
     games = []
+    game_ids = []
     for game in results:
-        list_of_tags = []
-        if tags:
-            for index, tag_id in enumerate(tags):
-                if game[f'tag_{index}'] != 0:
-                    list_of_tags.append(tag_id)
+        game_ids.append(game.game_id)
 
         games.append({
             'Id': game.game_id,
@@ -1083,9 +988,34 @@ def arg_test():
             'Home Score': game.home_score,
             'Innings Played': game.innings_played,
             'Innings Selected': game.innings_selected,
-            'Tags': list_of_tags
+            'Tags': []
         })
 
 
+
+    # If there are games with matching tags, get all additional tags they have
+    if game_ids:
+        where_game_id = str()
+        if len(game_ids) == 1:
+            where_game_id = f'WHERE game_tag.game_id = {game_ids[0]} '
+        else:
+            where_game_id = f'WHERE game_tag.game_id IN {tuple(game_ids)} '
+
+        tags_query = (
+            'SELECT '
+            'game_tag.game_id as game_id, '
+            'game_tag.tag_id as tag_id, '
+            'tag.name as name '
+            'FROM game_tag '
+            'LEFT JOIN tag ON game_tag.tag_id = tag.id '
+            f'{where_game_id}'
+            'GROUP BY game_id, tag_id'
+        )
+
+        tag_results = db.session.execute(tags_query).all()
+        for tag in tag_results:
+            for game in games:
+                if game['Id'] == tag.game_id:
+                    game['Tags'].append(tag.name)
 
     return {'games': games}
