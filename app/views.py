@@ -997,7 +997,7 @@ def games():
                     f'OR (game.home_player_id = {primary_user_id} AND game.away_player_id IN {user_ids})'
                 )
             else:
-                where_user = f'WHERE (game.away_player_id IN {user_ids} AND game.home_player_id IN {user_ids})'
+                where_user = f'WHERE (game.away_player_id IN {user_ids} OR game.home_player_id IN {user_ids})'
         else:
             where_user = f'WHERE (game.away_player_id = {user_ids[0]} OR game.home_player_id = {user_ids[0]})'
     else:
