@@ -352,6 +352,43 @@ def send_password_reset_email(user):
     return
 
 
+# === RIO Client Endpoints ===
+
+# Evaluate users provided to Client
+# /validateuserfromclient/?username=demouser1&rio_key=fI8WbLJ3Ti2gkcEuMh1DvcMGl4LQvYFRJvlpgwcCnpw
+@app.route('/validate_user_from_client/', methods=['GET'])
+def validate_user_from_client():
+    in_username = request.args.get('username')
+    in_username_lower = in_username.lower()
+    in_rio_key = request.args.get('rio_key')
+
+    user = User.query.filter_by(username_lowercase = in_username_lower, rio_key = in_rio_key).first()
+
+    if user is None:
+        abort(404, 'Invalid UserID or RioKey')
+
+    return {'msg': 'success'}
+
+
+@app.route('/get_available_tags/<username>/', methods=['GET'])
+def get_available_tags(username):
+    in_username_lower = username.lower()
+
+    query = (
+        'SELECT '
+        'tag.name AS tag_name '
+        'FROM tag '
+        'WHERE tag.community_id IS NULL'
+    )
+
+    result = db.session.execute(query).all()
+
+    print(result)
+
+    return 'Success...'
+
+
+
 
 @app.route('/change_password/', methods=['POST'])
 def change_password():
