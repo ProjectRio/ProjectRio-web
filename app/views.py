@@ -728,7 +728,6 @@ def populate_db():
     return 'Successfully added...\n'
 
 
-
 # === FRONT END REQUESTS ===
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
