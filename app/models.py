@@ -309,5 +309,6 @@ class Tag(db.Model):
     name_lowercase = db.Column(db.String(32))
     tag_type = db.Column(db.String(16))
     desc = db.Column(db.String(120))
+    community_id = db.Column(db.Integer)
 
     game_tag = db.relationship('GameTag', backref='tag')
