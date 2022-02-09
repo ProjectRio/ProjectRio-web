@@ -125,22 +125,26 @@ def create_character_tables():
 def create_default_tags():
     ranked = Tag(
         name = "Ranked",
+        name_lowercase = "ranked",
         desc = "Tag for Ranked games"
     )
 
     unranked = Tag(
         name = "Unranked",
+        name_lowercase = "unranked",
         desc = "Tag for Unranked games"
     )
 
     superstar = Tag(
         name = "Superstar",
+        name_lowercase = "superstar",
         desc = "Tag for Stars On"
     )
 
     normal = Tag(
         name = "Normal",
-        desc = "Tag for Stars Off"
+        name_lowercase = "normal",
+        desc = "Tag for Normal games"
     )
 
     db.session.add(ranked)
@@ -900,27 +904,68 @@ def calculate_era(runs_allowed, outs_pitched):
     else:
         return 0
 
-# http://127.0.0.1:5000/games/?recent=20&user_id=1&tag=1&tag=2
-# To add, exact_match, head_to_head
+# http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5&vs=True
 @app.route('/games/', methods = ['GET'])
 def games():
+    # === validate passed parameters ===
     try:
+        # Check if tags are valid and get a list of corresponding ids
         tags = request.args.getlist('tag')
-        user_id = int(request.args.get('user_id')) if request.args.get('user_id') is not None else None
+        tags_lowercase = tuple([tag.lower() for tag in tags])
+        tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(tags_lowercase)).all()
+        tag_ids = tuple([tag.id for tag in tag_rows])
+        if len(tag_ids) != len(tags):
+            abort(400)
+        
+        # Check if usernames are valid and get array of corresponding ids
+        usernames = request.args.getlist('username')
+        usernames_lowercase = tuple([username.lower() for username in usernames])
+        users = db.session.query(User).filter(User.username_lowercase.in_(usernames_lowercase)).all() 
+        if len(usernames) != len(users):
+            abort(400)
+
+        # If true, returned values will return games that contain the first passed username when playing against other provided usernames
+        vs = True if request.args.get('vs') == 'True' else False
+
+        user_id_list = []
+        for index, user in enumerate(users):
+            # primary_user_id is theid of the first username provided in the url, it is used when querying
+            # for games that must contain that username paired with n number of other provided usernames
+            if vs == True and user.username_lowercase == usernames_lowercase[0]:
+                primary_user_id = user.id
+            user_id_list.append(user.id)
+        user_ids = tuple(user_id_list)
+
         recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
     except:
-        abort('Invalid parameters', 408)
+       return abort(400, 'Invalid Username or Tag')
 
+
+    # === Set dynamic query values ===
+
+    limit = str()
+    order_by = str()
     if (recent == None):
         limit = ''
+        order_by = ''
     else:
         limit = 'LIMIT {}'.format(recent)
+        order_by = 'ORDER BY game.date_time DESC '
 
     where_user = str()
-    if (user_id == None or type(user_id) != int):
-        where_user = ''
+    if user_ids:
+        if len(user_ids) > 1:
+            if vs == True:
+                where_user = (
+                    f'WHERE (game.away_player_id = {primary_user_id} AND game.home_player_id IN {user_ids}) '
+                    f'OR (game.home_player_id = {primary_user_id} AND game.away_player_id IN {user_ids})'
+                )
+            else:
+                where_user = f'WHERE (game.away_player_id IN {user_ids} AND game.home_player_id IN {user_ids})'
+        else:
+            where_user = f'WHERE (game.away_player_id = {user_ids[0]} OR game.home_player_id = {user_ids[0]})'
     else:
-        where_user = f'WHERE (game.away_player_id = {user_id} OR game.home_player_id = {user_id})'
+        where_user = ''
 
     tag_cases = str()
     having_tags = str()
@@ -931,12 +976,14 @@ def games():
             'LEFT JOIN game_tag ON game.game_id = game_tag.game_id '
             'LEFT JOIN tag ON game_tag.tag_id = tag.id '
         )
-        for index, tag_id in enumerate(tags):
+        for index, tag_id in enumerate(tag_ids):
             tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {tag_id} THEN 1 END) AS tag_{index}, '
             having_tags += f'HAVING tag_{index} ' if index == 0 else f'AND tag_{index} '
 
         group_by = 'GROUP BY game_tag.game_id'
 
+
+    # === Construct query === 
     query = (
         'SELECT '
         'game.game_id AS game_id, '
@@ -967,6 +1014,7 @@ def games():
         f'{where_user} '
         f'{group_by} '
         f'{having_tags} '
+        f'{order_by}'
         f'{limit}'
     )
 
