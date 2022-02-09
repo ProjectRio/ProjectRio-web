@@ -306,6 +306,7 @@ class GameTag(db.Model):
 class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(32))
+    name_lowercase = db.Column(db.String(32))
     tag_type = db.Column(db.String(16))
     desc = db.Column(db.String(120))
 
