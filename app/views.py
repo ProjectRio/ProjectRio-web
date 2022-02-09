@@ -766,7 +766,6 @@ def user_stats(username):
         "user_totals": user_totals,
         "top_characters": char_totals,
         "top_captains": captain_totals,
-        "recent_games": recent_games
     }
 
 def create_query(user_id, query_subject):
