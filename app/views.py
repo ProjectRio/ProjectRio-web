@@ -788,14 +788,13 @@ def user_stats(username):
     #     }
 
     # if not user_to_query.private or user_to_query.username == logged_in_user: 
-    user_query = create_query(user_to_query.id, cUser)
+
+    user_totals = get_user_profile_totals(user_to_query.id)
+
     char_query = create_query(user_to_query.id, cCharacters)
     captain_query = create_query(user_to_query.id, cCaptains)
-
-    user_totals = get_user_totals(user_to_query.id, user_query)
     char_totals = get_per_char_totals(user_to_query.id, char_query)
     captain_totals = get_captain_totals(user_to_query.id, captain_query)
-
 
     return {
         "username": user_to_query.username,
@@ -803,6 +802,143 @@ def user_stats(username):
         "top_characters": char_totals,
         "top_captains": captain_totals,
     }
+
+
+def get_user_profile_totals(user_id):
+    game_ids_by_type_query = (
+        'SELECT '
+        'game.game_id AS game_id, '
+        'SUM(CASE WHEN game_tag.tag_id = 1 THEN 1 END) AS ranked, ' 
+        'SUM(CASE WHEN game_tag.tag_id = 2 THEN 1 END) AS unranked, '
+        'SUM(CASE WHEN game_tag.tag_id = 3 THEN 1 END) AS superstar, '
+        'SUM(CASE WHEN game_tag.tag_id = 4 THEN 1 END) AS normal '
+        'FROM user '
+        'LEFT JOIN game ON user.id = game.home_player_id OR user.id = game.away_player_id '
+        'LEFT JOIN game_tag ON game.game_id = game_tag.game_id '
+        f'WHERE user.id = {user_id} '
+        'GROUP BY game.game_id '
+    )
+    games_by_type = db.session.execute(game_ids_by_type_query).all()
+    
+    ranked_normal = []
+    ranked_superstar = []
+    unranked_normal = []
+    unranked_superstar = []
+    for game in games_by_type:
+        if game.ranked == 1 and game.normal == 1:
+            ranked_normal.append(str(game.game_id))
+        elif game.ranked == 1 and game.superstar == 1:
+            ranked_superstar.append(str(game.game_id))
+        elif game.unranked == 1 and game.normal == 1:
+            unranked_normal.append(str(game.game_id))
+        else:
+            unranked_superstar.append(str(game.game_id))
+
+    ranked_normal_game_ids_string = ', '.join(ranked_normal)
+    ranked_superstar_game_ids_string = ', '.join(ranked_superstar)
+    unranked_normal_game_ids_string = ', '.join(unranked_normal)
+    unranked_superstar_game_ids_string = ', '.join(unranked_superstar)
+
+    sum_games_by_type_query = (
+        'SELECT '
+        f'CASE WHEN game.game_id IN ({ranked_normal_game_ids_string}) THEN 1 '
+            f'WHEN game.game_id IN ({ranked_superstar_game_ids_string}) THEN 2 '
+            f'WHEN game.game_id IN ({unranked_normal_game_ids_string}) THEN 3 '
+            f'WHEN game.game_id IN ({unranked_superstar_game_ids_string}) THEN 4 '
+            'END as type, '
+        'SUM(CASE '
+            f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
+            f'WHEN game.home_player_id = {user_id} AND game.home_score > game.away_score THEN 1 '
+            'ELSE 0 '
+            'END)/9 AS wins, '
+        'SUM(CASE '
+            f'WHEN game.away_player_id = {user_id} AND game.away_score < game.home_score THEN 1 '
+            f'WHEN game.home_player_id = {user_id} AND game.home_score < game.away_score THEN 1 '
+            'ELSE 0 '
+            'END)/9 AS losses, '
+        'SUM(character_game_summary.runs_allowed) AS runs_allowed, '
+        'SUM(character_game_summary.outs_pitched) AS outs_pitched, '
+        'SUM(character_game_summary.hits) AS hits, '
+        'SUM(character_game_summary.at_bats) AS at_bats, '
+        'SUM(character_game_summary.walks_bb) AS walks_bb, '
+        'SUM(character_game_summary.walks_hit) AS walks_hit, '
+        'SUM(character_game_summary.rbi) AS rbi, '
+        'SUM(character_game_summary.singles) AS singles, '
+        'SUM(character_game_summary.doubles) AS doubles, '
+        'SUM(character_game_summary.triples) AS triples, '
+        'SUM(character_game_summary.homeruns) AS homeruns '
+        'FROM game '
+        'LEFT JOIN character_game_summary ON game.game_id = character_game_summary.game_id '
+        f'WHERE character_game_summary.user_id = {user_id} '
+        'GROUP BY character_game_summary.user_id, type'
+    )
+
+    summed_games_by_type = db.session.execute(sum_games_by_type_query).all()
+
+    user_totals = {
+        'all': {
+            'losses': 0,
+            'wins': 0,
+            'runs_allowed': 0,
+            'outs_pitched': 0,
+            'hits': 0,
+            'at_bats': 0,
+            'walks_bb': 0,
+            'walks_hit': 0,
+            'rbi': 0,
+            'singles': 0,
+            'doubles': 0,
+            'triples': 0,
+            'homeruns': 0,
+        },
+        'ranked_normal': {},
+        'ranked_superstar': {},
+        'unranked_normal': {},
+        'unranked_superstar': {}
+        }
+
+    for sum in summed_games_by_type:
+        user_totals['all']['losses'] += sum.losses
+        user_totals['all']['wins'] += sum.wins
+        user_totals['all']['runs_allowed'] += sum.runs_allowed
+        user_totals['all']['outs_pitched'] += sum.outs_pitched
+        user_totals['all']['hits'] += sum.hits
+        user_totals['all']['at_bats'] += sum.at_bats
+        user_totals['all']['walks_bb'] += sum.walks_bb
+        user_totals['all']['walks_hit'] += sum.walks_hit
+        user_totals['all']['rbi'] += sum.rbi
+        user_totals['all']['singles'] += sum.singles
+        user_totals['all']['doubles'] += sum.doubles
+        user_totals['all']['triples'] += sum.triples
+        user_totals['all']['homeruns'] += sum.homeruns
+        
+        key = str()
+        if sum.type == 1:
+            key = 'ranked_normal'
+        elif sum.type == 2:
+            key = 'ranked_superstar'
+        elif sum.type == 3:
+            key = 'unranked_normal'
+        elif sum.type == 4:
+            key = 'unranked_superstar'
+        
+        user_totals[key] = {
+            'losses': sum.losses,
+            'wins': sum.wins,
+            'runs_allowed': sum.runs_allowed,
+            'outs_pitched': sum.outs_pitched,
+            'hits': sum.hits,
+            'at_bats': sum.at_bats,
+            'walks_bb': sum.walks_bb,
+            'walks_hit': sum.walks_hit,
+            'rbi': sum.rbi,
+            'singles': sum.singles,
+            'doubles': sum.doubles,
+            'triples': sum.triples,
+            'homeruns': sum.homeruns,
+        }
+        
+    return user_totals
 
 def create_query(user_id, query_subject):
     left_join_character_statement = str()
@@ -815,8 +951,6 @@ def create_query(user_id, query_subject):
         left_join_character_statement = 'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
         group_by_statement = 'GROUP BY character_game_summary.char_id'
         character_name_statement = 'character.name as name, '
-    elif query_subject is cUser:
-        group_by_statement = 'GROUP BY character_game_summary.user_id'
     elif query_subject is cCaptains:
         left_join_character_statement = 'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
         group_by_statement = 'GROUP BY character_game_summary.char_id'
@@ -858,25 +992,6 @@ def create_query(user_id, query_subject):
     
     return query
 
-def get_user_totals(user_id, query):
-    result = db.session.execute(query).all()
-
-    user_totals = []
-    for row in result:
-        user_totals = {
-            "games": row.games/9,
-            "wins": row.wins/9,
-            "losses": row.losses/9,
-            "homeruns": row.homeruns,
-            "batting_average": row.hits/row.at_bats,
-            "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
-            "rbi": row.rbi,
-            "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
-            "era": calculate_era(row.runs_allowed, row.outs_pitched)
-        }
-    
-    return user_totals
-
 def get_captain_totals(user_id, query):
     result = db.session.execute(query).all()
 
@@ -902,11 +1017,11 @@ def get_captain_totals(user_id, query):
 def get_per_char_totals(user_id, query):
     result = db.session.execute(query).all()
 
-    # Get top 6 batter by rbi
+    # Get top 6 batter by rbi where they have more than 20 at bats
     batters = sorted(result, key=lambda batter: batter.rbi, reverse=True)
     top_batters = [batter.name for batter in batters if batter.at_bats > 20][0:6]
 
-    # Get top 6 pitchers by era
+    # Get top 6 pitchers by era where they have more than 135 outs pitched
     pitchers = sorted(result, key=lambda pitcher: calculate_era(pitcher.runs_allowed, pitcher.outs_pitched))
     top_pitchers = [pitcher.name for pitcher in pitchers if pitcher.outs_pitched > 135][0:6]
 
