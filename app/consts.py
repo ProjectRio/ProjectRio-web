@@ -21,6 +21,5 @@ cPLAY_RESULT_SAFE = {
 cPLAY_RESULT_BUNT = {0xD: 'Bunt'}
 
 # Consts used to create profile query
-cUser = 0
 cCharacters = 1
 cCaptains = 2
