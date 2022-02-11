@@ -767,14 +767,15 @@ def set_privacy():
             'private': current_user.private
         })
 
-
-@app.route('/<username>/stats/', methods = ['GET'])
+# API Request URL example: /demouser1/stats/?recent=10&username=demouser1
+@app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
-def user_stats(username):
+def user_stats():
     # # Check if user is logged in
     # logged_in_user = get_jwt_identity()
     
     # # Get User row
+    username = request.args.get('username')
     in_username_lowercase = username.lower()
     user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
 
@@ -789,6 +790,10 @@ def user_stats(username):
 
     # if not user_to_query.private or user_to_query.username == logged_in_user: 
 
+
+    # Called from profile page with ?recent=10&username=username
+    recent_games = games()
+
     user_totals = get_user_profile_totals(user_to_query.id)
 
     char_query = create_query(user_to_query.id, cCharacters)
@@ -797,6 +802,7 @@ def user_stats(username):
     captain_totals = get_captain_totals(user_to_query.id, captain_query)
 
     return {
+        "recent_games": recent_games,
         "username": user_to_query.username,
         "user_totals": user_totals,
         "top_characters": char_totals,
@@ -925,19 +931,18 @@ def get_user_profile_totals(user_id):
         user_totals[key] = {
             'losses': sum.losses,
             'wins': sum.wins,
-            'runs_allowed': sum.runs_allowed,
-            'outs_pitched': sum.outs_pitched,
-            'hits': sum.hits,
-            'at_bats': sum.at_bats,
-            'walks_bb': sum.walks_bb,
-            'walks_hit': sum.walks_hit,
-            'rbi': sum.rbi,
-            'singles': sum.singles,
-            'doubles': sum.doubles,
-            'triples': sum.triples,
             'homeruns': sum.homeruns,
+            'batting_average': sum.hits/sum.at_bats,
+            'obp': (sum.hits + sum.walks_bb + sum.walks_hit)/(sum.at_bats + sum.walks_bb + sum.walks_hit),
+            'slg': (sum.singles + (sum.doubles * 2) + (sum.triples * 3) + (sum.homeruns * 4))/sum.at_bats,
+            'rbi': sum.rbi,
+            'era': calculate_era(sum.runs_allowed, sum.outs_pitched)
         }
-        
+
+    user_totals['all']['batting_average'] = user_totals['all']['hits']/user_totals['all']['at_bats']
+    user_totals['all']['obp'] = (user_totals['all']['hits'] + user_totals['all']['walks_bb'] + user_totals['all']['walks_hit']) / (user_totals['all']['at_bats'] + user_totals['all']['walks_bb'] + user_totals['all']['walks_hit'])
+    user_totals['all']['slg'] = (user_totals['all']['singles'] + (user_totals['all']['doubles'] * 2) + (user_totals['all']['triples'] * 3) + (user_totals['all']['homeruns'] * 4))/user_totals['all']['at_bats']
+    user_totals['all']['era'] = calculate_era(user_totals['all']['runs_allowed'], user_totals['all']['outs_pitched'])
     return user_totals
 
 def create_query(user_id, query_subject):
