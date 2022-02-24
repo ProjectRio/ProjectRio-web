@@ -376,16 +376,18 @@ def get_available_tags(username):
 
     query = (
         'SELECT '
-        'tag.name AS tag_name '
+        'tag.name AS name '
         'FROM tag '
         'WHERE tag.community_id IS NULL'
     )
 
-    result = db.session.execute(query).all()
+    tags = db.session.execute(query).all()
 
-    print(result)
+    available_tags = []
+    for tag in tags:
+        available_tags.append(tag.name)
 
-    return 'Success...'
+    return { 'available_tags': available_tags }
 
 
 
@@ -831,15 +833,18 @@ def get_user_profile_totals(user_id):
     unranked_normal = []
     unranked_superstar = []
     for game in games_by_type:
-        if game.ranked == 1 and game.normal == 1:
-            ranked_normal.append(str(game.game_id))
-        elif game.ranked == 1 and game.superstar == 1:
-            ranked_superstar.append(str(game.game_id))
-        elif game.unranked == 1 and game.normal == 1:
-            unranked_normal.append(str(game.game_id))
-        else:
-            unranked_superstar.append(str(game.game_id))
+        if game.ranked == 1:
+            if game.normal == 1:
+                ranked_normal.append(str(game.game_id))
+            elif game.superstar == 1:
+                ranked_superstar.append(str(game.game_id))
+        elif game.unranked == 1:
+            if game.normal == 1:
+                unranked_normal.append(str(game.game_id))
+            elif game.superstar == 1:
+                unranked_superstar.append(str(game.game_id))
 
+    # Join game type arrays into strings separated by commas in order to mimic a tuple for SQL IN statements
     ranked_normal_game_ids_string = ', '.join(ranked_normal)
     ranked_superstar_game_ids_string = ', '.join(ranked_superstar)
     unranked_normal_game_ids_string = ', '.join(unranked_normal)
