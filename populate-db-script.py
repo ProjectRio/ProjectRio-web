@@ -9,8 +9,18 @@ print('Creating Character Table:\n')
 subprocess.run(["curl", "-i", 
     "--header", "Content-Type: application/json",
     "--request", "POST", 
-    "http://127.0.0.1:5000/create_character_tables/"
+    "http://127.0.0.1:5000/create_character_table/"
     ])
+
+
+# Create Default Tags
+print('Creating Tags:\n')
+subprocess.run(["curl", "-i", 
+    "--header", "Content-Type: application/json",
+    "--request", "POST", 
+    "http://127.0.0.1:5000/create_tag_table/"
+    ])
+
 
 # create 6 demo users
 f = open("./json/sample-users.json")

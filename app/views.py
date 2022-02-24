@@ -5,18 +5,19 @@ import smtplib
 import ssl
 import secrets
 from . import bc
-from .models import db, User, Character, UserCharacterStats, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable
+from .models import db, User, Character, Game, CharacterGameSummary, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, Tag, GameTag
 from .schemas import UserSchema
 import json
 from datetime import datetime, timedelta, timezone
-
 from .consts import *
+
+from pprint import pprint
 
 # Schemas
 user_schema = UserSchema()
 
-# === Initalize Character Tables ===
-@app.route('/create_character_tables/', methods = ['POST'])
+# === Initalize Character Tables And Ranked/Superstar Tags ===
+@app.route('/create_character_table/', methods = ['POST'])
 def create_character_tables():
     f = open('./json/characters.json')
     character_list = json.load(f)["Characters"]
@@ -119,8 +120,43 @@ def create_character_tables():
 
     return 'Characters added...\n'
 
-# == User Routes ==
 
+@app.route('/create_tag_table/', methods =['POST'])
+def create_default_tags():
+    ranked = Tag(
+        name = "Ranked",
+        name_lowercase = "ranked",
+        desc = "Tag for Ranked games"
+    )
+
+    unranked = Tag(
+        name = "Unranked",
+        name_lowercase = "unranked",
+        desc = "Tag for Unranked games"
+    )
+
+    superstar = Tag(
+        name = "Superstar",
+        name_lowercase = "superstar",
+        desc = "Tag for Stars On"
+    )
+
+    normal = Tag(
+        name = "Normal",
+        name_lowercase = "normal",
+        desc = "Tag for Normal games"
+    )
+
+    db.session.add(ranked)
+    db.session.add(unranked)
+    db.session.add(superstar)
+    db.session.add(normal)
+    db.session.commit()
+
+    return 'Tags created... \n'
+
+
+# == User Routes ==
 # Refresh any JWT within 7 days of expiration after requests
 @app.after_request
 def refresh_expiring_jwts(response):
@@ -316,6 +352,43 @@ def send_password_reset_email(user):
     return
 
 
+# === RIO Client Endpoints ===
+
+# Evaluate users provided to Client
+# /validateuserfromclient/?username=demouser1&rio_key=fI8WbLJ3Ti2gkcEuMh1DvcMGl4LQvYFRJvlpgwcCnpw
+@app.route('/validate_user_from_client/', methods=['GET'])
+def validate_user_from_client():
+    in_username = request.args.get('username')
+    in_username_lower = in_username.lower()
+    in_rio_key = request.args.get('rio_key')
+
+    user = User.query.filter_by(username_lowercase = in_username_lower, rio_key = in_rio_key).first()
+
+    if user is None:
+        abort(404, 'Invalid UserID or RioKey')
+
+    return {'msg': 'success'}
+
+
+@app.route('/get_available_tags/<username>/', methods=['GET'])
+def get_available_tags(username):
+    in_username_lower = username.lower()
+
+    query = (
+        'SELECT '
+        'tag.name AS tag_name '
+        'FROM tag '
+        'WHERE tag.community_id IS NULL'
+    )
+
+    result = db.session.execute(query).all()
+
+    print(result)
+
+    return 'Success...'
+
+
+
 
 @app.route('/change_password/', methods=['POST'])
 def change_password():
@@ -400,6 +473,10 @@ def update_rio_key():
 # === Upload Game Data ===
 @app.route('/upload_game_data/', methods = ['POST'])
 def populate_db():
+    # Boolean to check if a game has superstar tag
+    is_superstar_game = False
+    tags = []
+
     # Get players from db User table
     home_player = User.query.filter_by(username=request.json['Home Player']).first()
     away_player = User.query.filter_by(username=request.json['Away Player']).first()
@@ -623,34 +700,35 @@ def populate_db():
                     db.session.add(fielding_summary)
                     
                 db.session.commit()
+
+        # Check if its a superstar game or not
+        if character['Superstar'] == True:
+            is_superstar_game == True 
+
+    if game.ranked == True:
+        tags.append('Ranked')
+    else:
+        tags.append('Unranked')
+
+    if is_superstar_game == True:
+        tags.append('Superstar')
+    else:
+        tags.append('Normal')
+    
+    for name in tags:
+        tag = Tag.query.filter_by(name=name).first()
+        if tag:
+            game_tag = GameTag(
+                game_id = game.game_id,
+                tag_id = tag.id
+            )
+            db.session.add(game_tag)
+
+    db.session.commit()
     return 'Successfully added...\n'
 
 
-
 # === FRONT END REQUESTS ===
-@app.route('/get_user_info/<username>', methods = ['GET'])
-@jwt_required(optional=True)
-def get_user_info(username):
-    current_user = get_jwt_identity()
-    in_username_lowercase = username.lower()
-    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
-
-    if not user:
-        return abort(408, description='User does not exist')
-    elif user.username == current_user:
-        return {
-            "username": user.username,
-            "private": user.private,
-            "loggedIn": True
-        }
-    else:
-        return {
-            "username": user.username,
-            "private": user.private,
-            "loggedIn": False
-        }
-
-
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
     characters = []
@@ -660,50 +738,6 @@ def get_characters():
     return {
         'characters': characters
         }
-
-
-@app.route('/get_user_character_stats/<user>', methods = ['GET'])
-@jwt_required(optional=True)
-def get_user_character_stats(user):
-    current_user = get_jwt_identity()
-
-    in_username_lowercase = user.lower()
-    user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
-
-    if not user_to_query:
-        return abort(408, description='User does not exist')
-
-    if user_to_query.private and user_to_query.username != current_user:
-        return {
-            'private': True,
-            'username': user_to_query.username
-        }
-
-    if not user_to_query.private or user_to_query.username == current_user:
-        characters = []
-        user_characters = user_to_query.user_character_stats.all()    
-        for character in user_characters:
-            characters.append(character.to_dict())
-        
-        return {
-            'User Characters': characters,
-            'username': user_to_query.username
-            }
-
-
-@app.route('/get_games/<username>/', methods = ['GET'])
-def get_games(username):
-    in_username_lowercase = username.lower()
-    user_id = User.query.filter_by(username_lowercase=in_username_lowercase).first().id
-    games = Game.query.filter(db.or_(Game.away_player_id == user_id, Game.home_player_id == user_id))
-    
-    games_list = []
-    for game in games:
-        games_list.append(game.to_dict())
-
-    return {
-        'games': games_list,
-    }
 
 
 @app.route('/validate_JWT/', methods = ['GET'])
@@ -733,156 +767,382 @@ def set_privacy():
             'private': current_user.private
         })
 
-
-@app.route('/character_game_summaries/<user>/', methods = ['GET'])
-def get_character_game_summaries(user):
-    user = User.query.filter_by(username=user).first()
-    game_summaries_list = []
-
-
-    game_summaries = user.character_game_summaries
-    for game_summary in game_summaries:
-        game_summaries_list.append(game_summary.to_dict())
-
-    return {
-            'Game Summaries': game_summaries_list,
-        }
-
-
-
-
-@app.route('/<username>/stats/', methods = ['GET'])
+# API Request URL example: /demouser1/stats/?recent=10&username=demouser1
+@app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
-def user_stats(username):
+def user_stats():
+    # # Check if user is logged in
+    # logged_in_user = get_jwt_identity()
+    
+    # # Get User row
+    username = request.args.get('username')
     in_username_lowercase = username.lower()
-    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
-    user_sums = get_user_sums(user.id)
-    game_sums = get_game_sums(user.id)
+    user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user_to_query:
+        return abort(408, description='User does not exist')
+
+    # if user_to_query.private and user_to_query.username != logged_in_user:
+    #     return {
+    #         'private': True,
+    #         'username': user_to_query.username
+    #     }
+
+    # if not user_to_query.private or user_to_query.username == logged_in_user: 
+
+
+    # Called from profile page with ?recent=10&username=username
+    recent_games = games()
+
+    user_totals = get_user_profile_totals(user_to_query.id)
+
+    char_query = create_query(user_to_query.id, cCharacters)
+    captain_query = create_query(user_to_query.id, cCaptains)
+    char_totals = get_per_char_totals(user_to_query.id, char_query)
+    captain_totals = get_captain_totals(user_to_query.id, captain_query)
 
     return {
-        "user_sums": user_sums,
-        "game_sums": game_sums
+        "recent_games": recent_games,
+        "username": user_to_query.username,
+        "user_totals": user_totals,
+        "top_characters": char_totals,
+        "top_captains": captain_totals,
     }
 
-def get_user_sums(user_id):
-    query = (
+
+def get_user_profile_totals(user_id):
+    game_ids_by_type_query = (
         'SELECT '
-        'character_game_summary.char_id, '
-        'SUM(character_game_summary.pitches_thrown) AS pitches_thrown, '
-        'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, '
+        'game.game_id AS game_id, '
+        'SUM(CASE WHEN game_tag.tag_id = 1 THEN 1 END) AS ranked, ' 
+        'SUM(CASE WHEN game_tag.tag_id = 2 THEN 1 END) AS unranked, '
+        'SUM(CASE WHEN game_tag.tag_id = 3 THEN 1 END) AS superstar, '
+        'SUM(CASE WHEN game_tag.tag_id = 4 THEN 1 END) AS normal '
+        'FROM user '
+        'LEFT JOIN game ON user.id = game.home_player_id OR user.id = game.away_player_id '
+        'LEFT JOIN game_tag ON game.game_id = game_tag.game_id '
+        f'WHERE user.id = {user_id} '
+        'GROUP BY game.game_id '
+    )
+    games_by_type = db.session.execute(game_ids_by_type_query).all()
+    
+    ranked_normal = []
+    ranked_superstar = []
+    unranked_normal = []
+    unranked_superstar = []
+    for game in games_by_type:
+        if game.ranked == 1 and game.normal == 1:
+            ranked_normal.append(str(game.game_id))
+        elif game.ranked == 1 and game.superstar == 1:
+            ranked_superstar.append(str(game.game_id))
+        elif game.unranked == 1 and game.normal == 1:
+            unranked_normal.append(str(game.game_id))
+        else:
+            unranked_superstar.append(str(game.game_id))
+
+    ranked_normal_game_ids_string = ', '.join(ranked_normal)
+    ranked_superstar_game_ids_string = ', '.join(ranked_superstar)
+    unranked_normal_game_ids_string = ', '.join(unranked_normal)
+    unranked_superstar_game_ids_string = ', '.join(unranked_superstar)
+
+    sum_games_by_type_query = (
+        'SELECT '
+        f'CASE WHEN game.game_id IN ({ranked_normal_game_ids_string}) THEN 1 '
+            f'WHEN game.game_id IN ({ranked_superstar_game_ids_string}) THEN 2 '
+            f'WHEN game.game_id IN ({unranked_normal_game_ids_string}) THEN 3 '
+            f'WHEN game.game_id IN ({unranked_superstar_game_ids_string}) THEN 4 '
+            'END as type, '
+        'SUM(CASE '
+            f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
+            f'WHEN game.home_player_id = {user_id} AND game.home_score > game.away_score THEN 1 '
+            'ELSE 0 '
+            'END)/9 AS wins, '
+        'SUM(CASE '
+            f'WHEN game.away_player_id = {user_id} AND game.away_score < game.home_score THEN 1 '
+            f'WHEN game.home_player_id = {user_id} AND game.home_score < game.away_score THEN 1 '
+            'ELSE 0 '
+            'END)/9 AS losses, '
+        'SUM(character_game_summary.runs_allowed) AS runs_allowed, '
+        'SUM(character_game_summary.outs_pitched) AS outs_pitched, '
         'SUM(character_game_summary.hits) AS hits, '
         'SUM(character_game_summary.at_bats) AS at_bats, '
         'SUM(character_game_summary.walks_bb) AS walks_bb, '
         'SUM(character_game_summary.walks_hit) AS walks_hit, '
-        'AVG(character_game_summary.rbi) AS rbi, '
+        'SUM(character_game_summary.rbi) AS rbi, '
+        'SUM(character_game_summary.singles) AS singles, '
+        'SUM(character_game_summary.doubles) AS doubles, '
+        'SUM(character_game_summary.triples) AS triples, '
+        'SUM(character_game_summary.homeruns) AS homeruns '
+        'FROM game '
+        'LEFT JOIN character_game_summary ON game.game_id = character_game_summary.game_id '
+        f'WHERE character_game_summary.user_id = {user_id} '
+        'GROUP BY character_game_summary.user_id, type'
+    )
+
+    summed_games_by_type = db.session.execute(sum_games_by_type_query).all()
+
+    user_totals = {
+        'all': {
+            'losses': 0,
+            'wins': 0,
+            'runs_allowed': 0,
+            'outs_pitched': 0,
+            'hits': 0,
+            'at_bats': 0,
+            'walks_bb': 0,
+            'walks_hit': 0,
+            'rbi': 0,
+            'singles': 0,
+            'doubles': 0,
+            'triples': 0,
+            'homeruns': 0,
+        },
+        'ranked_normal': {},
+        'ranked_superstar': {},
+        'unranked_normal': {},
+        'unranked_superstar': {}
+        }
+
+    for sum in summed_games_by_type:
+        user_totals['all']['losses'] += sum.losses
+        user_totals['all']['wins'] += sum.wins
+        user_totals['all']['runs_allowed'] += sum.runs_allowed
+        user_totals['all']['outs_pitched'] += sum.outs_pitched
+        user_totals['all']['hits'] += sum.hits
+        user_totals['all']['at_bats'] += sum.at_bats
+        user_totals['all']['walks_bb'] += sum.walks_bb
+        user_totals['all']['walks_hit'] += sum.walks_hit
+        user_totals['all']['rbi'] += sum.rbi
+        user_totals['all']['singles'] += sum.singles
+        user_totals['all']['doubles'] += sum.doubles
+        user_totals['all']['triples'] += sum.triples
+        user_totals['all']['homeruns'] += sum.homeruns
+        
+        key = str()
+        if sum.type == 1:
+            key = 'ranked_normal'
+        elif sum.type == 2:
+            key = 'ranked_superstar'
+        elif sum.type == 3:
+            key = 'unranked_normal'
+        elif sum.type == 4:
+            key = 'unranked_superstar'
+        
+        user_totals[key] = {
+            'losses': sum.losses,
+            'wins': sum.wins,
+            'homeruns': sum.homeruns,
+            'batting_average': sum.hits/sum.at_bats,
+            'obp': (sum.hits + sum.walks_bb + sum.walks_hit)/(sum.at_bats + sum.walks_bb + sum.walks_hit),
+            'slg': (sum.singles + (sum.doubles * 2) + (sum.triples * 3) + (sum.homeruns * 4))/sum.at_bats,
+            'rbi': sum.rbi,
+            'era': calculate_era(sum.runs_allowed, sum.outs_pitched)
+        }
+
+    user_totals['all']['batting_average'] = user_totals['all']['hits']/user_totals['all']['at_bats']
+    user_totals['all']['obp'] = (user_totals['all']['hits'] + user_totals['all']['walks_bb'] + user_totals['all']['walks_hit']) / (user_totals['all']['at_bats'] + user_totals['all']['walks_bb'] + user_totals['all']['walks_hit'])
+    user_totals['all']['slg'] = (user_totals['all']['singles'] + (user_totals['all']['doubles'] * 2) + (user_totals['all']['triples'] * 3) + (user_totals['all']['homeruns'] * 4))/user_totals['all']['at_bats']
+    user_totals['all']['era'] = calculate_era(user_totals['all']['runs_allowed'], user_totals['all']['outs_pitched'])
+    return user_totals
+
+def create_query(user_id, query_subject):
+    left_join_character_statement = str()
+    group_by_statement = str()
+    character_name_statement = str()
+    where_captain_statement = str()
+
+    # Construct query to return 1 row for every character or 1 row with totals from all characters
+    if query_subject is cCharacters:
+        left_join_character_statement = 'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
+        group_by_statement = 'GROUP BY character_game_summary.char_id'
+        character_name_statement = 'character.name as name, '
+    elif query_subject is cCaptains:
+        left_join_character_statement = 'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
+        group_by_statement = 'GROUP BY character_game_summary.char_id'
+        character_name_statement = 'character.name as name, '
+        where_captain_statement = 'AND character_game_summary.captain = 1 '
+
+    query = (
+        'SELECT '
+        f'{character_name_statement}'
+        'SUM(CASE '
+            f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
+            f'WHEN game.home_player_id = {user_id} AND game.home_score > game.away_score THEN 1 '
+            'ELSE 0 '
+            'END) AS wins, '
+        'SUM(CASE '
+            f'WHEN game.away_player_id = {user_id} AND game.away_score < game.home_score THEN 1 '
+            f'WHEN game.home_player_id = {user_id} AND game.home_score < game.away_score THEN 1 '
+            'ELSE 0 '
+            'END) AS losses, '
+        'COUNT(character_game_summary.game_id) AS games, '
+        'SUM(character_game_summary.runs_allowed) AS runs_allowed, '
+        'SUM(character_game_summary.outs_pitched) AS outs_pitched, '
+        'SUM(character_game_summary.hits) AS hits, '
+        'SUM(character_game_summary.at_bats) AS at_bats, '
+        'SUM(character_game_summary.walks_bb) AS walks_bb, '
+        'SUM(character_game_summary.walks_hit) AS walks_hit, '
+        'SUM(character_game_summary.rbi) AS rbi, '
         'SUM(character_game_summary.singles) AS singles, '
         'SUM(character_game_summary.doubles) AS doubles, '
         'SUM(character_game_summary.triples) AS triples, '
         'SUM(character_game_summary.homeruns) AS homeruns '
         'FROM character_game_summary '
-        'LEFT JOIN user '
-        'ON character_game_summary.user_id = user.id '
-        'WHERE user.id = {0} '
-    ).format(
-        user_id,
+        'LEFT JOIN game ON character_game_summary.game_id = game.game_id '
+        f'{left_join_character_statement}'
+        f'WHERE character_game_summary.user_id = {user_id} '
+        f'{where_captain_statement}'
+        f'{group_by_statement}'
     )
+    
+    return query
 
-    result = db.session.execute(query)
-    # There is only one row in this result, but it must be called this way to access it as dict
-    for row in result:
-        user_sums = {
-            "pitches_thrown": row.pitches_thrown,
-            "strikeouts_pitched": row.strikeouts_pitched,
-            "hits": row.hits,
-            "at_bats": row.at_bats,
-            "batting_average": row.hits/row.at_bats,
-            "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
-            "rbi": row.rbi,
-            "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
-        }
+def get_captain_totals(user_id, query):
+    result = db.session.execute(query).all()
 
-    return user_sums
+    # Get top 3 captains
+    sorted_captains = sorted(result, key=lambda captain: captain.wins/captain.games, reverse=True)[0:3]
 
-# CASE operates similar to an if, else if, else statement
-def get_game_sums(user_id):
-    query = (
-        'SELECT '
-        'COUNT(game_id) as games, '
-        'SUM(CASE '
-            'WHEN (game.away_player_id = {0} AND game.away_score > game.home_score) THEN 1 '
-            'ELSE 0 '
-            'END) AS away_wins, '
-        'SUM(CASE '
-            'WHEN (game.home_player_id = {0} AND game.home_score > game.away_score) THEN 1 '
-            'ELSE 0 '
-            'END) AS home_wins '
-        'FROM game '
-        'WHERE game.away_player_id = {0} OR game.home_player_id = {0}'
-    ).format(
-        user_id
-    )
-
-    result = db.session.execute(query)
-    # There is only one row in this result, but it must be called this way to access it as dict
-    for row in result:
-        game_sums = {
-            "games": row.games,
-            "away_wins": row.away_wins,
-            "home_wins": row.home_wins,
-            "winrate": (row.away_wins + row.home_wins)/row.games,
-        }
-
-    return game_sums
-
-
-# 1 row per Character per User with the sum of all pitches thrown
-# user_id       char_id       sum_pitches_thrown
-# ______       __________     ___________________
-#   1            0 - 53              n
-#   2            0 - 53              n
-
-@app.route('/user_char_stats/', methods = ['GET'])
-def user_char_stats():
-    user_char_stats_query = (
-        'SELECT user_id, char_id, sum(pitches_thrown) AS sum_pitches_thrown '
-        'FROM character_game_summary '
-        'GROUP BY user_id, char_id'
-    )
-    user_char_stats_query_result = db.session.execute(user_char_stats_query)
-
-    user_char_stats_list = []
-    for row in user_char_stats_query_result:
-        user_char_stats_list.append({
-            'User ID': row.user_id,
-            'Char ID': row.char_id,
-            'Pitches Thrown': row.sum_pitches_thrown
+    top_captains = []
+    for captain in sorted_captains: 
+        top_captains.append({
+            "name": captain.name,
+            "wins": captain.wins,
+            "losses": captain.losses,
+            "homeruns": captain.homeruns,
+            "batting_average": captain.hits/captain.at_bats,
+            "obp": (captain.hits + captain.walks_bb + captain.walks_hit)/(captain.at_bats + captain.walks_bb + captain.walks_hit),
+            "rbi": captain.rbi,
+            "slg": (captain.singles + (captain.doubles * 2) + (captain.triples * 3) + (captain.homeruns * 4))/captain.at_bats,
+            "era": calculate_era(captain.runs_allowed, captain.outs_pitched),
         })
-        
-    return {
-        "User Char Stats": user_char_stats_list
+
+    return top_captains
+
+def get_per_char_totals(user_id, query):
+    result = db.session.execute(query).all()
+
+    # Get top 6 batter by rbi where they have more than 20 at bats
+    batters = sorted(result, key=lambda batter: batter.rbi, reverse=True)
+    top_batters = [batter.name for batter in batters if batter.at_bats > 20][0:6]
+
+    # Get top 6 pitchers by era where they have more than 135 outs pitched
+    pitchers = sorted(result, key=lambda pitcher: calculate_era(pitcher.runs_allowed, pitcher.outs_pitched))
+    top_pitchers = [pitcher.name for pitcher in pitchers if pitcher.outs_pitched > 135][0:6]
+
+    top_characters = {
+        "top_pitchers": top_pitchers,
+        "top_batters": top_batters,
+        "character_values": {}
     }
+    for row in result:
+        if row.name in top_batters or row.name in top_pitchers:
+            top_characters["character_values"][row.name] = {
+                "games": row.games,
+                "wins": row.wins,
+                "losses": row.losses,
+                "homeruns": row.homeruns,
+                "batting_average": row.hits/row.at_bats,
+                "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
+                "rbi": row.rbi,
+                "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
+                "era": calculate_era(row.runs_allowed, row.outs_pitched),
+            }
+    
+    return top_characters
 
+def calculate_era(runs_allowed, outs_pitched):
+    if outs_pitched == 0 and runs_allowed > 0:
+        return -abs(runs_allowed)
+    elif outs_pitched > 0:
+        return runs_allowed/(outs_pitched/3)
+    else:
+        return 0
 
-# Description: Return all games. Probably shouldn't be used in its raw form
+# http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5&vs=True
 @app.route('/games/', methods = ['GET'])
-def games(recent = None, user_id = None):
+def games():
+    # === validate passed parameters ===
+    try:
+        # Check if tags are valid and get a list of corresponding ids
+        tags = request.args.getlist('tag')
+        tags_lowercase = tuple([tag.lower() for tag in tags])
+        tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(tags_lowercase)).all()
+        tag_ids = tuple([tag.id for tag in tag_rows])
+        if len(tag_ids) != len(tags):
+            abort(400)
+        
+        # Check if usernames are valid and get array of corresponding ids
+        usernames = request.args.getlist('username')
+        usernames_lowercase = tuple([username.lower() for username in usernames])
+        users = db.session.query(User).filter(User.username_lowercase.in_(usernames_lowercase)).all() 
+        if len(usernames) != len(users):
+            abort(400)
+
+        # If true, returned values will return games that contain the first passed username when playing against other provided usernames
+        vs = True if request.args.get('vs') == 'True' else False
+
+        user_id_list = []
+        for index, user in enumerate(users):
+            # primary_user_id is theid of the first username provided in the url, it is used when querying
+            # for games that must contain that username paired with n number of other provided usernames
+            if vs == True and user.username_lowercase == usernames_lowercase[0]:
+                primary_user_id = user.id
+            user_id_list.append(user.id)
+        user_ids = tuple(user_id_list)
+
+        recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
+    except:
+       return abort(400, 'Invalid Username or Tag')
+
+
+    # === Set dynamic query values ===
+
     limit = str()
-    if (recent == None or type(recent) != int):
+    order_by = str()
+    if (recent == None):
         limit = ''
+        order_by = ''
     else:
         limit = 'LIMIT {}'.format(recent)
+        order_by = 'ORDER BY game.date_time DESC '
 
-    #Decide if we want a specific user and build SQL statement
     where_user = str()
-    if (user_id == None or type(user_id) != int):
-        where_user = ''
+    if user_ids:
+        if len(user_ids) > 1:
+            if vs == True:
+                where_user = (
+                    f'WHERE (game.away_player_id = {primary_user_id} AND game.home_player_id IN {user_ids}) '
+                    f'OR (game.home_player_id = {primary_user_id} AND game.away_player_id IN {user_ids})'
+                )
+            else:
+                where_user = f'WHERE (game.away_player_id IN {user_ids} OR game.home_player_id IN {user_ids})'
+        else:
+            where_user = f'WHERE (game.away_player_id = {user_ids[0]} OR game.home_player_id = {user_ids[0]})'
     else:
-        where_user = f'WHERE game.away_player_id = {user_id} OR game.home_player_id = {user_id}'
+        where_user = ''
 
-    #Construct Query
+    tag_cases = str()
+    having_tags = str()
+    join_tags = str()
+    group_by = str()
+    if tags:
+        join_tags = (
+            'LEFT JOIN game_tag ON game.game_id = game_tag.game_id '
+            'LEFT JOIN tag ON game_tag.tag_id = tag.id '
+        )
+        for index, tag_id in enumerate(tag_ids):
+            tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {tag_id} THEN 1 END) AS tag_{index}, '
+            having_tags += f'HAVING tag_{index} ' if index == 0 else f'AND tag_{index} '
+
+        group_by = 'GROUP BY game_tag.game_id'
+
+
+    # === Construct query === 
     query = (
         'SELECT '
         'game.game_id AS game_id, '
+        f'{tag_cases}'
         'game.date_time AS date_time, '
         'game.away_score AS away_score, '
         'game.home_score AS home_score, '
@@ -890,9 +1150,10 @@ def games(recent = None, user_id = None):
         'game.innings_selected AS innings_selected, '
         'away_player.username AS away_player, '
         'home_player.username AS home_player, '
-        'away_character_game_summary.char_id AS away_captain, '
-        'home_character_game_summary.char_id AS home_captain '    
+        'away_captain.name AS away_captain, '
+        'home_captain.name AS home_captain '   
         'FROM game '
+        f'{join_tags} '
         'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
         'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
         'LEFT JOIN character_game_summary AS away_character_game_summary '
@@ -903,17 +1164,25 @@ def games(recent = None, user_id = None):
             'ON game.game_id = home_character_game_summary.game_id '
             'AND home_character_game_summary.user_id = home_player.id '
             'AND home_character_game_summary.captain = True '
+        'LEFT JOIN character AS away_captain ON away_character_game_summary.char_id = away_captain.char_id '
+        'LEFT JOIN character AS home_captain ON home_character_game_summary.char_id = home_captain.char_id '
         f'{where_user} '
-        f'{limit} '
+        f'{group_by} '
+        f'{having_tags} '
+        f'{order_by}'
+        f'{limit}'
     )
 
-    results = db.session.execute(query)
+    results = db.session.execute(query).all()
     
-    recent_games = []
+    games = []
+    game_ids = []
     for game in results:
-        recent_games.append({
+        game_ids.append(game.game_id)
+
+        games.append({
             'Id': game.game_id,
-            'Datetime': datetime.fromtimestamp(game.date_time),
+            'Datetime': game.date_time,
             'Away User': game.away_player,
             'Away Captain': game.away_captain,
             'Away Score': game.away_score,
@@ -921,66 +1190,35 @@ def games(recent = None, user_id = None):
             'Home Captain': game.home_captain,
             'Home Score': game.home_score,
             'Innings Played': game.innings_played,
-            'Innings Selected': game.innings_selected
+            'Innings Selected': game.innings_selected,
+            'Tags': []
         })
 
-    return {'recent_games': recent_games}
 
-# Description: Return 20 most recent games for all users
-@app.route('/games/recent/', methods = ['GET'])
-def recent_games(user_id = None):
-    #TODO handle exceptions
-    return games(recent=20)
 
-# Description: Return 20 most recent games for single
-@app.route('/games/recent/<user_id>', methods = ['GET'])
-def recent_games_user(user_id):
-    #TODO handle exceptions
-    return games(recent=20, user_id=int(user_id))
+    # If there are games with matching tags, get all additional tags they have
+    if game_ids:
+        where_game_id = str()
+        if len(game_ids) == 1:
+            where_game_id = f'WHERE game_tag.game_id = {game_ids[0]} '
+        else:
+            where_game_id = f'WHERE game_tag.game_id IN {tuple(game_ids)} '
 
-@app.route('/games/<user_id>', methods = ['GET'])
-def all_games_user(user_id):
-    #TODO handle exceptions
-    return games(recent=None, user_id=int(user_id))
+        tags_query = (
+            'SELECT '
+            'game_tag.game_id as game_id, '
+            'game_tag.tag_id as tag_id, '
+            'tag.name as name '
+            'FROM game_tag '
+            'LEFT JOIN tag ON game_tag.tag_id = tag.id '
+            f'{where_game_id}'
+            'GROUP BY game_id, tag_id'
+        )
 
-# def recent_games(user_id = None):
-#     query = (
-#         'SELECT '
-#         'game.game_id AS game_id, '
-#         'game.date_time AS date_time, '
-#         'game.away_score AS away_score, '
-#         'game.home_score AS home_score, '
-#         'game.innings_played AS innings_played, '
-#         'game.innings_selected AS innings_selected, '
-#         'away_player.username AS away_player, '
-#         'home_player.username AS home_player, '
-#         'away_character_game_summary.char_id AS away_captain, '
-#         'home_character_game_summary.char_id AS home_captain '    
-#         'FROM game '
-#         'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
-#         'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
-#         'LEFT JOIN character_game_summary AS away_character_game_summary '
-#             'ON game.game_id = away_character_game_summary.game_id '
-#             'AND away_character_game_summary.user_id = away_player.id '
-#             'AND away_character_game_summary.captain = True '
-#         'LEFT JOIN character_game_summary AS home_character_game_summary '
-#             'ON game.game_id = home_character_game_summary.game_id '
-#             'AND home_character_game_summary.user_id = home_player.id '
-#             'AND home_character_game_summary.captain = True '
-#         'LIMIT 20'
-#     )
+        tag_results = db.session.execute(tags_query).all()
+        for tag in tag_results:
+            for game in games:
+                if game['Id'] == tag.game_id:
+                    game['Tags'].append(tag.name)
 
-#     results = db.session.execute(query)
-    
-#     recent_games = []
-#     for game in results:
-#         recent_games.append({
-#             'Id': game.game_id,
-#             'Datetime': datetime.fromtimestamp(game.date_time),
-#             'Away User': game.away_player,
-#             'Away Captain': game.away_captain,
-#             'Away Score': game.away_score,
-#             'Home User': game.home_player,
-#             'Home Captain': game.home_captain,
-
-#     return {'Recent Games': recent_games}
+    return {'games': games}

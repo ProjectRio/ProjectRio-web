@@ -19,3 +19,7 @@ cPLAY_RESULT_SAFE = {
     0x10: 'ClearedBases'
 }
 cPLAY_RESULT_BUNT = {0xD: 'Bunt'}
+
+# Consts used to create profile query
+cCharacters = 1
+cCaptains = 2

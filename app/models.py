@@ -32,7 +32,6 @@ class Character(db.Model):
     running_stat_bar = db.Column(db.Integer)
     fielding_stat_bar = db.Column(db.Integer)
     
-    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_character')
     character_game_summary = db.relationship('CharacterGameSummary', backref = 'character_game_summary_from_character')
 
     def to_dict(self):
@@ -137,7 +136,6 @@ class User(db.Model, UserMixin):
     verified = db.Column(db.Boolean)
     active_url = db.Column(db.String(32), unique = True)
 
-    user_character_stats = db.relationship('UserCharacterStats', backref = 'user_character_stats_from_user', lazy = 'dynamic')
     character_game_summaries = db.relationship('CharacterGameSummary', backref = 'user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
@@ -167,6 +165,8 @@ class Game(db.Model):
     valid = db.Column(db.Boolean)
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
+    game_tag = db.relationship('GameTag', backref='game_from_game_tag')
+
 
     def to_dict(self):
         return {
@@ -298,134 +298,17 @@ class FieldingSummary(db.Model):
     fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)
 
-
-# Depreciated
-
-class UserStats(db.Model):
+class GameTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    num_of_games = db.Column(db.Integer)
-    homeruns = db.Column(db.Integer)
-    innings_played = db.Column(db.Integer)
+    game_id = db.Column(db.ForeignKey('game.game_id'), nullable=False)
+    tag_id = db.Column(db.ForeignKey('tag.id'), nullable=False)
 
-    def __init__(self, user_id):
-        self.user_id = user_id
-        self.num_of_games = 0
-        self.homeruns = 0
-        self.innings_played = 0
-
-    def to_dict(self):
-        return {
-            'num_of_games': self.num_of_games,
-            'homeruns': self.homeruns,
-            'innings_played': self.innings_played
-        }
-
-class UserCharacterStats(db.Model):
+class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
-    captain = db.Column(db.Integer)
-    superstar = db.Column(db.Integer)
-    num_of_games = db.Column(db.Integer)
-    at_bats = db.Column(db.Integer)
-    hits = db.Column(db.Integer)
-    singles = db.Column(db.Integer)
-    doubles = db.Column(db.Integer)
-    triples = db.Column(db.Integer)
-    homeruns = db.Column(db.Integer)
-    walks_bb = db.Column(db.Integer)
-    walks_hit = db.Column(db.Integer)
-    strikeouts = db.Column(db.Integer)
-    bases_stolen = db.Column(db.Integer)
-    double_plays = db.Column(db.Integer)
-    offensive_star_swings = db.Column(db.Integer)
-    offensive_stars_used = db.Column(db.Integer)
-    offensive_stars_put_in_play = db.Column(db.Integer)
-    offensive_star_successes = db.Column(db.Integer)
-    offensive_star_chances = db.Column(db.Integer)
-    offensive_star_chances_won = db.Column(db.Integer)
-    strikeouts_pitched = db.Column(db.Integer)
-    outs_pitched = db.Column(db.Integer)
-    inning_appearances = db.Column(db.Integer)
-    batters_faced = db.Column(db.Integer)
-    runs_allowed = db.Column(db.Integer)
-    defensive_star_pitches = db.Column(db.Integer)
-    defensive_stars_used = db.Column(db.Integer)
-    defensive_star_successes = db.Column(db.Integer)
-    defensive_star_chances = db.Column(db.Integer)
-    defensive_star_chances_won = db.Column(db.Integer)
+    name = db.Column(db.String(32))
+    name_lowercase = db.Column(db.String(32))
+    tag_type = db.Column(db.String(16))
+    desc = db.Column(db.String(120))
+    community_id = db.Column(db.Integer)
 
-    def __init__(self, user_id, char_id, captain, superstar):
-        self.user_id = user_id
-        self.char_id = char_id
-        self.captain = captain
-        self.superstar = superstar
-        self.num_of_games = 0
-        self.at_bats = 0
-        self.hits = 0
-        self.singles = 0
-        self.doubles = 0
-        self.triples = 0
-        self.homeruns = 0
-        self.walks_bb = 0
-        self.walks_hit = 0
-        self.strikeouts = 0
-        self.bases_stolen = 0
-        self.double_plays = 0
-        self.offensive_star_swings = 0
-        self.offensive_stars_used = 0
-        self.offensive_stars_put_in_play = 0
-        self.offensive_star_successes = 0
-        self.offensive_star_chances = 0
-        self.offensive_star_chances_won = 0
-        self.strikeouts_pitched = 0
-        self.outs_pitched = 0
-        self.inning_appearances = 0
-        self.batters_faced = 0
-        self.runs_allowed = 0
-        self.defensive_star_pitches = 0
-        self.defensive_stars_used = 0
-        self.defensive_star_successes = 0
-        self.defensive_star_chances = 0
-        self.defensive_star_chances_won = 0
-
-    def to_dict(self): 
-        return {
-            'id': self.id,
-            'user_id': self.user_id,
-            'char_id': self.char_id,
-            'captain': self.captain,
-            'superstar': self.superstar,
-            'num_of_games': self.num_of_games,
-            'at_bats': self.at_bats,
-            'hits': self.hits,
-            'singles': self.singles,
-            'doubles': self.doubles,
-            'triples': self.triples,
-            'homeruns': self.homeruns,
-            'walks_bb': self.walks_bb,
-            'walks_hit': self.walks_hit,
-            'strikeouts': self.strikeouts,
-            'bases_stolen': self.bases_stolen,
-            'double_plays': self.double_plays,
-            'offensive_star_swings': self.offensive_star_swings,
-            'offensive_stars_used': self.offensive_stars_used,
-            'offensive_stars_put_in_play': self.offensive_stars_put_in_play,
-            'offensive_star_successes': self.offensive_star_successes,
-            'offensive_star_chances': self.offensive_star_chances,
-            'offensive_star_chances_won': self.offensive_star_chances_won,
-            'strikeouts_pitched': self.strikeouts,
-            "outs_pitched": self.outs_pitched,
-            'inning_appearances': self.inning_appearances,
-            'batters_faced': self.batters_faced,
-            'runs_allowed': self.runs_allowed,
-            'defensive_star_pitches': self.defensive_star_pitches,
-            'defensive_stars_used': self.defensive_stars_used,
-            'defensive_star_successes': self.defensive_star_successes,
-            'defensive_star_chances': self.defensive_star_chances,
-            'defensive_stars_chance_won': self.defensive_star_chances_won
-
-            #TODO Add calculated stats
-        }
-        
+    game_tag = db.relationship('GameTag', backref='tag')
