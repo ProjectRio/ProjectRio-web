@@ -24,6 +24,12 @@ def init_app():
 
     with app.app_context():
         #import routes
+        from .views import populate_db
+        from .views import user_registration_and_settings
+        from .views import temp_endpoints
+        from .views import client_routes
+        from .views import stat_retrieval
+
         from . import views
         
         #create sql tables for data models
