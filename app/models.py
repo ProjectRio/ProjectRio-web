@@ -6,6 +6,7 @@ class Character(db.Model):
     char_id = db.Column(db.Integer, primary_key=True)
     chemistry_table_id = db.Column(db.ForeignKey('chemistry_table.id'), nullable = False)
     name = db.Column(db.String(16))
+    name_lowercase = db.Column(db.String(16))
     starting_addr = db.Column(db.String(16))
     curve_ball_speed = db.Column(db.Integer)
     fast_ball_speed = db.Column(db.Integer)

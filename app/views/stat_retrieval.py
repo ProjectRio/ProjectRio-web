@@ -474,3 +474,87 @@ def games():
                     game['Tags'].append(tag.name)
 
     return {'games': games}
+
+
+# http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=mario
+@app.route('/user_character_stats/', methods = ['GET'])
+def get_user_character_stats():
+    # verify username
+    in_username = request.args.get('username')
+    in_username_lowercase = in_username.lower()
+    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user:
+        return abort(408, description='User does not exist')
+
+    user_id = user.id
+
+    # verify character
+    in_char_name = request.args.get('character')
+    in_char_name_lowercase = in_char_name.lower()
+    character = Character.query.filter_by(name_lowercase=in_char_name_lowercase).first()
+
+    if not character:
+        return abort(408, description='Character does not exist')
+
+    char_id = character.char_id
+    
+    # batting_stats = get_batting_stats(user_id, char_id)
+    pitching_and_fielding_stats = get_pitching_and_fielding_stats(user_id, char_id)
+
+    return {
+        'Batting Stats': batting_stats,
+        "Pitching Stats": pitching_and_fielding_stats,
+        "Fielding Stats": pitching_and_fielding_stats,
+    }
+
+def get_batting_stats(user_id, char_id):
+    query = (
+        'SELECT '
+        'character.name AS name, '
+        'character_game_summary.char_id AS char_id, '
+        'pitch_summary.type_of_swing AS type_of_swing, '
+        'COUNT(CASE WHEN pitch_summary.pitch_result = 'WALK_BB' AS 1 ELSE NULL END) AS walks_bb, '
+        'COUNT(CASE WHEN pitch_summary.pitch_result = 'WALKS_HIT' AS 1 ELSE NULL END) AS walks_hit, '
+        'COUNT(CASE WHEN contact_summary.contact_result_primary = 'OUT' AS 1 ELSE NULL END) AS outs, '
+        'COUNT(CASE WHEN contact_summary.contact_result_primary = 'FOUL' AS 1 ELSE NULL END) AS foul_hits, '
+        'COUNT(CASE WHEN contact_summary.contact_result_primary = 'FAIR' AS 1 ELSE NULL END) AS fair_hits, '
+        'COUNT(CASE WHEN contact_summary.type_of_contact = 'SOUR' AS 1 ELSE NULL END) AS sour_hits, '
+        'COUNT(CASE WHEN contact_summary.type_of_contact = 'NICE' AS 1 ELSE NULL END) AS nice_hits, '
+        'COUNT(CASE WHEN contact_summary.type_of_contact = 'PERFECT' AS 1 ELSE NULL END) AS perfect_hits, '
+        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'SINGLE' AS 1 ELSE NULL END) AS singles, '
+        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'DOUBLE' AS 1 ELSE NULL END) AS doubles, '
+        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'TRIPLE' AS 1 ELSE NULL END) AS triples, '
+        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'HOMERUN' AS 1 ELSE NULL END) AS homeruns, '
+        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'DOUBLE PLAY' AS 1 ELSE NULL END) AS double_plays, '
+        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'SACFLY' AS 1 ELSE NULL END) AS sacflys, '
+        'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
+        'SUM(ABS(contact_summary.ball_y_pos)) AS ball_y_pos_total, '
+        'FROM character_game_summary '
+        'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
+        'LEFT JOIN pitch_summary ON character_game_summary.id = pitch_summary.batter_id '
+        'LEFT JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id '
+        'WHERE character_game_summary.user_id = {user_id} '
+        'AND character_game_summary.char_id = {char_id} '
+        'GROUP BY character_game_summary.char_id, pitch_summary.type_of_swing '
+    )
+
+    results = db.session.execute(query).all()
+
+    batting_stats = {}
+    for character in results:
+        batting_stats[character.name] = {
+            'insert stats here': 'insert stats here'
+        }
+
+    return batting_stats
+
+def get_pitching_and_fielding_stats(user_id, char_id):
+    query = (
+        
+    )
+
+    results = db.session.execute(query).all()
+
+    print(user_id, char_id)
+    return 'success...'

@@ -73,6 +73,7 @@ def create_character_tables():
             char_id = int(character['Char Id'], 16),
             chemistry_table_id = chemistry_table.id,
             name = character['Char Name'],
+            name_lowercase = character['Char Name'].lower(),
             starting_addr = character['Starting Addr'],
             curve_ball_speed = character['Curve Ball Speed (0x0)'],
             fast_ball_speed = character['Fast Ball Speed (0x1)'],
