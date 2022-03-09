@@ -477,6 +477,7 @@ def games():
 
 
 # http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=mario
+# UNDER CONSTRUCTION
 @app.route('/user_character_stats/', methods = ['GET'])
 def get_user_character_stats():
     # verify username
@@ -551,10 +552,31 @@ def get_batting_stats(user_id, char_id):
 
 def get_pitching_and_fielding_stats(user_id, char_id):
     query = (
-        
+        'SELECT '
+        'SUM(batters_faced) AS batters_faced, '
+        'SUM(earned_runs) AS earned_runs, '
+        'SUM(runs_allowed) AS runs_allowed, '
+        'SUM(hits_allowed) AS hits_allowed, '
+        'SUM(strikeouts_pitched) AS strikeouts_pitched, '
+        'SUM(star_pitches_thrown) AS star_pitches_thrown, '
+        'SUM(defensive_star_successes) AS defensive_star_successes, '
+        'SUM(outs_pitched) AS outs_pitched, '
+        'SUM(offensive_stars_used) AS offensive_stars_used, '
+        'SUM(defensive_stars_used) AS defensive_stars_used, '
+        'SUM(offensive_star_chances_won) AS offensive_star_chances_won, '
+        'SUM(deffensive_star_chances_won) AS defensive_star_chances_won, '
+        'SUM(total_pitches) AS total_pitches, '
+        # Insert other stats once questions addressed
+        'FROM character_game_summary '
+        'WHERE character_game_summary.user_id = {user_id} '
+        'GROUP BY character_game_summary.char_id'
     )
 
     results = db.session.execute(query).all()
+    pitching_and_fielding_stats = {}
+    for character in results:
+        pitching_and_fielding_stats[character.name] = {
+            'insert stats here': 'insert stats here'
+        }
 
-    print(user_id, char_id)
-    return 'success...'
+    return pitching_and_fielding_stats
