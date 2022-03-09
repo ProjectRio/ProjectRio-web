@@ -15,7 +15,7 @@ def get_characters():
         'characters': characters
         }
 
-# API Request URL example: /demouser1/stats/?recent=10&username=demouser1
+# API Request URL example: /profile/stats/?recent=10&username=demouser1
 @app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats():
@@ -515,20 +515,20 @@ def get_batting_stats(user_id, char_id):
         'character.name AS name, '
         'character_game_summary.char_id AS char_id, '
         'pitch_summary.type_of_swing AS type_of_swing, '
-        'COUNT(CASE WHEN pitch_summary.pitch_result = 'WALK_BB' AS 1 ELSE NULL END) AS walks_bb, '
-        'COUNT(CASE WHEN pitch_summary.pitch_result = 'WALKS_HIT' AS 1 ELSE NULL END) AS walks_hit, '
-        'COUNT(CASE WHEN contact_summary.contact_result_primary = 'OUT' AS 1 ELSE NULL END) AS outs, '
-        'COUNT(CASE WHEN contact_summary.contact_result_primary = 'FOUL' AS 1 ELSE NULL END) AS foul_hits, '
-        'COUNT(CASE WHEN contact_summary.contact_result_primary = 'FAIR' AS 1 ELSE NULL END) AS fair_hits, '
-        'COUNT(CASE WHEN contact_summary.type_of_contact = 'SOUR' AS 1 ELSE NULL END) AS sour_hits, '
-        'COUNT(CASE WHEN contact_summary.type_of_contact = 'NICE' AS 1 ELSE NULL END) AS nice_hits, '
-        'COUNT(CASE WHEN contact_summary.type_of_contact = 'PERFECT' AS 1 ELSE NULL END) AS perfect_hits, '
-        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'SINGLE' AS 1 ELSE NULL END) AS singles, '
-        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'DOUBLE' AS 1 ELSE NULL END) AS doubles, '
-        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'TRIPLE' AS 1 ELSE NULL END) AS triples, '
-        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'HOMERUN' AS 1 ELSE NULL END) AS homeruns, '
-        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'DOUBLE PLAY' AS 1 ELSE NULL END) AS double_plays, '
-        'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'SACFLY' AS 1 ELSE NULL END) AS sacflys, '
+        # 'COUNT(CASE WHEN pitch_summary.pitch_result = 'WALK_BB' AS 1 ELSE NULL END) AS walks_bb, '
+        # 'COUNT(CASE WHEN pitch_summary.pitch_result = 'WALKS_HIT' AS 1 ELSE NULL END) AS walks_hit, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_primary = 'OUT' AS 1 ELSE NULL END) AS outs, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_primary = 'FOUL' AS 1 ELSE NULL END) AS foul_hits, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_primary = 'FAIR' AS 1 ELSE NULL END) AS fair_hits, '
+        # 'COUNT(CASE WHEN contact_summary.type_of_contact = 'SOUR' AS 1 ELSE NULL END) AS sour_hits, '
+        # 'COUNT(CASE WHEN contact_summary.type_of_contact = 'NICE' AS 1 ELSE NULL END) AS nice_hits, '
+        # 'COUNT(CASE WHEN contact_summary.type_of_contact = 'PERFECT' AS 1 ELSE NULL END) AS perfect_hits, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'SINGLE' AS 1 ELSE NULL END) AS singles, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'DOUBLE' AS 1 ELSE NULL END) AS doubles, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'TRIPLE' AS 1 ELSE NULL END) AS triples, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'HOMERUN' AS 1 ELSE NULL END) AS homeruns, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'DOUBLE PLAY' AS 1 ELSE NULL END) AS double_plays, '
+        # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'SACFLY' AS 1 ELSE NULL END) AS sacflys, '
         'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
         'SUM(ABS(contact_summary.ball_y_pos)) AS ball_y_pos_total, '
         'FROM character_game_summary '
