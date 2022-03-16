@@ -312,7 +312,7 @@ class PitchSummary(db.Model):
 
 class ContactSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    fielding_summary_id = db.Column(db.Integer, db.ForeignKey(fielding_summary.id), nullable=True)
+    fielding_summary_id = db.Column(db.Integer, db.ForeignKey('fielding_summary.id'), nullable=True)
     type_of_contact = db.Column(db.Integer)
     type_of_swing = db.Column(db.Integer)
     charge_power_up = db.Column(db.Float)
