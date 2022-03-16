@@ -260,3 +260,45 @@ def populate_db():
 
     db.session.commit()
     return 'Successfully added...\n'
+
+
+@app.route('/populate_db/', methods=['POST'])
+def populate_db2():
+    tags = []
+
+    # Boolean to check if a game has a superstar player
+    is_superstar_game = False
+    
+    # Get players from db User table
+    home_player = User.query.filter_by(username=request.json['Home Player']).first()
+    away_player = User.query.filter_by(username=request.json['Away Player']).first()
+
+    # Check if players exist
+    if home_player is None or away_player is None:
+        abort(400, 'Invalid Username')
+
+    # Detect invalid games
+    innings_selected = request.json['Innings Selected']
+    innings_played = request.json['Innings Played']
+    score_difference = abs(request.json['Home Score'] - request.json['Away Score'])
+    is_valid = False if innings_played < innings_selected and score_difference < 10 else True
+
+    game = Game(
+        game_id = int(request.json['GameID'].replace(',', ''), 16),
+        away_player_id = away_player.id,
+        home_player_id = home_player.id,
+        date_time = request.json['Date'],
+        ranked = request.json['Ranked'],
+        stadium_id = request.json['StadiumID'],
+        away_score = request.json['Away Score'],
+        home_score = request.json['Home Score'],
+        innings_selected = request.json['Innings Selected'],
+        innings_played = request.json['Innings Played'],
+        quitter = request.json['Quitter Team'],
+        valid = is_valid,
+    )
+
+    db.session.add(game)
+    db.session.commit()
+
+    return 'completed...'
