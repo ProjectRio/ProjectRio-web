@@ -530,7 +530,7 @@ def get_batting_stats(user_id, char_id):
         # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'DOUBLE PLAY' AS 1 ELSE NULL END) AS double_plays, '
         # 'COUNT(CASE WHEN contact_summary.contact_result_secondary = 'SACFLY' AS 1 ELSE NULL END) AS sacflys, '
         'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
-        'SUM(ABS(contact_summary.ball_y_pos)) AS ball_y_pos_total, '
+        'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total, '
         'FROM character_game_summary '
         'LEFT JOIN character ON character_game_summary.char_id = character.char_id '
         'LEFT JOIN pitch_summary ON character_game_summary.id = pitch_summary.batter_id '
