@@ -360,7 +360,6 @@ def populate_db2():
             homeruns_allowed = defensive_stats['HRs Allowed'],
             pitches_thrown = defensive_stats['Pitches Thrown'],
             stamina = defensive_stats['Stamina'],
-            # Should this be a boolean
             was_pitcher = defensive_stats['Was Pitcher'],
             strikeouts_pitched = defensive_stats['Strikeouts'],
             star_pitches_thrown = defensive_stats['Star Pitches Thrown'],
@@ -427,8 +426,7 @@ def populate_db2():
             )
             db.session.add(game_tag)
 
-
-# Create Events, Runners, PitchSummaries, ContactSummaries, and FieldingSummaries
+    # Create Events, Runners, PitchSummaries, ContactSummaries, and FieldingSummaries
     # contains json data for comparing events
     previous_runners_json = {
         'Runner Batter': None,
@@ -465,7 +463,6 @@ def populate_db2():
             strikes = event_data['Strikes'],
             result_rbi = event_data['RBI'],
             result_of_ab = event_data['Result of AB'],
-
         )
 
         # ======= Create Runner rows for batters ======
@@ -531,7 +528,7 @@ def populate_db2():
                 charge_power_down = event_data['Pitch']['Contact']['Charge Power Down'],
                 star_swing_five_star = event_data['Pitch']['Contact']['Star Swing Five-Star'],
                 input_direction = event_data['Pitch']['Contact']['Input Direction'],
-                frame_of_swing_upon_contact = event_data['Pitch']['Contact']['Frame Of Swing Upon Contact'],
+                frame_of_swing_upon_contact = event_data['Pitch']['Contact']['Frame of Swing Upon Contact'],
                 ball_angle = event_data['Pitch']['Contact']['Ball Angle'],
                 ball_horiz_power = event_data['Pitch']['Contact']['Ball Horizontal Power'],
                 ball_vert_power = event_data['Pitch']['Contact']['Ball Vertical Power'],
@@ -563,7 +560,7 @@ def populate_db2():
                     position = fielder_data['Fielder Position'],
                     action = fielder_data['Fielder Action'],
                     bobble = fielder_data['Fielder Bobble'],
-                    swap = fielder_data['Fielder Swap'],
+                    swap = False if fielder_data['Fielder Swap'] == 0 else True,
                     fielder_x_pos = fielder_data['Fielder Position - X'],
                     fielder_y_pos = fielder_data['Fielder Position - Y'],
                     fielder_z_pos = fielder_data['Fielder Position - Z']
