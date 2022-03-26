@@ -69,7 +69,7 @@ for file_path in os.listdir("./json/games/"):
         "--header", "Content-type: application/json",
         "--request", "POST",
         "--data", game_json,
-        "http://127.0.0.1:5000/upload_game_data/"
+        "http://127.0.0.1:5000/populate_db/"
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT
