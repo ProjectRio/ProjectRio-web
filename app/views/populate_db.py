@@ -479,7 +479,7 @@ def populate_db2():
                     elif key == 'Runner 3B':
                         event.runner_on_3 = previous_runners[key].id
                 else:
-                    runner_batter = Runner(
+                    runner = Runner(
                         runner_character_game_summary_id = teams['Away'][event_data[key]['Runner Roster Loc']].id if event_data['Half Inning'] == 0 else teams['Home'][event_data[key]['Runner Roster Loc']].id,
                         initial_base = event_data[key]['Runner Initial Base'],
                         result_base = event_data[key]['Runner Result Base'],
@@ -488,19 +488,19 @@ def populate_db2():
                         steal = event_data[key]['Steal'],                   
                     )
 
-                    db.session.add(runner_batter)
+                    db.session.add(runner)
                     db.session.commit()
 
                     if key == 'Runner Batter':
-                        event.runner_on_0 = runner_batter.id
+                        event.runner_on_0 = runner.id
                     elif key == 'Runner 1B':
-                        event.runner_on_1 = runner_batter.id
+                        event.runner_on_1 = runner.id
                     elif key == 'Runner 2B':
-                        event.runner_on_2 = runner_batter.id
+                        event.runner_on_2 = runner.id
                     elif key == 'Runner 3B':
-                        event.runner_on_3 = runner_batter.id
+                        event.runner_on_3 = runner.id
 
-                    previous_runners[key] = runner_batter
+                    previous_runners[key] = runner
                     previous_runners_json[key] = event_data[key]
             else:
                 previous_runners['Runner Batter'] = None
@@ -572,6 +572,7 @@ def populate_db2():
                 db.session.add(contact_summary)
             
         db.session.add(pitch_summary)
+        db.session.commit()
         event.pitch_summary_id = pitch_summary.id
         db.session.add(event)
         db.session.commit()
