@@ -475,6 +475,56 @@ def games():
 
     return {'games': games}
 
+# == Functions to return coordinates for graphing ==
+'''
+    - Game params (args): Same params as games. Use to get games with proper tags/users/etc
+    - Char Id (list):     List of characters to get coordinates for
+    - TypeOfHit (list):   List of contact types to get data for
+    - TypeOfSwing (list): List of swing types to get data for
+    - Hand (list):        List of batterhands
+
+'''
+@app.route('/batter_position_data/', methods = ['GET'])
+def endpoint_batter_position():
+
+        # === Construct query === 
+    list_of_games = games()
+
+    #Get list of game_ids from list_of_games
+
+    # Apply filters
+    #   WHERE batter.hand in input_hand
+    #   WHERE contact.type_of_contact in input_typeofcontact
+    #   WHERE pitch.type_of_swing in input_typeofswing
+    #   WHERE character.char_id in input_char_ids
+    query = (
+        'SELECT '
+        'game.game_id AS game_id, '
+        
+        'FROM game '
+        'WHERE (game.game_id IN {game_ids})'
+        'LEFT JOIN event ON game.game_id = event.game_id '
+        'LEFT JOIN pitch_summary AS pitch ON pitch.event = event.id '
+        'LEFT JOIN contact_summary AS contact ON pitch.id = contact.pitch_summary '
+        'LEFT JOIN character_game_summary AS batter ON batter.id = pitch.batter_id '
+        'LEFT JOIN character ON character.char_id = batter.char_id '
+    )
+
+    #Format output data and return
+    '''
+    Format:
+        {
+            "Batter Character ID": 0-53,
+            "Ball upon hit X position": float,
+            "Ball upon hit Z position": float,
+            "Batter upon hit X position": float,
+            "Batter upon hit Z position": float,
+            "Batter hand": bool
+            "Type of contact": left-sour, left-nice, perfect...
+            "Type of swing": slap, star, charge
+        }
+    '''
+
 
 # http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=mario
 # UNDER CONSTRUCTION
