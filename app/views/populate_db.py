@@ -577,4 +577,75 @@ def populate_db2():
         db.session.add(event)
         db.session.commit()
 
+
+        # == Star Calcs Offensse ==
+        # Batter summary object
+        batter_summary = teams['Away'][event_data['Batter Roster Loc']] if event_data['Half Inning'] == 0 else teams['Home'][event_data['Batter Roster Loc']]
+
+        #Bools to make this all more readable
+        batter_captainable_char = (Character.query.filter_by(char_id = batter_summary.char_id, captain=1).first() != None)
+        star_swing = (pitch_summary.type_of_swing == 3) # ToDo replace with decode const. 3==star swing
+        made_contact = (pitch_summary.contact_summary_id != None)
+
+        #Contact was made and was caught or landed
+        star_put_in_play = (made_contact and ((pitch_summary.contact_summary.primary_result == 1) or (pitch_summary.contact_summary.primary_result == 2))) # ToDo replace with decode const. 2 == Fair, 1 == out
+        star_landed = (made_contact and (pitch_summary.contact_summary.primary_result == 2)) # ToDo replace with decode const. 2 == Fair, 1 == out
+        
+
+        #Info to tell if batter won star chance
+        batter_safe = event.runner_0.out_type == 0
+        outs_during_play = 0
+        for runner in [event.runner_0, event.runner_1, event.runner_2, event.runner_3]:
+            if runner == None:
+                continue
+            if runner.out_type > 0:
+                outs_during_play += 1
+        final_pitch_of_atbat = event.result_of_ab > 0
+
+        if (star_swing):
+            batter_summary.offensive_star_swings += 1
+            # Misses, non-captain contact, and captain star cost each cost 1 star.
+            # Contact with a non-captain character costs 2 stars
+            if (made_contact and (batter_captainable_char and batter_summary.captain == False)):
+                batter_summary.offensive_stars_used += 2
+            else:
+                batter_summary.offensive_stars_used += 1
+
+            if (star_put_in_play):
+                batter_summary.offensive_stars_put_in_play += 1
+        
+            if (star_landed):
+                batter_summary.offensive_star_successes += 1
+
+        # == Star Calcs Defense ==
+        pitcher_summary = teams['Away'][event_data['Pitcher Roster Loc']] if event_data['Half Inning'] == 1 else teams['Home'][event_data['Pitcher Roster Loc']]
+
+        pitcher_captainable_char = (Character.query.filter_by(char_id = pitcher_summary.char_id, captain=1).first() != None)
+
+        if (pitch_summary.star_pitch):
+            pitcher_summary.defensive_star_pitches += 1
+            if (pitch_summary.pitch_result >= 3 and pitch_summary.pitch_result >= 5):
+                pitch_summary.defensive_star_successes += 1
+
+            if (pitcher_captainable_char and pitcher_summary.captain == False):
+                pitch_summary.defensive_stars_used += 2
+            else:
+                pitch_summary.defensive_stars_used += 1
+        
+        #Only increment star chances when the ab is over
+        if (final_pitch_of_atbat):
+            if (event.star_chance):
+                batter_summary.offensive_star_chances += 1
+                pitcher_summary.defensive_star_chances += 1
+                #Batter wins star chance if the batter is safe and the inning doesn't end
+                if (batter_safe and ((event.outs + outs_during_play) < 3) ):
+                    batter_summary.offensive_star_chances_won += 1
+                else:
+                    pitcher_summary.defensive_star_chances_won += 1
+
+        for idx, team in teams.items():
+            for character_summary in team:
+                db.session.add(character_summary)
+        db.session.commit()
+
     return 'Completed...'
