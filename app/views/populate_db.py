@@ -296,6 +296,8 @@ def populate_db2():
         innings_played = request.json['Innings Played'],
         quitter = request.json['Quitter Team'],
         valid = is_valid,
+        average_ping = request.json['Average Ping'],
+        lag_spikes = request.json['Lag Spikes'],
     )
 
     db.session.add(game)
