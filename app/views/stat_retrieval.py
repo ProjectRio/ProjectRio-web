@@ -16,6 +16,18 @@ def get_characters():
         }
 
 # API Request URL example: /profile/stats/?recent=10&username=demouser1
+'''
+    profile/stats returns an overview of a player that includes:
+        - recent games
+        - user totals for ranked normal, ranked superstar, unranked normal, unranked superstar, sum total
+        - top 6 pitchers by era
+        - top 6 batters by rbi
+        - top 3 captains by winrate
+
+    required attributes:
+    - recent: number of games to return
+    - username: first one is the primary user, successive ones are other users to consider
+'''
 @app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats():
@@ -314,7 +326,16 @@ def calculate_era(runs_allowed, outs_pitched):
 
 
 
+
 # URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5&vs=True
+'''
+    the games endpoint returns a dict with a list of games pertaining to the query values provided below:
+        - recent: number of games to return, if None, returns all.
+        - username: first one is the primary user, successive ones are other users to consider
+        - vs:
+            - if True, return only games where the primary user is playing against the other provided users.
+            - if False, return games where any provided user is playing against any other provided user.
+'''
 @app.route('/games/', methods = ['GET'])
 def games():
     # === validate passed parameters ===
@@ -339,7 +360,7 @@ def games():
 
         user_id_list = []
         for index, user in enumerate(users):
-            # primary_user_id is theid of the first username provided in the url, it is used when querying
+            # primary_user_id is the id of the first username provided in the url, it is used when querying
             # for games that must contain that username paired with n number of other provided usernames
             if vs == True and user.username_lowercase == usernames_lowercase[0]:
                 primary_user_id = user.id
@@ -557,6 +578,13 @@ def endpoint_batter_position():
 
 # URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=mario
 # UNDER CONSTRUCTION
+'''
+    user_character_stats the batting, pitching, and fielding stats for a user's character
+
+    required attributes:
+        - username: username to search
+        - character: character name to search
+'''
 @app.route('/user_character_stats/', methods = ['GET'])
 def get_user_character_stats():
     # verify username
