@@ -167,9 +167,9 @@ class Game(db.Model):
     average_ping = db.Column(db.Integer)
     lag_spikes = db.Column(db.Integer)
 
-    character_game_summary = db.relationship('CharacterGameSummary', backref='character_game_summaries')
-    game_tag = db.relationship('GameTag', backref='game_tags')
-    event = db.relationship('Event', backref='events')
+    character_game_summary = db.relationship('CharacterGameSummary', backref='game')
+    game_tag = db.relationship('GameTag', backref='game')
+    event = db.relationship('Event', backref='game')
 
     def to_dict(self):
         return {
@@ -238,7 +238,8 @@ class CharacterGameSummary(db.Model):
     batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
     pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
     fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary')
-    events_when_pitcher = db.relationship('Event', backref='events')
+    events_when_pitcher = db.relationship('Event', foreign_keys = 'Event.pitcher_id', backref='character_game_summary_of_event_pitcher')
+    events_when_catcher = db.relationship('Event', foreign_keys = 'Event.catcher_id', backref='character_game_summary_of_event_catcher')
     runner = db.relationship('Runner', foreign_keys = 'Runner.runner_character_game_summary_id', backref = 'character_game_summary_runner')
     catcher = db.relationship('Runner', foreign_keys = 'Runner.catcher_character_game_summary_id', backref = 'character_game_summary_catcher')
 
@@ -278,6 +279,7 @@ class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
     pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False) #Based on "Pitcher Roster Loc" in JSON
+    catcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     runner_on_0 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=False)
     runner_on_1 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=True)
     runner_on_2 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=True)
@@ -301,12 +303,15 @@ class Event(db.Model):
 
 class PitchSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=True)
     pitch_type = db.Column(db.Integer)
     charge_pitch_type = db.Column(db.Integer)
     star_pitch = db.Column(db.Integer)
     pitch_speed = db.Column(db.Integer)
     pitch_result = db.Column(db.Integer)
+    type_of_swing = db.Column(db.Integer)
 
     event = db.relationship('Event', backref='pitch_summary')
 
@@ -314,7 +319,6 @@ class ContactSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     fielding_summary_id = db.Column(db.Integer, db.ForeignKey('fielding_summary.id'), nullable=True)
     type_of_contact = db.Column(db.Integer)
-    type_of_swing = db.Column(db.Integer)
     charge_power_up = db.Column(db.Float)
     charge_power_down = db.Column(db.Float)
     star_swing_five_star = db.Column(db.Integer)
@@ -357,13 +361,16 @@ class Runner(db.Model):
     runner_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     # Catcher nullable til future update
     catcher_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=True)
-    inital_base = db.Column(db.Integer)
+    initial_base = db.Column(db.Integer)
     result_base = db.Column(db.Integer)
     out_type = db.Column(db.Integer)
     out_location = db.Column(db.Integer)
     steal = db.Column(db.Integer)
 
-    event = db.relationship('Event', backref = 'runner')
+    events_on_0 = db.relationship('Event', foreign_keys = 'Event.runner_on_0', backref = 'runner_0')
+    events_on_1 = db.relationship('Event', foreign_keys = 'Event.runner_on_1', backref = 'runner_1')
+    events_on_2 = db.relationship('Event', foreign_keys = 'Event.runner_on_2', backref = 'runner_2')
+    events_on_3 = db.relationship('Event', foreign_keys = 'Event.runner_on_3', backref = 'runner_3')
 
 
 class GameTag(db.Model):

@@ -47,31 +47,30 @@ for user in users["Users"]:
 print('Uploading Game data:')
 for file_path in os.listdir("./json/games/"):
     if file_path != '.DS_Store':
-        file = open("./json/games/" + file_path)
-        game_data = json.load(file)
+        with open("./json/games/" + file_path, 'r') as f:
+            game_data = json.load(f)
 
-        # Replace players with demo players
-        demo_players = random.sample(users["Users"], 2)
-        away_player = demo_players[0]['Username']
-        home_player = demo_players[1]['Username']
-        game_data['Away Player'] = away_player
-        game_data['Home Player'] = home_player
+            # Replace players with demo players
+            demo_players = random.sample(users["Users"], 2)
+            away_player = demo_players[0]['Username']
+            home_player = demo_players[1]['Username']
+            game_data['Away Player'] = away_player
+            game_data['Home Player'] = home_player
 
+        with open("./json/games/" + file_path, 'w') as f:
+            f.write(json.dumps(game_data, indent=4))
 
         print(file_path + ': ' + game_data["GameID"] + ' Players: ' + away_player + ' vs ' + home_player)
 
-        
         # send POST request with editted game data
         # Output suppressed to clearly see which users were selected. 
         # View statuses on the Localhost pipenv terminal.
-        game_json = json.dumps(game_data)
-        subprocess.run(["curl", "-i",
+        proc = subprocess.run(["curl", "-i",
         "--header", "Content-type: application/json",
         "--request", "POST",
-        "--data", game_json,
-        "http://127.0.0.1:5000/upload_game_data/"
+        "--data", f'@./json/games/{file_path}',
+        "http://127.0.0.1:5000/populate_db/"
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.STDOUT
-    )
-  
+        )  
