@@ -488,7 +488,16 @@ def games():
 def endpoint_batter_position():
 
         # === Construct query === 
-    list_of_games = games()
+    list_of_games = games()   # List of dicts of games we want data from and info about those games
+    list_of_game_ids = list() # Holds IDs for all the games we want data from
+
+    print(list_of_games)
+    for game_dict in list_of_games['games']:
+        list_of_game_ids.append(game_dict['Id'])
+
+    list_of_game_ids = tuple(list_of_game_ids)
+    print(list_of_game_ids)
+
 
     #Get list of game_ids from list_of_games
 
@@ -500,15 +509,31 @@ def endpoint_batter_position():
     query = (
         'SELECT '
         'game.game_id AS game_id, '
-        
+        'event.id AS event_id, '
+        'character.char_id AS char_id, '
+        'contact.batter_x_pos_upon_hit AS batter_x_pos, '
+        'contact.batter_z_pos_upon_hit AS batter_z_pos, '
+        'contact.ball_x_pos_upon_hit AS ball_x_pos, '
+        'contact.ball_z_pos_upon_hit AS ball_z_pos, '
+        'contact.type_of_contact AS type_of_contact, '
+        'pitch.pitch_result AS pitch_result, '
+        'pitch.type_of_swing AS type_of_swing '
         'FROM game '
-        'WHERE (game.game_id IN {game_ids})'
-        'LEFT JOIN event ON game.game_id = event.game_id '
-        'LEFT JOIN pitch_summary AS pitch ON pitch.event = event.id '
-        'LEFT JOIN contact_summary AS contact ON pitch.id = contact.pitch_summary '
+        'LEFT JOIN event ON event.game_id = game.game_id '
+        'LEFT JOIN pitch_summary AS pitch ON pitch.id = event.pitch_summary_id '
+            'AND pitch.pitch_result = 6 ' #Pitch_result == 6 is contact TODO make constant
+        'LEFT JOIN contact_summary AS contact ON contact.id = pitch.contact_summary_id '
         'LEFT JOIN character_game_summary AS batter ON batter.id = pitch.batter_id '
-        'LEFT JOIN character ON character.char_id = batter.char_id '
+        'LEFT JOIN character ON character.char_id = batter.char_id ' #Not sure we actually need this
+       f'WHERE (game.game_id IN {list_of_game_ids}) '
     )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+    print(result)
+    for entry in result:
+        print(entry._asdict())
 
     #Format output data and return
     '''
