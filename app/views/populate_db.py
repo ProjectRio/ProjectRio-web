@@ -509,7 +509,7 @@ def populate_db2():
             
         # ==== Pitch Summary ====
         pitch_summary = PitchSummary(
-            batter_id = event.runner_on_0,
+            batter_id = teams['Home'][event_data['Batter Roster Loc']].id if event_data['Half Inning'] == 1 else teams['Away'][event_data['Batter Roster Loc']].id,
             pitcher_id = event.pitcher_id,
             pitch_type = event_data['Pitch']['Pitch Type'],
             charge_pitch_type = event_data['Pitch']['Charge Type'],
