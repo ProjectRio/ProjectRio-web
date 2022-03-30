@@ -19,7 +19,7 @@ def get_characters():
 @app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats():
-    # # Check if user is logged in
+    # # Use JSON Web Token to get username if user is logged in
     # logged_in_user = get_jwt_identity()
     
     # # Get User row
@@ -27,6 +27,7 @@ def user_stats():
     in_username_lowercase = username.lower()
     user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
 
+    # If user doesn't exist, abort
     if not user_to_query:
         return abort(408, description='User does not exist')
 
@@ -36,14 +37,14 @@ def user_stats():
     #         'username': user_to_query.username
     #     }
 
-    # if not user_to_query.private or user_to_query.username == logged_in_user: 
-
-
-    # Called from profile page with ?recent=10&username=username
+    # if not user_to_query.private or user_to_query.username == logged_in_user:
+    # Returns dict with most 10 recent games for the user and summary data
     recent_games = games()
 
+    # Returns JSON with user stats for ranked normal, ranked superstar, unranked normal, unranked superstar, and sum total
     user_totals = get_user_profile_totals(user_to_query.id)
 
+    # These will be changed later, but currently they get TOP pitchers, hitters, and captains using a dynamically crafted query
     char_query = create_query(user_to_query.id, cCharacters)
     captain_query = create_query(user_to_query.id, cCaptains)
     char_totals = get_per_char_totals(user_to_query.id, char_query)
@@ -73,6 +74,7 @@ def get_user_profile_totals(user_id):
     )
     games_by_type = db.session.execute(game_ids_by_type_query).all()
     
+    # Sort games according to their corresponding tags, we will use these later to get totals per tag combination
     ranked_normal = []
     ranked_superstar = []
     unranked_normal = []
@@ -247,10 +249,10 @@ def create_query(user_id, query_subject):
     
     return query
 
+# Returns list of the top 3 Captains and summary stats according to their winrate
 def get_captain_totals(user_id, query):
     result = db.session.execute(query).all()
 
-    # Get top 3 captains
     sorted_captains = sorted(result, key=lambda captain: captain.wins/captain.games, reverse=True)[0:3]
 
     top_captains = []
@@ -269,6 +271,7 @@ def get_captain_totals(user_id, query):
 
     return top_captains
 
+# Returns the top 6 batters and pitchers according to rbi and era, along with their summary stats. (Summary stats are kept seperate to reduce possible duplication)
 def get_per_char_totals(user_id, query):
     result = db.session.execute(query).all()
 
@@ -311,7 +314,7 @@ def calculate_era(runs_allowed, outs_pitched):
 
 
 
-# http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5&vs=True
+# URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5&vs=True
 @app.route('/games/', methods = ['GET'])
 def games():
     # === validate passed parameters ===
@@ -349,7 +352,6 @@ def games():
 
 
     # === Set dynamic query values ===
-
     limit = str()
     order_by = str()
     if (recent == None):
@@ -475,6 +477,8 @@ def games():
 
     return {'games': games}
 
+
+
 # == Functions to return coordinates for graphing ==
 '''
     - Game params (args): Same params as games. Use to get games with proper tags/users/etc
@@ -551,7 +555,7 @@ def endpoint_batter_position():
     '''
 
 
-# http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=mario
+# URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=mario
 # UNDER CONSTRUCTION
 @app.route('/user_character_stats/', methods = ['GET'])
 def get_user_character_stats():
