@@ -4,6 +4,11 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, User, Character, Game, ChemistryTable, Tag, GameTag
 from ..consts import *
 
+import pprint
+
+# == Helper functions for SQL query formatting
+def format_tuple_for_SQL(in_tuple):
+    return "(" + ",".join(repr(v) for v in in_tuple) + ")"
 
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
@@ -555,82 +560,88 @@ def endpoint_batter_position():
     '''
 
 
-# URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=mario
+# URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1
 # UNDER CONSTRUCTION
 @app.route('/user_character_stats/', methods = ['GET'])
 def get_user_character_stats():
-    # verify username
-    in_username = request.args.get('username')
-    in_username_lowercase = in_username.lower()
-    user = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+    
+    list_of_games = games()   # List of dicts of games we want data from and info about those games
+    list_of_game_ids = list() # Holds IDs for all the games we want data from
 
-    if not user:
-        return abort(408, description='User does not exist')
+    #print(list_of_games)
+    for game_dict in list_of_games['games']:
+        list_of_game_ids.append(game_dict['Id'])
 
-    user_id = user.id
+    list_of_game_ids = tuple(list_of_game_ids)
 
     # verify character
-    in_char_name = request.args.get('character')
-    in_char_name_lowercase = in_char_name.lower()
-    character = Character.query.filter_by(name_lowercase=in_char_name_lowercase).first()
+    in_char_ids = tuple(request.args.getlist('character'))
 
-    if not character:
+    if not in_char_ids:
         return abort(408, description='Character does not exist')
-
-    char_id = character.char_id
-
-    print(char_id)
     
     # batting_stats = get_batting_stats(user_id, char_id)
-    pitching_and_fielding_stats = get_pitching_and_fielding_stats(user_id, char_id)
-    batting_stats = get_batting_stats(user_id, char_id)
+    #pitching_and_fielding_stats = get_pitching_and_fielding_stats(list_of_game_ids, char_id)
+    batting_stats = get_batting_stats(list_of_game_ids, in_char_ids)
 
     return {
         'Batting Stats': batting_stats,
-        "Pitching Stats": pitching_and_fielding_stats,
-        "Fielding Stats": pitching_and_fielding_stats,
+        #"Pitching Stats": pitching_and_fielding_stats,
+        #"Fielding Stats": pitching_and_fielding_stats,
     }
 
-def get_batting_stats(user_id, char_id):
+def get_batting_stats(list_of_game_ids, char_ids):
+
+    char_string = format_tuple_for_SQL(char_ids)
+    print(list_of_game_ids)
     query = (
-        'SELECT '
-        'character.name AS name, '
-        'character_game_summary.char_id AS char_id, '
-        'pitch_summary.type_of_swing AS type_of_swing, '
-        #'COUNT(CASE WHEN pitch_summary.pitch_result = 1 THEN 1 ELSE NULL END) AS walks_bb, '
-        #'COUNT(CASE WHEN pitch_summary.pitch_result = 0 THEN 1 ELSE NULL END) AS walks_hit, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_primary = 0 THEN 1 ELSE NULL END) AS outs, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_primary = 1 THEN 1 ELSE NULL END) AS foul_hits, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_primary = 2 THEN 1 ELSE NULL END) AS fair_hits, '
-        ##'COUNT(CASE WHEN ((contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) AS 1) ELSE NULL END) AS sour_hits, '
-        ##'COUNT(CASE WHEN ((contact_summary.type_of_contact = 1 OR contact_summary.type_of_contact = 3) AS 1) ELSE NULL END) AS nice_hits, '
-        #'COUNT(CASE WHEN contact_summary.type_of_contact = 2 THEN 1 ELSE NULL END) AS perfect_hits, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_secondary = 7 THEN 1 ELSE NULL END) AS singles, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_secondary = 8 THEN 1 ELSE NULL END) AS doubles, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_secondary = 9 THEN 1 ELSE NULL END) AS triples, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_secondary = 10 THEN 1 ELSE NULL END) AS homeruns, '
-        #'COUNT(CASE WHEN contact_summary.multi_out = 1 AS 1 ELSE NULL END) THEN double_plays, '
-        #'COUNT(CASE WHEN contact_summary.contact_result_secondary = 14 THEN 1 ELSE NULL END) AS sacflys, '
-        'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
-        'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total '
-        'FROM character_game_summary '
-        'JOIN character ON character_game_summary.char_id = character.char_id '
-        'JOIN pitch_summary ON character_game_summary.id = pitch_summary.batter_id '
-        'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id '
-       f'WHERE character_game_summary.user_id = {user_id} '
-       #f'AND character_game_summary.char_id = {char_id} '
-        'GROUP BY character_game_summary.char_id, pitch_summary.type_of_swing '
+        'SELECT \n'
+        'user.username AS username, \n'
+        'character.name AS name, \n'
+        'character_game_summary.char_id AS char_id, \n'
+        'pitch_summary.type_of_swing AS type_of_swing, \n'
+        'COUNT(CASE WHEN pitch_summary.pitch_result = 1 THEN 1 ELSE NULL END) AS walks_bb, \n'
+        'COUNT(CASE WHEN pitch_summary.pitch_result = 0 THEN 1 ELSE NULL END) AS walks_hit, \n'
+        'COUNT(CASE WHEN contact_summary.primary_result = 0 THEN 1 ELSE NULL END) AS outs, \n'
+        'COUNT(CASE WHEN contact_summary.primary_result = 1 THEN 1 ELSE NULL END) AS foul_hits, \n'
+        'COUNT(CASE WHEN contact_summary.primary_result = 2 THEN 1 ELSE NULL END) AS fair_hits, \n'
+        'COUNT(CASE WHEN (contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) THEN 1 ELSE NULL END) AS sour_hits, '
+        'COUNT(CASE WHEN (contact_summary.type_of_contact = 1 OR contact_summary.type_of_contact = 3) THEN 1 ELSE NULL END) AS nice_hits, '
+        'COUNT(CASE WHEN contact_summary.type_of_contact = 2 THEN 1 ELSE NULL END) AS perfect_hits, '
+        'COUNT(CASE WHEN contact_summary.secondary_result = 7 THEN 1 ELSE NULL END) AS singles, \n'
+        'COUNT(CASE WHEN contact_summary.secondary_result = 8 THEN 1 ELSE NULL END) AS doubles, \n'
+        'COUNT(CASE WHEN contact_summary.secondary_result = 9 THEN 1 ELSE NULL END) AS triples, \n'
+        'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
+        'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
+        'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
+        #'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
+        #'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total '
+        'event.result_of_ab AS result \n'
+        'FROM character_game_summary \n'
+        'JOIN character ON character_game_summary.char_id = character.char_id \n'
+        'JOIN pitch_summary ON character_game_summary.id = pitch_summary.batter_id \n'
+        'JOIN event ON pitch_summary.id = event.pitch_summary_id \n'
+        '   AND event.result_of_ab != 0 \n'
+        'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
+        'JOIN user ON character_game_summary.user_id = user.id \n'
+       f'WHERE character_game_summary.game_id IN {list_of_game_ids} \n'
+       f'   AND character_game_summary.char_id = {char_string} \n'
+        'GROUP BY character_game_summary.char_id, character_game_summary.user_id, pitch_summary.type_of_swing '
     )
+
+    print(query)
 
     results = db.session.execute(query).all()
 
+    print(results)
+
     batting_stats = {}
     for character in results:
-        print(character._asdict())
+        pprint.pprint(character._asdict())
 
     return batting_stats
 
-def get_pitching_and_fielding_stats(user_id, char_id):
+def get_pitching_and_fielding_stats(list_of_game_ids, char_id):
     query = (
         'SELECT '
         'character_game_summary.id AS char_id, '
