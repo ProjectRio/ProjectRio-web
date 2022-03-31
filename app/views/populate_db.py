@@ -449,6 +449,7 @@ def populate_db2():
         event = Event(
             game_id = game.game_id,
             pitcher_id = teams['Home'][event_data['Pitcher Roster Loc']].id if event_data['Half Inning'] == 0 else teams['Away'][event_data['Pitcher Roster Loc']].id,
+            batter_id = teams['Home'][event_data['Batter Roster Loc']].id if event_data['Half Inning'] == 1 else teams['Away'][event_data['Batter Roster Loc']].id,
             catcher_id = teams['Home'][event_data['Catcher Roster Loc']].id if event_data['Half Inning'] == 0 else teams['Away'][event_data['Catcher Roster Loc']].id,
             event_num = index,
             away_score = event_data['Away Score'],
@@ -511,8 +512,6 @@ def populate_db2():
             
         # ==== Pitch Summary ====
         pitch_summary = PitchSummary(
-            batter_id = teams['Home'][event_data['Batter Roster Loc']].id if event_data['Half Inning'] == 1 else teams['Away'][event_data['Batter Roster Loc']].id,
-            pitcher_id = event.pitcher_id,
             pitch_type = event_data['Pitch']['Pitch Type'],
             charge_pitch_type = event_data['Pitch']['Charge Type'],
             star_pitch = event_data['Pitch']['Star Pitch'],
@@ -627,12 +626,12 @@ def populate_db2():
         if (pitch_summary.star_pitch):
             pitcher_summary.defensive_star_pitches += 1
             if (pitch_summary.pitch_result >= 3 and pitch_summary.pitch_result >= 5):
-                pitch_summary.defensive_star_successes += 1
+                pitcher_summary.defensive_star_successes += 1
 
             if (pitcher_captainable_char and pitcher_summary.captain == False):
-                pitch_summary.defensive_stars_used += 2
+                pitcher_summary.defensive_stars_used += 2
             else:
-                pitch_summary.defensive_stars_used += 1
+                pitcher_summary.defensive_stars_used += 1
         
         #Only increment star chances when the ab is over
         if (final_pitch_of_atbat):
