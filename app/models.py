@@ -235,13 +235,11 @@ class CharacterGameSummary(db.Model):
     defensive_star_chances = db.Column(db.Integer)
     defensive_star_chances_won = db.Column(db.Integer)
 
-    batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
-    pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
     fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary')
     events_when_pitcher = db.relationship('Event', foreign_keys = 'Event.pitcher_id', backref='character_game_summary_of_event_pitcher')
     events_when_catcher = db.relationship('Event', foreign_keys = 'Event.catcher_id', backref='character_game_summary_of_event_catcher')
+    events_when_batter = db.relationship('Event', foreign_keys = 'Event.batter_id', backref = 'character_game_summary_of_event_batter')
     runner = db.relationship('Runner', foreign_keys = 'Runner.runner_character_game_summary_id', backref = 'character_game_summary_runner')
-    catcher = db.relationship('Runner', foreign_keys = 'Runner.catcher_character_game_summary_id', backref = 'character_game_summary_catcher')
 
     def to_dict(self):
         return {
@@ -279,6 +277,7 @@ class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
     pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False) #Based on "Pitcher Roster Loc" in JSON
+    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     catcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     runner_on_0 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=False)
     runner_on_1 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=True)
@@ -303,8 +302,6 @@ class Event(db.Model):
 
 class PitchSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
-    pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=True)
     pitch_type = db.Column(db.Integer)
     charge_pitch_type = db.Column(db.Integer)
@@ -359,8 +356,6 @@ class FieldingSummary(db.Model):
 class Runner(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     runner_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
-    # Catcher nullable til future update
-    catcher_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=True)
     initial_base = db.Column(db.Integer)
     result_base = db.Column(db.Integer)
     out_type = db.Column(db.Integer)
