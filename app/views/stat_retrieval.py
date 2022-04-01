@@ -42,23 +42,24 @@ def user_stats():
     # Returns dict with most 10 recent games for the user and summary data
     recent_games = games()
 
-    sorted_user_games = get_users_sorted_games(user_to_query.id)
+    # returns tuples of game_ids for ranked_normals, ranked_superstar, unranked_normals, unranked_superstar games
+    game_tuples = get_users_sorted_games(user_to_query.id)
 
     # Returns JSON with user stats for ranked normal, ranked superstar, unranked normal, unranked superstar, and sum total
-    user_totals = get_user_profile_totals(user_to_query.id, sorted_user_games)
+    user_totals = get_user_profile_totals(user_to_query.id, game_tuples)
 
-    # Returns JSON with top 6 pitchers, top 6 batters, and corresponding stats
-    char_totals = get_top_pitchers_and_batters(user_to_query.id)
+    # Returns JSON with top 6 pitchers by era, top 6 batters by rbi for ranked normals, ranked superstars, unranked normals, unranked superstars
+    char_totals = get_top_pitchers_and_batters(user_to_query.id, game_tuples)
 
-    # Returns JSON of top 3 captains by winrate with corresponding stats
-    captain_totals = get_captain_totals(user_to_query.id)
-    captains_by_tags = top_captains_for_tags(user_to_query.id, sorted_user_games)
+    # Returns JSON of top 3 captains by winrate for ranked normals, ranked superstars, unranked normals, unranked superstars
+    captain_totals = get_top_captains(user_to_query.id, game_tuples)
 
     return {
         "recent_games": recent_games,
         "username": user_to_query.username,
         "user_totals": user_totals,
-        "top_characters": char_totals,
+        "top_batters": char_totals['batters'],
+        "top_pitchers": char_totals['pitchers'],
         "top_captains": captain_totals,
     }
 
@@ -96,26 +97,25 @@ def get_users_sorted_games(user_id):
                 unranked_superstar.append(str(game.game_id))
 
     return {
-        'ranked_normal': ranked_normal,
-        'ranked_superstar': ranked_superstar,
-        'unranked_normal': unranked_normal,
-        'unranked_superstar': unranked_superstar
+        'ranked_normal': ', '.join(ranked_normal),
+        'ranked_superstar': ', '.join(ranked_superstar),
+        'unranked_normal': ', '.join(unranked_normal),
+        'unranked_superstar': ', '.join(unranked_superstar)
     }
 
-def top_captains_for_tags(user_id, games):
-    # Join game type arrays into strings separated by commas in order to mimic a tuple for SQL IN statements
-    ranked_normal_game_ids_string = ', '.join(games['ranked_normal'])
-    ranked_superstar_game_ids_string = ', '.join(games['ranked_superstar'])
-    unranked_normal_game_ids_string = ', '.join(games['unranked_normal'])
-    unranked_superstar_game_ids_string = ', '.join(games['unranked_superstar'])
+def get_top_captains(user_id, game_tuples):
+    ranked_normal_ids = game_tuples['ranked_normal']
+    ranked_superstar_ids = game_tuples['ranked_superstar']
+    unranked_normal_ids = game_tuples['unranked_normal']
+    unranked_superstar_ids = game_tuples['unranked_superstar']
 
     query = (
         'SELECT '
         'character.name AS name, '
-        f'CASE WHEN game.game_id IN ({ranked_normal_game_ids_string}) THEN 1 '
-            f'WHEN game.game_id IN ({ranked_superstar_game_ids_string}) THEN 2 '
-            f'WHEN game.game_id IN ({unranked_normal_game_ids_string}) THEN 3 '
-            f'WHEN game.game_id IN ({unranked_superstar_game_ids_string}) THEN 4 '
+        f'CASE WHEN game.game_id IN ({ranked_normal_ids}) THEN 1 '
+            f'WHEN game.game_id IN ({ranked_superstar_ids}) THEN 2 '
+            f'WHEN game.game_id IN ({unranked_normal_ids}) THEN 3 '
+            f'WHEN game.game_id IN ({unranked_superstar_ids}) THEN 4 '
             'END as type, '
         'SUM(CASE '
             f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
@@ -146,53 +146,57 @@ def top_captains_for_tags(user_id, games):
         'GROUP BY character_game_summary.char_id, type'
     )
 
-    summed_captains_by_type = db.session.execute(query).all()
-    captains = {
-        'ranked_normal': [],
-        'ranked_superstar': [],
-        'unranked_normal': [],
-        'unranked_superstar': []
+    summed_captains_by_tags = db.session.execute(query).all()
+
+    captains_ranked_normal = []
+    captains_ranked_superstar = []
+    captains_unranked_normal = []
+    captains_unranked_superstar = []
+    for captain in summed_captains_by_tags:
+        if captain.wins + captain.losses >= 5:
+            stats = {
+                    "name": captain.name,
+                    "wins": captain.wins,
+                    "losses": captain.losses,
+                    "homeruns": captain.homeruns,
+                    "batting_average": captain.hits/captain.at_bats,
+                    "obp": (captain.hits + captain.walks_bb + captain.walks_hit)/(captain.at_bats + captain.walks_bb + captain.walks_hit),
+                    "rbi": captain.rbi,
+                    "slg": (captain.singles + (captain.doubles * 2) + (captain.triples * 3) + (captain.homeruns * 4))/captain.at_bats,
+                    "era": calculate_era(captain.runs_allowed, captain.outs_pitched),
+            }
+
+            if captain.type == 1:
+                captains_ranked_normal.append(stats)
+            elif captain.type == 2:
+                captains_ranked_superstar.append(stats)
+            elif captain.type == 3:
+                captains_unranked_normal.append(stats)
+            elif captain.type == 4:
+                captains_unranked_superstar.append(stats)
+
+    
+    sorted_captains = {
+        'ranked_normal': sorted(captains_ranked_normal, key=lambda captain: captain['wins']/(captain['wins'] + captain['losses']), reverse=True)[0:3],
+        'ranked_superstar': sorted(captains_ranked_superstar, key=lambda captain: captain['wins']/(captain['wins'] + captain['losses']), reverse=True)[0:3],
+        'unranked_normal': sorted(captains_unranked_normal, key=lambda captain: captain['wins']/(captain['wins'] + captain['losses']), reverse=True)[0:3],
+        'unranked_superstar': sorted(captains_unranked_superstar, key=lambda captain: captain['wins']/(captain['wins'] + captain['losses']), reverse=True)[0:3]
     }
 
-    for captain in summed_captains_by_type:
-        key = str()
-        if captain.type == 1:
-            key = 'ranked_normal'
-        elif captain.type == 2:
-            key = 'ranked_superstar'
-        elif captain.type == 3:
-            key = 'unranked_normal'
-        elif captain.type == 4:
-            key = 'unranked_superstar'
+    return sorted_captains
 
-        captains[key].append({
-                "name": captain.name,
-                "wins": captain.wins,
-                "losses": captain.losses,
-                "homeruns": captain.homeruns,
-                "batting_average": captain.hits/captain.at_bats,
-                "obp": (captain.hits + captain.walks_bb + captain.walks_hit)/(captain.at_bats + captain.walks_bb + captain.walks_hit),
-                "rbi": captain.rbi,
-                "slg": (captain.singles + (captain.doubles * 2) + (captain.triples * 3) + (captain.homeruns * 4))/captain.at_bats,
-                "era": calculate_era(captain.runs_allowed, captain.outs_pitched),
-            })
-
-    return captains
-
-
-def get_user_profile_totals(user_id, games):
-    # Join game type arrays into strings separated by commas in order to mimic a tuple for SQL IN statements
-    ranked_normal_game_ids_string = ', '.join(games['ranked_normal'])
-    ranked_superstar_game_ids_string = ', '.join(games['ranked_superstar'])
-    unranked_normal_game_ids_string = ', '.join(games['unranked_normal'])
-    unranked_superstar_game_ids_string = ', '.join(games['unranked_superstar'])
+def get_user_profile_totals(user_id, game_tuples):
+    ranked_normal_ids = game_tuples['ranked_normal']
+    ranked_superstar_ids = game_tuples['ranked_superstar']
+    unranked_normal_ids = game_tuples['unranked_normal']
+    unranked_superstar_ids = game_tuples['unranked_superstar']
 
     query = (
         'SELECT '
-        f'CASE WHEN game.game_id IN ({ranked_normal_game_ids_string}) THEN 1 '
-            f'WHEN game.game_id IN ({ranked_superstar_game_ids_string}) THEN 2 '
-            f'WHEN game.game_id IN ({unranked_normal_game_ids_string}) THEN 3 '
-            f'WHEN game.game_id IN ({unranked_superstar_game_ids_string}) THEN 4 '
+        f'CASE WHEN game.game_id IN ({ranked_normal_ids}) THEN 1 '
+            f'WHEN game.game_id IN ({ranked_superstar_ids}) THEN 2 '
+            f'WHEN game.game_id IN ({unranked_normal_ids}) THEN 3 '
+            f'WHEN game.game_id IN ({unranked_superstar_ids}) THEN 4 '
             'END as type, '
         'SUM(CASE '
             f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
@@ -287,11 +291,22 @@ def get_user_profile_totals(user_id, games):
     user_totals['all']['era'] = calculate_era(user_totals['all']['runs_allowed'], user_totals['all']['outs_pitched'])
     return user_totals
 
-# Returns list of the top 3 Captains by winrate with 5 or more games and their stats
-def get_captain_totals(user_id):
+
+# Returns the top 6 batters and pitchers according to rbi and era, along with their summary stats.
+def get_top_pitchers_and_batters(user_id, game_tuples):
+    ranked_normal_ids = game_tuples['ranked_normal']
+    ranked_superstar_ids = game_tuples['ranked_superstar']
+    unranked_normal_ids = game_tuples['unranked_normal']
+    unranked_superstar_ids = game_tuples['unranked_superstar']
+
     query = (
         'SELECT '
-        'character.name as name, '
+        'character.name AS name, '
+        f'CASE WHEN game.game_id IN ({ranked_normal_ids}) THEN 1 '
+            f'WHEN game.game_id IN ({ranked_superstar_ids}) THEN 2 '
+            f'WHEN game.game_id IN ({unranked_normal_ids}) THEN 3 '
+            f'WHEN game.game_id IN ({unranked_superstar_ids}) THEN 4 '
+            'END as type, '
         'SUM(CASE '
             f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
             f'WHEN game.home_player_id = {user_id} AND game.home_score > game.away_score THEN 1 '
@@ -302,7 +317,6 @@ def get_captain_totals(user_id):
             f'WHEN game.home_player_id = {user_id} AND game.home_score < game.away_score THEN 1 '
             'ELSE 0 '
             'END) AS losses, '
-        'COUNT(character_game_summary.game_id) AS games, '
         'SUM(character_game_summary.runs_allowed) AS runs_allowed, '
         'SUM(character_game_summary.outs_pitched) AS outs_pitched, '
         'SUM(character_game_summary.hits) AS hits, '
@@ -316,96 +330,80 @@ def get_captain_totals(user_id):
         'SUM(character_game_summary.homeruns) AS homeruns '
         'FROM character_game_summary '
         'JOIN game ON character_game_summary.game_id = game.game_id '
-        'JOIN character ON character_game_summary.char_id = character.char_id '
+        'JOIN character ON character_game_summary.char_id = character.char_id '        
         f'WHERE character_game_summary.user_id = {user_id} '
-        'AND character_game_summary.captain = 1 '
-        'GROUP BY character_game_summary.char_id'
+        'GROUP BY character_game_summary.char_id, type'
     )
 
-    result = db.session.execute(query).all()
+    summed_chars_by_tags = db.session.execute(query).all()
 
-    captains = sorted(result, key=lambda captain: captain.wins/captain.games, reverse=True)
-    top_captains = []
-    for captain in captains: 
-        if captain.games >= 5 and len(top_captains) < 3:
-            top_captains.append({
-                "name": captain.name,
-                "wins": captain.wins,
-                "losses": captain.losses,
-                "homeruns": captain.homeruns,
-                "batting_average": captain.hits/captain.at_bats,
-                "obp": (captain.hits + captain.walks_bb + captain.walks_hit)/(captain.at_bats + captain.walks_bb + captain.walks_hit),
-                "rbi": captain.rbi,
-                "slg": (captain.singles + (captain.doubles * 2) + (captain.triples * 3) + (captain.homeruns * 4))/captain.at_bats,
-                "era": calculate_era(captain.runs_allowed, captain.outs_pitched),
+    pitchers = {
+        'ranked_normal': [],
+        'ranked_superstar': [],
+        'unranked_normal': [],
+        'unranked_superstar': []
+    }
+    batters = {
+        'ranked_normal': [],
+        'ranked_superstar': [],
+        'unranked_normal': [],
+        'unranked_superstar': []
+    }
+    for character in summed_chars_by_tags:
+        key = str()
+        if character.type == 1:
+            key = 'ranked_normal'
+        elif character.type == 2:
+            key = 'ranked_superstar'
+        elif character.type == 3:
+            key = 'unranked_normal'
+        elif character.type == 4:
+            key = 'unranked_superstar'
+        
+        if character.outs_pitched >= 12:
+            pitchers[key].append({
+                "name": character.name,
+                "wins": character.wins,
+                "losses": character.losses,
+                "homeruns": character.homeruns,
+                "batting_average": character.hits/character.at_bats,
+                "obp": (character.hits + character.walks_bb + character.walks_hit)/(character.at_bats + character.walks_bb + character.walks_hit),
+                "rbi": character.rbi,
+                "slg": (character.singles + (character.doubles * 2) + (character.triples * 3) + (character.homeruns * 4))/character.at_bats,
+                "era": calculate_era(character.runs_allowed, character.outs_pitched),
             })
 
-    return top_captains
+        if character.at_bats >= 5:
+            batters[key].append({
+                "name": character.name,
+                "wins": character.wins,
+                "losses": character.losses,
+                "homeruns": character.homeruns,
+                "batting_average": character.hits/character.at_bats,
+                "obp": (character.hits + character.walks_bb + character.walks_hit)/(character.at_bats + character.walks_bb + character.walks_hit),
+                "rbi": character.rbi,
+                "slg": (character.singles + (character.doubles * 2) + (character.triples * 3) + (character.homeruns * 4))/character.at_bats,
+                "era": calculate_era(character.runs_allowed, character.outs_pitched),
+            })
 
-# Returns the top 6 batters and pitchers according to rbi and era, along with their summary stats. (Summary stats are kept seperate to reduce possible duplication)
-def get_top_pitchers_and_batters(user_id):
-    query = (
-        'SELECT '
-        'character.name as name, '
-        'SUM(CASE '
-            f'WHEN game.away_player_id = {user_id} AND game.away_score > game.home_score THEN 1 '
-            f'WHEN game.home_player_id = {user_id} AND game.home_score > game.away_score THEN 1 '
-            'ELSE 0 '
-            'END) AS wins, '
-        'SUM(CASE '
-            f'WHEN game.away_player_id = {user_id} AND game.away_score < game.home_score THEN 1 '
-            f'WHEN game.home_player_id = {user_id} AND game.home_score < game.away_score THEN 1 '
-            'ELSE 0 '
-            'END) AS losses, '
-        'COUNT(character_game_summary.game_id) AS games, '
-        'SUM(character_game_summary.runs_allowed) AS runs_allowed, '
-        'SUM(character_game_summary.outs_pitched) AS outs_pitched, '
-        'SUM(character_game_summary.hits) AS hits, '
-        'SUM(character_game_summary.at_bats) AS at_bats, '
-        'SUM(character_game_summary.walks_bb) AS walks_bb, '
-        'SUM(character_game_summary.walks_hit) AS walks_hit, '
-        'SUM(character_game_summary.rbi) AS rbi, '
-        'SUM(character_game_summary.singles) AS singles, '
-        'SUM(character_game_summary.doubles) AS doubles, '
-        'SUM(character_game_summary.triples) AS triples, '
-        'SUM(character_game_summary.homeruns) AS homeruns '
-        'FROM character_game_summary '
-        'JOIN game ON character_game_summary.game_id = game.game_id '
-        'JOIN character ON character_game_summary.char_id = character.char_id '
-        f'WHERE character_game_summary.user_id = {user_id} '
-        'GROUP BY character_game_summary.char_id'
-    )
-
-    result = db.session.execute(query).all()
-
-    # Get top 6 batter by rbi where they have more than 20 at bats
-    batters = sorted(result, key=lambda batter: batter.rbi, reverse=True)
-    top_batters = [batter.name for batter in batters if batter.at_bats > 10][0:6]
-
-    # Get top 6 pitchers by era where they have more than 135 outs pitched
-    pitchers = sorted(result, key=lambda pitcher: calculate_era(pitcher.runs_allowed, pitcher.outs_pitched))
-    top_pitchers = [pitcher.name for pitcher in pitchers if pitcher.outs_pitched > 60][0:6]
-
-    top_characters = {
-        "top_pitchers": top_pitchers,
-        "top_batters": top_batters,
-        "character_values": {}
+    sorted_pitchers = {
+        'ranked_normal': sorted(pitchers['ranked_normal'], key=lambda pitcher: pitcher['era'])[0:6],
+        'ranked_superstar':sorted(pitchers['ranked_superstar'], key=lambda pitcher: pitcher['era'])[0:6],
+        'unranked_normal': sorted(pitchers['unranked_normal'], key=lambda pitcher: pitcher['era'])[0:6],
+        'unranked_superstar': sorted(pitchers['unranked_superstar'], key=lambda pitcher: pitcher['era'])[0:6],
     }
-    for row in result:
-        if row.name in top_batters or row.name in top_pitchers:
-            top_characters["character_values"][row.name] = {
-                "games": row.games,
-                "wins": row.wins,
-                "losses": row.losses,
-                "homeruns": row.homeruns,
-                "batting_average": row.hits/row.at_bats,
-                "obp": (row.hits + row.walks_bb + row.walks_hit)/(row.at_bats + row.walks_bb + row.walks_hit),
-                "rbi": row.rbi,
-                "slg": (row.singles + (row.doubles * 2) + (row.triples * 3) + (row.homeruns * 4))/row.at_bats,
-                "era": calculate_era(row.runs_allowed, row.outs_pitched),
-            }
-    
-    return top_characters
+
+    sorted_batters = {
+        'ranked_normal': sorted(batters['ranked_normal'], key=lambda batter: batter['rbi'], reverse=True)[0:6],
+        'ranked_superstar': sorted(batters['ranked_superstar'], key=lambda batter: batter['rbi'], reverse=True)[0:6],
+        'unranked_normal': sorted(batters['unranked_normal'], key=lambda batter: batter['rbi'], reverse=True)[0:6],
+        'unranked_superstar': sorted(batters['unranked_superstar'], key=lambda batter: batter['rbi'], reverse=True)[0:6],
+    }
+
+    return {
+        'pitchers': sorted_pitchers,
+        'batters': sorted_batters,
+    }
 
 def calculate_era(runs_allowed, outs_pitched):
     if outs_pitched == 0 and runs_allowed > 0:
