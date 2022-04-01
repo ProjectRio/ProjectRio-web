@@ -5,10 +5,14 @@ from ..models import db, User, Character, Game, ChemistryTable, Tag, GameTag
 from ..consts import *
 
 import pprint
+import itertools
 
 # == Helper functions for SQL query formatting
-def format_tuple_for_SQL(in_tuple):
-    return "(" + ",".join(repr(v) for v in in_tuple) + ")"
+# Returns tuple in SQL ready string and a bool to indicate if query is empty
+def format_tuple_for_SQL(in_tuple, none_on_empty=False):
+    sql_tuple = "(" + ",".join(repr(v) for v in in_tuple) + ")"
+    
+    return (sql_tuple, (len(in_tuple) == 0))
 
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
@@ -320,6 +324,9 @@ def calculate_era(runs_allowed, outs_pitched):
 
 
 # URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5&vs=True
+
+usernames = ['User1'] #Any game with these characters
+vs_username = ['User3', 'User4']
 @app.route('/games/', methods = ['GET'])
 def games():
     # === validate passed parameters ===
@@ -560,7 +567,7 @@ def endpoint_batter_position():
     '''
 
 
-# URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1
+# URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1&by_swing=1
 # UNDER CONSTRUCTION
 @app.route('/user_character_stats/', methods = ['GET'])
 def get_user_character_stats():
@@ -572,30 +579,43 @@ def get_user_character_stats():
     for game_dict in list_of_games['games']:
         list_of_game_ids.append(game_dict['Id'])
 
-    list_of_game_ids = tuple(list_of_game_ids)
+    tuple_of_game_ids = tuple(list_of_game_ids)
 
-    # verify character
-    in_char_ids = tuple(request.args.getlist('character'))
+    tuple_char_ids = tuple(request.args.getlist('character'))
 
-    if not in_char_ids:
-        return abort(408, description='Character does not exist')
+    group_by_swing = (request.args.get('by_swing') == '1')
+    group_by_char = (request.args.get('by_char') == '1')
+
+    usernames = request.args.getlist('username')
+    usernames_lowercase = tuple([username.lower() for username in usernames])
+    #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+    list_of_user_id_tuples = db.session.query(User.id).filter(User.username_lowercase.in_(usernames_lowercase)).all()
+    # using list comprehension
+    list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
+
+    tuple_user_ids = tuple(list_of_user_id)
     
     # batting_stats = get_batting_stats(user_id, char_id)
-    #pitching_and_fielding_stats = get_pitching_and_fielding_stats(list_of_game_ids, char_id)
-    batting_stats = get_batting_stats(list_of_game_ids, in_char_ids)
+    pitching_stats = get_pitching_stats(tuple_of_game_ids, tuple_user_ids, tuple_char_ids)
+    batting_stats = get_batting_stats(tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_char, group_by_swing)
 
     return {
         'Batting Stats': batting_stats,
-        #"Pitching Stats": pitching_and_fielding_stats,
+        "Pitching Stats": pitching_stats,
         #"Fielding Stats": pitching_and_fielding_stats,
     }
 
-def get_batting_stats(list_of_game_ids, char_ids):
+def get_batting_stats(game_ids, user_ids, char_ids, group_by_char=False, group_by_swing=False):
 
-    char_string = format_tuple_for_SQL(char_ids)
-    print(list_of_game_ids)
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
+    char_string, char_empty = format_tuple_for_SQL(char_ids)
+    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+
+    by_char = ', character_game_summary.char_id' if group_by_char else ''
+    by_swing = ', pitch_summary.type_of_swing' if group_by_swing else ''
     query = (
         'SELECT \n'
+        'character_game_summary.id AS id, '
         'user.username AS username, \n'
         'character.name AS name, \n'
         'character_game_summary.char_id AS char_id, \n'
@@ -605,6 +625,7 @@ def get_batting_stats(list_of_game_ids, char_ids):
         'COUNT(CASE WHEN contact_summary.primary_result = 0 THEN 1 ELSE NULL END) AS outs, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 1 THEN 1 ELSE NULL END) AS foul_hits, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 2 THEN 1 ELSE NULL END) AS fair_hits, \n'
+        'COUNT(CASE WHEN contact_summary.primary_result = 3 THEN 1 ELSE NULL END) AS unknown_hits, \n'
         'COUNT(CASE WHEN (contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) THEN 1 ELSE NULL END) AS sour_hits, '
         'COUNT(CASE WHEN (contact_summary.type_of_contact = 1 OR contact_summary.type_of_contact = 3) THEN 1 ELSE NULL END) AS nice_hits, '
         'COUNT(CASE WHEN contact_summary.type_of_contact = 2 THEN 1 ELSE NULL END) AS perfect_hits, '
@@ -614,61 +635,77 @@ def get_batting_stats(list_of_game_ids, char_ids):
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
+        'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
+        'SUM(character_game_summary.offensive_stars_put_in_play) AS stars_put_in_play, \n'
+        'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
+        'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
+        'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won, \n'
         #'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
         #'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total '
         'event.result_of_ab AS result \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN pitch_summary ON character_game_summary.id = pitch_summary.batter_id \n'
-        'JOIN event ON pitch_summary.id = event.pitch_summary_id \n'
-        '   AND event.result_of_ab != 0 \n'
+        'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
+        '   AND pitch_summary.type_of_swing != 4 \n'
         'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
+        'JOIN event ON character_game_summary.id = event.batter_id \n'
         'JOIN user ON character_game_summary.user_id = user.id \n'
-       f'WHERE character_game_summary.game_id IN {list_of_game_ids} \n'
-       f'   AND character_game_summary.char_id = {char_string} \n'
-        'GROUP BY character_game_summary.char_id, character_game_summary.user_id, pitch_summary.type_of_swing '
+       f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
+       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f'GROUP BY character_game_summary.user_id {by_char} {by_swing} '
     )
 
-    print(query)
-
     results = db.session.execute(query).all()
-
-    print(results)
 
     batting_stats = {}
     for character in results:
-        pprint.pprint(character._asdict())
-
+        #pprint.pprint(character._asdict())
+        stat_dict = character._asdict()
+        batting_stats.update({stat_dict['id']: stat_dict})
     return batting_stats
 
-def get_pitching_and_fielding_stats(list_of_game_ids, char_id):
+def get_pitching_stats(game_ids, user_ids, char_ids, group_by_char=False):
+
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
+    char_string, char_empty = format_tuple_for_SQL(char_ids, True)
+    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+
+    by_char = ', character_game_summary.char_id' if group_by_char else ''
     query = (
         'SELECT '
-        'character_game_summary.id AS char_id, '
-        'SUM(character_game_summary.batters_faced) AS batters_faced, '
-        #'SUM(earned_runs) AS earned_runs, '
-        'SUM(character_game_summary.runs_allowed) AS runs_allowed, '
-        'SUM(character_game_summary.hits_allowed) AS hits_allowed, '
-        'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, '
-        'SUM(character_game_summary.star_pitches_thrown) AS star_pitches_thrown, '
-        'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, '
-        'SUM(character_game_summary.outs_pitched) AS outs_pitched, '
-        'SUM(character_game_summary.offensive_stars_used) AS offensive_stars_used, '
-        'SUM(character_game_summary.defensive_stars_used) AS defensive_stars_used, '
-        'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won, '
-        'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, '
-        'SUM(character_game_summary.pitches_thrown) AS total_pitches '
+        'character_game_summary.id AS id, '
+        'character_game_summary.char_id AS char_id, \n'
+        'SUM(character_game_summary.batters_faced) AS batters_faced, \n'
+        #'SUM(earned_runs) AS earned_runs, \n'
+        'SUM(character_game_summary.runs_allowed) AS runs_allowed, \n'
+        'SUM(character_game_summary.hits_allowed) AS hits_allowed, \n'
+        'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, \n'
+        'SUM(character_game_summary.star_pitches_thrown) AS star_pitches_thrown, \n'
+        'SUM(character_game_summary.outs_pitched) AS outs_pitched, \n'
+        'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
+        'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
+        'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
+        'SUM(character_game_summary.pitches_thrown) AS total_pitches, \n'
+        'COUNT(CASE WHEN pitch_summary.pitch_result < 3 THEN 1 ELSE NULL END) AS walks, \n'
+        'COUNT(CASE WHEN pitch_summary.pitch_result = 2 THEN 1 ELSE NULL END) AS balls, \n'
+        'COUNT(CASE WHEN (pitch_summary.pitch_result = 3 OR pitch_summary.pitch_result = 4 OR pitch_summary.pitch_result = 5) THEN 1 ELSE NULL END) AS strikes \n'
         # Insert other stats once questions addressed
-        'FROM character_game_summary '
-       f'WHERE character_game_summary.user_id = {user_id} '
-       #f'AND character_game_summary.char_id = {char_id} '
-        #'GROUP BY character_game_summary.char_id'
+        'FROM character_game_summary \n'
+        #'JOIN character_position_summary ON character_position_summary.id = character_game_summary.character_position_summary_id \n'
+        'JOIN event ON event.pitcher_id = character_game_summary.id \n'
+        'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
+        f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
+       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"GROUP BY character_game_summary.user_id {by_char} "
     )
 
-    print(query)
     results = db.session.execute(query).all()
-    pitching_and_fielding_stats = {}
+    pitching_stats = {}
     for character in results:
-        print(character._asdict())
+        #pprint.pprint(character._asdict())
+        stat_dict = character._asdict()
+        pitching_stats.update({stat_dict['id']: stat_dict})
 
-    return pitching_and_fielding_stats
+    return pitching_stats
