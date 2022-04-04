@@ -570,7 +570,7 @@ def endpoint_batter_position():
 # URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1&by_swing=1
 # UNDER CONSTRUCTION
 @app.route('/user_character_stats/', methods = ['GET'])
-def get_user_character_stats():
+def endpoint_detailed_stats():
     
     list_of_games = games()   # List of dicts of games we want data from and info about those games
     list_of_game_ids = list() # Holds IDs for all the games we want data from
@@ -583,6 +583,7 @@ def get_user_character_stats():
 
     tuple_char_ids = tuple(request.args.getlist('character'))
 
+    group_by_user = (request.args.get('by_user') == '1')
     group_by_swing = (request.args.get('by_swing') == '1')
     group_by_char = (request.args.get('by_char') == '1')
 
@@ -596,29 +597,37 @@ def get_user_character_stats():
     tuple_user_ids = tuple(list_of_user_id)
     
     # batting_stats = get_batting_stats(user_id, char_id)
-    pitching_stats = get_pitching_stats(tuple_of_game_ids, tuple_user_ids, tuple_char_ids)
-    batting_stats = get_batting_stats(tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_char, group_by_swing)
+    #pitching_stats = get_pitching_stats(tuple_of_game_ids, tuple_user_ids, tuple_char_ids)
+    batting_stats = query_detailed_batting_stats(tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing)
+
+    pprint.pprint(batting_stats)
 
     return {
         'Batting Stats': batting_stats,
-        "Pitching Stats": pitching_stats,
+        #"Pitching Stats": pitching_stats,
         #"Fielding Stats": pitching_and_fielding_stats,
     }
 
-def get_batting_stats(game_ids, user_ids, char_ids, group_by_char=False, group_by_swing=False):
+def query_detailed_batting_stats(game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False, group_by_swing=False):
 
     game_id_string, game_empty = format_tuple_for_SQL(game_ids)
     char_string, char_empty = format_tuple_for_SQL(char_ids)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
-    by_char = ', character_game_summary.char_id' if group_by_char else ''
-    by_swing = ', pitch_summary.type_of_swing' if group_by_swing else ''
+    by_user = 'character_game_summary.user_id' if group_by_user else ''
+    by_char = 'character_game_summary.char_id' if group_by_char else ''
+    by_swing = 'pitch_summary.type_of_swing' if group_by_swing else ''
+
+    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
+    groups = ','.join(filter(None,[by_user, by_char, by_swing]))
+    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    print(group_by_statement)
     query = (
         'SELECT \n'
-        'character_game_summary.id AS id, '
+        'user.id AS user_id, \n'
         'user.username AS username, \n'
-        'character.name AS name, \n'
         'character_game_summary.char_id AS char_id, \n'
+        'character.name AS char_name, \n'
         'pitch_summary.type_of_swing AS type_of_swing, \n'
         'COUNT(CASE WHEN pitch_summary.pitch_result = 1 THEN 1 ELSE NULL END) AS walks_bb, \n'
         'COUNT(CASE WHEN pitch_summary.pitch_result = 0 THEN 1 ELSE NULL END) AS walks_hit, \n'
@@ -635,14 +644,9 @@ def get_batting_stats(game_ids, user_ids, char_ids, group_by_char=False, group_b
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
-        'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
-        'SUM(character_game_summary.offensive_stars_put_in_play) AS stars_put_in_play, \n'
-        'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
-        'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
-        'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won, \n'
+        'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances \n'
         #'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
         #'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total '
-        'event.result_of_ab AS result \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
@@ -653,25 +657,119 @@ def get_batting_stats(game_ids, user_ids, char_ids, group_by_char=False, group_b
        f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
-       f'GROUP BY character_game_summary.user_id {by_char} {by_swing} '
+       f"{group_by_statement}"
     )
 
     results = db.session.execute(query).all()
 
     batting_stats = {}
-    for character in results:
-        #pprint.pprint(character._asdict())
-        stat_dict = character._asdict()
-        batting_stats.update({stat_dict['id']: stat_dict})
+    for result in results:
+        data_dict = result._asdict()
+        print(data_dict)
+        #Values we don't need in final dict
+        data_dict.pop('username')
+        data_dict.pop('user_id')
+        data_dict.pop('char_name')
+        data_dict.pop('char_id')
+        data_dict.pop('type_of_swing')
+
+        #User=1, Char=X, Swing=X
+        if group_by_user:
+            if result.username not in batting_stats:
+                batting_stats[result.username] = {}
+
+            USER_DICT = batting_stats[result.username]
+        
+            #User=1, Char=1, Swing=X
+            if group_by_char:
+                if result.char_name not in USER_DICT:
+                    USER_DICT[result.char_name] = {}
+
+                CHAR_DICT = USER_DICT[result.char_name]
+
+                #Build batting
+                if 'Batting' not in CHAR_DICT:
+                    CHAR_DICT['Batting'] = {}
+
+                #User=1, Char=1, Swing=1
+                if group_by_swing:
+                    BATTING_DICT = CHAR_DICT['Batting']
+
+                    if result.type_of_swing in BATTING_DICT:
+                        print('ERROR: FOUND PREVIOUS SWING TYPE')
+                        
+                    BATTING_DICT[result.type_of_swing] = data_dict
+                
+                #User=1, Char=1, Swing=0
+                else:
+                    CHAR_DICT['Batting'] = data_dict
+
+            #User=1, Char=0, Swing=1
+            elif group_by_swing:
+                if USER_DICT[result.type_of_swing]:
+                    print('ERROR: FOUND PREVIOUS SWING TYPE')
+                    
+                USER_DICT[result.type_of_swing] = data_dict
+
+            #User=1, Char=0, Swing=0
+            else:
+                USER_DICT['Batting'] = data_dict
+
+        #User=0, Char=1, Swing=X
+        elif group_by_char:
+            if result.char_name not in batting_stats:
+                batting_stats[result.char_name] = {}
+
+            CHAR_DICT = batting_stats[result.char_name]
+
+            #Build batting
+            if 'Batting' not in CHAR_DICT:
+                CHAR_DICT['Batting'] = {}
+
+            #User=0, Char=1, Swing=1
+            if group_by_swing:
+                BATTING_DICT = CHAR_DICT['Batting']
+
+                if result.type_of_swing in BATTING_DICT:
+                    print('ERROR: FOUND PREVIOUS SWING TYPE')
+                    
+                BATTING_DICT[result.type_of_swing] = data_dict
+            
+            #User=0, Char=1, Swing=0
+            else:
+                CHAR_DICT['Batting'] = data_dict
+        
+        #User=0, Char=0, Swing=1
+        elif group_by_swing:
+            #Build batting
+            if 'Batting' not in batting_stats:
+                batting_stats['Batting'] = {}
+
+            if result.type_of_swing in batting_stats['Batting']:
+                print('ERROR: FOUND PREVIOUS SWING TYPE')
+                
+            batting_stats['Batting'][result.type_of_swing] = data_dict
+
+        #User=0, Char=0, Swing=0
+        else:
+            if 'Batting' not in batting_stats:
+                batting_stats['Batting'] = {}
+            batting_stats['Batting'] = data_dict
+
     return batting_stats
 
-def get_pitching_stats(game_ids, user_ids, char_ids, group_by_char=False):
+def query_detailed_pitching_stats(game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
 
     game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
     char_string, char_empty = format_tuple_for_SQL(char_ids, True)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
-    by_char = ', character_game_summary.char_id' if group_by_char else ''
+    by_user = 'character_game_summary.user_id' if group_by_user else ''
+    by_char = 'character_game_summary.char_id' if group_by_char else ''
+
+    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
+    groups = ','.join(filter(None,[by_user, by_char]))
+    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     query = (
         'SELECT '
         'character_game_summary.id AS id, '
@@ -698,7 +796,7 @@ def get_pitching_stats(game_ids, user_ids, char_ids, group_by_char=False):
         f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
-       f"GROUP BY character_game_summary.user_id {by_char} "
+       f"{group_by_statement}"
     )
 
     results = db.session.execute(query).all()
@@ -709,3 +807,109 @@ def get_pitching_stats(game_ids, user_ids, char_ids, group_by_char=False):
         pitching_stats.update({stat_dict['id']: stat_dict})
 
     return pitching_stats
+
+def query_detailed_star_stats(game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
+    char_string, char_empty = format_tuple_for_SQL(char_ids, True)
+    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+
+    by_user = 'character_game_summary.user_id' if group_by_user else ''
+    by_char = 'character_game_summary.char_id' if group_by_char else ''
+
+    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
+    groups = ','.join(filter(None,[by_user, by_char]))
+    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    query = (
+        'SELECT '
+        'character_game_summary.id AS id, '
+        'character_game_summary.char_id AS char_id, \n'
+        'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
+        'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
+        'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
+        'SUM(character_game_summary.offensive_stars_put_in_play) AS stars_put_in_play, \n'
+        'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
+        'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
+        'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won, \n'
+        'FROM character_game_summary \n'
+        f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
+       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"{group_by_statement}"
+    )
+
+    results = db.session.execute(query).all()
+    star_stats = {}
+    for result in results:
+        pass
+
+    return star_stats
+
+def query_detailed_fielding_stats(game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
+    char_string, char_empty = format_tuple_for_SQL(char_ids, True)
+    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+
+    by_user = 'character_game_summary.user_id' if group_by_user else ''
+    by_char = 'character_game_summary.char_id' if group_by_char else ''
+
+    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
+    groups = ','.join(filter(None,[by_user, by_char]))
+    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    position_query = (
+        'SELECT '
+        'character_game_summary.id AS id, \n'
+        'character_game_summary.char_id AS char_id, \n'
+        'SUM(pitches_at_p) AS pitches_per_p, \n'
+        'SUM(pitches_at_c) AS pitches_per_c, \n'
+        'SUM(pitches_at_1b) AS pitches_per_1b, \n'
+        'SUM(pitches_at_2b) AS pitches_per_2b, \n'
+        'SUM(pitches_at_3b) AS pitches_per_3b, \n'
+        'SUM(pitches_at_ss) AS pitches_per_ss, \n'
+        'SUM(pitches_at_lf) AS pitches_per_lf, \n'
+        'SUM(pitches_at_cf) AS pitches_per_cf, \n'
+        'SUM(pitches_at_rf) AS pitches_per_rf, \n'
+        'SUM(outs_at_p) AS outs_per_p, \n'
+        'SUM(outs_at_c) AS outs_per_c, \n'
+        'SUM(outs_at_1b) AS outs_per_1b, \n'
+        'SUM(outs_at_2b) AS outs_per_2b, \n'
+        'SUM(outs_at_3b) AS outs_per_3b, \n'
+        'SUM(outs_at_ss) AS outs_per_ss, \n'
+        'SUM(outs_at_lf) AS outs_per_lf, \n'
+        'SUM(outs_at_cf) AS outs_per_cf, \n'
+        'SUM(outs_at_rf) AS outs_per_rf, \n'
+        #SUM( Insert other stats once questions addressed
+        'FROM character_game_summary \n'
+        'JOIN character_position_summary ON character_position_summary.id = character_game_summary.character_position_summary_id \n'
+       f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
+       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"{group_by_statement}"
+    )
+
+    fielding_query = (
+        'SELECT '
+        'character_game_summary.id AS id, \n'
+        'character_game_summary.char_id AS char_id, \n'
+        'COUNT(CASE WHEN fielder_summary.action = 1 THEN 1 ELSE NULL END) AS jump_catches, \n'
+        'COUNT(CASE WHEN fielder_summary.action = 2 THEN 1 ELSE NULL END) AS diving_catches, \n'
+        'COUNT(CASE WHEN fielder_summary.action = 3 THEN 1 ELSE NULL END) AS wall_jumps, \n'
+        'SUM(fielder_summary.swap) AS swap_successes, \n'
+        'COUNT(CASE WHEN fielder_summary.bobble != 0 THEN 1 ELSE NULL END) AS bobbles, \n'
+        #SUM( Insert other stats once questions addressed
+        'FROM character_game_summary \n'
+        'JOIN fielder_summary ON fielder_summary.fielder_character_game_summary_id = character_game_summary.id \n'
+       f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
+       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"{group_by_statement}"
+    )
+
+    position_results = db.session.execute(position_query).all()
+    position_stats = {}
+    for character in results:
+        #pprint.pprint(character._asdict())
+        stat_dict = character._asdict()
+        position_stats.update({stat_dict['id']: stat_dict})
+
+    return position_stats
