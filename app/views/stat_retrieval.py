@@ -568,14 +568,33 @@ def endpoint_batter_position():
 
 
 # URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1&by_swing=1
-# UNDER CONSTRUCTION
+
+
+## === Detailed stats ===
+'''
+@ Description: Returns batting, pitching, fielding, and star stats on configurable levels
+@ Params:
+    - Username (list):  List of users to get stats for. All users if blank
+    - Character (list): List of character ids to get stats for. All charas if blank
+    - by_user (bool):   When true stats will be organized by user. When false, all users will be 
+                        combined
+    - by_char (bool):   When true stats will be organized by character. When false, 
+                        all characters will be combined
+    - by_swing (bool):  When true batting stats will be organized by swing type (slap, charge, star). When false, 
+                        all swings will be combined. Only considered for swings
+    - exlude_nonfair:   Exlude foul and unknown hits from the return
+    - Games parms:      All params for /games/ endpoint. Determines the games that will be considered
+@ Output:
+    - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
+      the large return dict at each step
+'''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
-    
+
+    #Get pool of games to summarize stats from    
     list_of_games = games()   # List of dicts of games we want data from and info about those games
     list_of_game_ids = list() # Holds IDs for all the games we want data from
 
-    #print(list_of_games)
     for game_dict in list_of_games['games']:
         list_of_game_ids.append(game_dict['Id'])
 
@@ -586,6 +605,7 @@ def endpoint_detailed_stats():
     group_by_user = (request.args.get('by_user') == '1')
     group_by_swing = (request.args.get('by_swing') == '1')
     group_by_char = (request.args.get('by_char') == '1')
+    exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
 
     usernames = request.args.getlist('username')
     usernames_lowercase = tuple([username.lower() for username in usernames])
@@ -596,8 +616,9 @@ def endpoint_detailed_stats():
 
     tuple_user_ids = tuple(list_of_user_id)
     
+    # Individual functions create queries to get their respective stats
     return_dict = {}
-    batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing)
+    batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
     pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
     star_stats = query_detailed_star_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
     fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
@@ -608,7 +629,7 @@ def endpoint_detailed_stats():
         'Stats': return_dict
     }
 
-def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False, group_by_swing=False):
+def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False, group_by_swing=False, exclude_nonfair=False):
 
     game_id_string, game_empty = format_tuple_for_SQL(game_ids)
     char_string, char_empty = format_tuple_for_SQL(char_ids)
@@ -621,7 +642,6 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char, by_swing]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-    print(group_by_statement)
     query = (
         'SELECT \n'
         'user.id AS user_id, \n'
@@ -652,6 +672,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
         '   AND pitch_summary.type_of_swing != 4 \n'
         'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
+       f"   {'AND contact_summary.primary_result != 1 AND contact_summary.primary_result != 3' if exclude_nonfair else ''} \n"
         'JOIN event ON character_game_summary.id = event.batter_id \n'
         'JOIN user ON character_game_summary.user_id = user.id \n'
        f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
