@@ -323,12 +323,10 @@ def calculate_era(runs_allowed, outs_pitched):
 
 
 
-# URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5&vs=True
+# URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
 
-usernames = ['User1'] #Any game with these characters
-vs_username = ['User3', 'User4']
 @app.route('/games/', methods = ['GET'])
-def games():
+def endpoint_games():
     # === validate passed parameters ===
     try:
         # Check if tags are valid and get a list of corresponding ids
@@ -338,25 +336,24 @@ def games():
         tag_ids = tuple([tag.id for tag in tag_rows])
         if len(tag_ids) != len(tags):
             abort(400)
-        
-        # Check if usernames are valid and get array of corresponding ids
+
+        #Get user ids from list of users
         usernames = request.args.getlist('username')
         usernames_lowercase = tuple([username.lower() for username in usernames])
-        users = db.session.query(User).filter(User.username_lowercase.in_(usernames_lowercase)).all() 
-        if len(usernames) != len(users):
-            abort(400)
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        list_of_user_id_tuples = db.session.query(User.id).filter(User.username_lowercase.in_(usernames_lowercase)).all()
+        # using list comprehension
+        list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
+        tuple_user_ids = tuple(list_of_user_id)
 
-        # If true, returned values will return games that contain the first passed username when playing against other provided usernames
-        vs = True if request.args.get('vs') == 'True' else False
-
-        user_id_list = []
-        for index, user in enumerate(users):
-            # primary_user_id is theid of the first username provided in the url, it is used when querying
-            # for games that must contain that username paired with n number of other provided usernames
-            if vs == True and user.username_lowercase == usernames_lowercase[0]:
-                primary_user_id = user.id
-            user_id_list.append(user.id)
-        user_ids = tuple(user_id_list)
+        #Get user ids from list of users
+        vs_usernames = request.args.getlist('vs_username')
+        vs_usernames_lowercase = tuple([username.lower() for username in vs_usernames])
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        list_of_vs_user_id_tuples = db.session.query(User.id).filter(User.username_lowercase.in_(vs_usernames_lowercase)).all()
+        # using list comprehension
+        list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
+        tuple_vs_user_ids = tuple(list_of_vs_user_id)
 
         recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
     except:
@@ -364,38 +361,22 @@ def games():
 
 
     # === Set dynamic query values ===
-    limit = str()
-    order_by = str()
-    if (recent == None):
-        limit = ''
-        order_by = ''
-    else:
-        limit = 'LIMIT {}'.format(recent)
-        order_by = 'ORDER BY game.date_time DESC '
 
-    where_user = str()
-    if user_ids:
-        if len(user_ids) > 1:
-            if vs == True:
-                where_user = (
-                    f'WHERE (game.away_player_id = {primary_user_id} AND game.home_player_id IN {user_ids}) '
-                    f'OR (game.home_player_id = {primary_user_id} AND game.away_player_id IN {user_ids})'
-                )
-            else:
-                where_user = f'WHERE (game.away_player_id IN {user_ids} OR game.home_player_id IN {user_ids})'
-        else:
-            where_user = f'WHERE (game.away_player_id = {user_ids[0]} OR game.home_player_id = {user_ids[0]})'
-    else:
-        where_user = ''
+    #Build User strings
+    user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
+    vs_user_id_string, vs_user_empty = format_tuple_for_SQL(tuple_vs_user_ids)
 
+    user_sql_statement = f"WHERE (game.away_player_id {'NOT' if user_empty else ''} IN {user_id_string} OR game.home_player_id {'NOT' if user_empty else ''} IN {user_id_string}) \n"
+    vs_user_sql_statement = f"AND (game.away_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string} OR game.home_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string}) \n"
+    
     tag_cases = str()
     having_tags = str()
     join_tags = str()
     group_by = str()
     if tags:
         join_tags = (
-            'LEFT JOIN game_tag ON game.game_id = game_tag.game_id '
-            'LEFT JOIN tag ON game_tag.tag_id = tag.id '
+            'LEFT JOIN game_tag ON game.game_id = game_tag.game_id \n'
+            'LEFT JOIN tag ON game_tag.tag_id = tag.id \n'
         )
         for index, tag_id in enumerate(tag_ids):
             tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {tag_id} THEN 1 END) AS tag_{index}, '
@@ -407,37 +388,39 @@ def games():
     # === Construct query === 
     query = (
         'SELECT '
-        'game.game_id AS game_id, '
-        f'{tag_cases}'
-        'game.date_time AS date_time, '
-        'game.away_score AS away_score, '
-        'game.home_score AS home_score, '
-        'game.innings_played AS innings_played, '
-        'game.innings_selected AS innings_selected, '
-        'away_player.username AS away_player, '
-        'home_player.username AS home_player, '
-        'away_captain.name AS away_captain, '
-        'home_captain.name AS home_captain '   
+        'game.game_id AS game_id, \n'
+        f'{tag_cases} \n'
+        'game.date_time AS date_time, \n'
+        'game.away_score AS away_score, \n'
+        'game.home_score AS home_score, \n'
+        'game.innings_played AS innings_played, \n'
+        'game.innings_selected AS innings_selected, \n'
+        'away_player.username AS away_player, \n'
+        'home_player.username AS home_player, \n'
+        'away_captain.name AS away_captain, \n'
+        'home_captain.name AS home_captain \n'   
         'FROM game '
         f'{join_tags} '
-        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id '
-        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id '
-        'LEFT JOIN character_game_summary AS away_character_game_summary '
-            'ON game.game_id = away_character_game_summary.game_id '
-            'AND away_character_game_summary.user_id = away_player.id '
-            'AND away_character_game_summary.captain = True '
-        'LEFT JOIN character_game_summary AS home_character_game_summary '
-            'ON game.game_id = home_character_game_summary.game_id '
-            'AND home_character_game_summary.user_id = home_player.id '
-            'AND home_character_game_summary.captain = True '
-        'LEFT JOIN character AS away_captain ON away_character_game_summary.char_id = away_captain.char_id '
-        'LEFT JOIN character AS home_captain ON home_character_game_summary.char_id = home_captain.char_id '
-        f'{where_user} '
-        f'{group_by} '
-        f'{having_tags} '
-        f'{order_by}'
-        f'{limit}'
+        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id \n'
+        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id \n'
+        'LEFT JOIN character_game_summary AS away_captain_game_summary \n'
+            'ON game.game_id = away_captain_game_summary.game_id \n'
+            'AND away_captain_game_summary.user_id = away_player.id \n'
+            'AND away_captain_game_summary.captain = True \n'
+        'LEFT JOIN character_game_summary AS home_captain_game_summary \n'
+            'ON game.game_id = home_captain_game_summary.game_id \n'
+            'AND home_captain_game_summary.user_id = home_player.id \n'
+            'AND home_captain_game_summary.captain = True \n'
+        'LEFT JOIN character AS away_captain ON away_captain_game_summary.char_id = away_captain.char_id \n'
+        'LEFT JOIN character AS home_captain ON home_captain_game_summary.char_id = home_captain.char_id \n'
+        f'{user_sql_statement} {vs_user_sql_statement} '
+        f'{group_by} \n'
+        f'{having_tags} \n'
+        f'ORDER BY game.date_time DESC \n'
+        f"{('LIMIT ' + str(recent)) if recent != None else ''}" #Limit values if limit provided, otherwise return all
     )
+
+    print(query)
 
     results = db.session.execute(query).all()
     
