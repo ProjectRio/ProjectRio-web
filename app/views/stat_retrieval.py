@@ -4,6 +4,9 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, User, Character, Game, ChemistryTable, Tag, GameTag
 from ..consts import *
 
+import time
+import datetime
+
 import pprint
 import itertools
 
@@ -328,8 +331,8 @@ def calculate_era(runs_allowed, outs_pitched):
 @ Params:
     - tag - list of tags to filter by
     - exclude_tag (TODO) - List of tags to exclude from search
-    - start date (TODO) - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
-    - end_date (TODO) - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
+    - start date - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
+    - end_date - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
     - username - list of users who appear in games to retreive
     - vs_username - list of users who MUST also appear in the game along with users
     - recent - Int of number of games
@@ -380,8 +383,36 @@ def endpoint_games():
     user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
     vs_user_id_string, vs_user_empty = format_tuple_for_SQL(tuple_vs_user_ids)
 
-    user_sql_statement = f"WHERE (game.away_player_id {'NOT' if user_empty else ''} IN {user_id_string} OR game.home_player_id {'NOT' if user_empty else ''} IN {user_id_string}) \n"
-    vs_user_sql_statement = f"AND (game.away_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string} OR game.home_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string}) \n"
+    where_user_sql_statement = f"(game.away_player_id {'NOT' if user_empty else ''} IN {user_id_string} OR game.home_player_id {'NOT' if user_empty else ''} IN {user_id_string}) \n"
+    where_vs_user_sql_statement = f"AND (game.away_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string} OR game.home_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string}) \n"
+
+    #Build GameTime strings
+    start_time_unix = 0
+    if (request.args.get('start_time') != None):
+        try:
+            start_time = request.args.get('start_time')
+            start_time_strs = start_time.split('-') #YYYY-MM-DD
+            print(start_time_strs)
+            dt = datetime.datetime(year=int(start_time_strs[0]), month=int(start_time_strs[1]), day=int(start_time_strs[2]))
+            start_time_unix = round(time.mktime(dt.timetuple()))
+        except:
+            return abort(408, 'Invalid start time format')
+    
+    end_time_unix = 0
+    if (request.args.get('end_time') != None):
+        try:
+            end_time = request.args.get('end_time')
+            end_time_strs = end_time.split('-') #YYYY-MM-DD
+            dt = datetime.datetime(year=int(end_time_strs[0]), month=int(end_time_strs[1]), day=int(end_time_strs[2]))
+            end_time_unix = round(time.mktime(dt.timetuple()))
+        except:
+            return abort(408, 'Invalid end time format')
+    
+    #Set start time to now if its 0
+    if (start_time_unix == 0):
+        start_time_unix = round(time.time())
+    where_start_time_sql_statement = f"AND game.date_time < {start_time_unix} \n" if start_time_unix != 0 else ''
+    where_end_time_sql_statement = f"AND game.date_time > {end_time_unix} \n" if end_time_unix != 0 else ''
     
     tag_cases = str()
     having_tags = str()
@@ -427,7 +458,7 @@ def endpoint_games():
             'AND home_captain_game_summary.captain = True \n'
         'LEFT JOIN character AS away_captain ON away_captain_game_summary.char_id = away_captain.char_id \n'
         'LEFT JOIN character AS home_captain ON home_captain_game_summary.char_id = home_captain.char_id \n'
-        f'{user_sql_statement} {vs_user_sql_statement} '
+        f'WHERE {where_user_sql_statement} {where_vs_user_sql_statement} {where_start_time_sql_statement} {where_end_time_sql_statement} '
         f'{group_by} \n'
         f'{having_tags} \n'
         f'ORDER BY game.date_time DESC \n'
@@ -590,8 +621,14 @@ def endpoint_detailed_stats():
     #Get pool of games to summarize stats from   
     
     list_of_game_ids = list() # Holds IDs for all the games we want data from
-    if (request.args.getlist('games') != None):
+    if (len(request.args.getlist('games')) != 0):
         list_of_game_ids = request.args.getlist('games')
+
+
+        list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
+        if (len(list_of_game_id_tuples) == 0):
+            return abort(408, description='Provided GameIDs no found')
+
     else:
         list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
         for game_dict in list_of_games['games']:
@@ -612,6 +649,16 @@ def endpoint_detailed_stats():
     list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
 
     tuple_user_ids = tuple(list_of_user_id)
+
+    #If we didn't find every user provided in the DB, abort
+    if (len(tuple_user_ids) != len(usernames)):
+        return abort(408, description='Provided Usernames no found')
+
+    #If a char was provided that is not 0-54 abort
+    invalid_chars=[i for i in tuple_char_ids if int(i) not in range(0,55)]
+    if len(invalid_chars) > 0:
+        return abort(408, description='Invalid provided characters')
+
     
     # Individual functions create queries to get their respective stats
     return_dict = {}
