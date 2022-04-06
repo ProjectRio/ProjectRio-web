@@ -324,13 +324,15 @@ def calculate_era(runs_allowed, outs_pitched):
 
 ## === Detailed stats ===
 '''
-@ Description: Returns games that fit the parameterseddddddddddddddddddddddddddwqqqqqqqqqhjnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+@ Description: Returns games that fit the parameters
 @ Params:
-    - tag
-    - exclude_tag (TODO)
-    - username
-    - vs_username
-    - recent
+    - tag - list of tags to filter by
+    - exclude_tag (TODO) - List of tags to exclude from search
+    - start date (TODO) - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
+    - end_date (TODO) - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
+    - username - list of users who appear in games to retreive
+    - vs_username - list of users who MUST also appear in the game along with users
+    - recent - Int of number of games
 
 @ Output:
     - List of games and highlevel info based on flags
