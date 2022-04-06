@@ -48,7 +48,7 @@ def user_stats():
 
     # if not user_to_query.private or user_to_query.username == logged_in_user:
     # Returns dict with most 10 recent games for the user and summary data
-    recent_games = games()
+    recent_games = endpoint_games()
 
     # Returns JSON with user stats for ranked normal, ranked superstar, unranked normal, unranked superstar, and sum total
     user_totals = get_user_profile_totals(user_to_query.id)
@@ -322,9 +322,21 @@ def calculate_era(runs_allowed, outs_pitched):
         return 0
 
 
+## === Detailed stats ===
+'''
+@ Description: Returns games that fit the parameterseddddddddddddddddddddddddddwqqqqqqqqqhjnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+@ Params:
+    - tag
+    - exclude_tag (TODO)
+    - username
+    - vs_username
+    - recent
 
-# URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
+@ Output:
+    - List of games and highlevel info based on flags
 
+@ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
+'''
 @app.route('/games/', methods = ['GET'])
 def endpoint_games():
     # === validate passed parameters ===
@@ -420,7 +432,7 @@ def endpoint_games():
         f"{('LIMIT ' + str(recent)) if recent != None else ''}" #Limit values if limit provided, otherwise return all
     )
 
-    print(query)
+    #print(query)
 
     results = db.session.execute(query).all()
     
@@ -487,7 +499,7 @@ def endpoint_games():
 def endpoint_batter_position():
 
         # === Construct query === 
-    list_of_games = games()   # List of dicts of games we want data from and info about those games
+    list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
     list_of_game_ids = list() # Holds IDs for all the games we want data from
 
     print(list_of_games)
@@ -549,16 +561,13 @@ def endpoint_batter_position():
         }
     '''
 
-
-# URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1&by_swing=1
-
-
 ## === Detailed stats ===
 '''
 @ Description: Returns batting, pitching, fielding, and star stats on configurable levels
 @ Params:
     - Username (list):  List of users to get stats for. All users if blank
     - Character (list): List of character ids to get stats for. All charas if blank
+    - Games (list):     List of game ids to use. If not provided arguments for /games/ endpoint will be expected and used
     - by_user (bool):   When true stats will be organized by user. When false, all users will be 
                         combined
     - by_char (bool):   When true stats will be organized by character. When false, 
@@ -570,21 +579,24 @@ def endpoint_batter_position():
 @ Output:
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
+
+@ URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1&by_swing=1
 '''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
 
-    #Get pool of games to summarize stats from    
-    list_of_games = games()   # List of dicts of games we want data from and info about those games
+    #Get pool of games to summarize stats from   
+    
     list_of_game_ids = list() # Holds IDs for all the games we want data from
-
-    for game_dict in list_of_games['games']:
-        list_of_game_ids.append(game_dict['Id'])
+    if (request.args.getlist('games') != None):
+        list_of_game_ids = request.args.getlist('games')
+    else:
+        list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
+        for game_dict in list_of_games['games']:
+            list_of_game_ids.append(game_dict['Id'])
 
     tuple_of_game_ids = tuple(list_of_game_ids)
-
     tuple_char_ids = tuple(request.args.getlist('character'))
-
     group_by_user = (request.args.get('by_user') == '1')
     group_by_swing = (request.args.get('by_swing') == '1')
     group_by_char = (request.args.get('by_char') == '1')
@@ -667,7 +679,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     results = db.session.execute(query).all()
 
     batting_stats = {}
-    for result_row in results:        
+    for result_row in results:
         update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char, group_by_swing)
 
     return batting_stats
@@ -730,12 +742,6 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
     for result_row in pitch_breakdown_results:
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
-    return
-
-    results = db.session.execute(query).all()
-    for result_row in results:
-        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
-
     return
 
 def query_detailed_star_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
