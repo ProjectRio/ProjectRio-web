@@ -354,6 +354,14 @@ def endpoint_games():
         if len(tag_ids) != len(tags):
             abort(400)
 
+        # Check if exclude_tags are valid and get a list of corresponding ids
+        exclude_tags = request.args.getlist('exclude_tag')
+        exclude_tags_lowercase = tuple([exclude_tag.lower() for exclude_tag in exclude_tags])
+        exclude_tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(exclude_tags_lowercase)).all()
+        exclude_tag_ids = tuple([exclude_tag.id for exclude_tag in exclude_tag_rows])
+        if len(exclude_tag_ids) != len(exclude_tags):
+            abort(400)
+
         #Get user ids from list of users
         usernames = request.args.getlist('username')
         usernames_lowercase = tuple([username.lower() for username in usernames])
@@ -420,8 +428,8 @@ def endpoint_games():
     group_by = str()
     if tags:
         join_tags = (
-            'LEFT JOIN game_tag ON game.game_id = game_tag.game_id \n'
-            'LEFT JOIN tag ON game_tag.tag_id = tag.id \n'
+            'JOIN game_tag ON game.game_id = game_tag.game_id \n'
+            'JOIN tag ON game_tag.tag_id = tag.id \n'
         )
         for index, tag_id in enumerate(tag_ids):
             tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {tag_id} THEN 1 END) AS tag_{index}, '
@@ -429,12 +437,33 @@ def endpoint_games():
 
         group_by = 'GROUP BY game_tag.game_id'
 
+    exclude_tag_cases = str()
+    having_exclude_tags = str()
+
+    if exclude_tags:
+        if join_tags == "":
+            join_tags = (
+            'JOIN game_tag ON game.game_id = game_tag.game_id \n'
+            'JOIN tag ON game_tag.tag_id = tag.id \n'
+            )
+
+        for index, exclude_tag_id in enumerate(exclude_tag_ids):
+            exclude_tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {exclude_tag_id} THEN 1 ELSE 0 END) AS exclude_tag_{index}, '
+
+            if having_tags == "":
+                having_exclude_tags += f'HAVING exclude_tag_{index} = 0' if index == 0 else f' AND exclude_tag_{index} = 0'
+            else:
+                having_exclude_tags += f' AND exclude_tag_{index} = 0'
+
+        if group_by == "":
+            group_by = 'GROUP BY game_tag.game_id'
 
     # === Construct query === 
     query = (
         'SELECT '
         'game.game_id AS game_id, \n'
         f'{tag_cases} \n'
+        f'{exclude_tag_cases} \n'
         'game.date_time AS date_time, \n'
         'game.away_score AS away_score, \n'
         'game.home_score AS home_score, \n'
@@ -446,21 +475,21 @@ def endpoint_games():
         'home_captain.name AS home_captain \n'   
         'FROM game '
         f'{join_tags} '
-        'LEFT JOIN user AS away_player ON game.away_player_id = away_player.id \n'
-        'LEFT JOIN user AS home_player ON game.home_player_id = home_player.id \n'
-        'LEFT JOIN character_game_summary AS away_captain_game_summary \n'
+        'JOIN user AS away_player ON game.away_player_id = away_player.id \n'
+        'JOIN user AS home_player ON game.home_player_id = home_player.id \n'
+        'JOIN character_game_summary AS away_captain_game_summary \n'
             'ON game.game_id = away_captain_game_summary.game_id \n'
             'AND away_captain_game_summary.user_id = away_player.id \n'
             'AND away_captain_game_summary.captain = True \n'
-        'LEFT JOIN character_game_summary AS home_captain_game_summary \n'
+        'JOIN character_game_summary AS home_captain_game_summary \n'
             'ON game.game_id = home_captain_game_summary.game_id \n'
             'AND home_captain_game_summary.user_id = home_player.id \n'
             'AND home_captain_game_summary.captain = True \n'
-        'LEFT JOIN character AS away_captain ON away_captain_game_summary.char_id = away_captain.char_id \n'
-        'LEFT JOIN character AS home_captain ON home_captain_game_summary.char_id = home_captain.char_id \n'
+        'JOIN character AS away_captain ON away_captain_game_summary.char_id = away_captain.char_id \n'
+        'JOIN character AS home_captain ON home_captain_game_summary.char_id = home_captain.char_id \n'
         f'WHERE {where_user_sql_statement} {where_vs_user_sql_statement} {where_start_time_sql_statement} {where_end_time_sql_statement} '
         f'{group_by} \n'
-        f'{having_tags} \n'
+        f'{having_tags} {having_exclude_tags} \n'
         f'ORDER BY game.date_time DESC \n'
         f"{('LIMIT ' + str(recent)) if recent != None else ''}" #Limit values if limit provided, otherwise return all
     )
