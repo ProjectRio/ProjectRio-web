@@ -28,6 +28,18 @@ def get_characters():
         }
 
 # API Request URL example: /profile/stats/?recent=10&username=demouser1
+'''
+    profile/stats returns an overview of a player that includes:
+        - recent games
+        - user totals for ranked normal, ranked superstar, unranked normal, unranked superstar, sum total
+        - top 6 pitchers by era
+        - top 6 batters by rbi
+        - top 3 captains by winrate
+
+    required attributes:
+    - recent: number of games to return
+    - username: first one is the primary user, successive ones are other users to consider
+'''
 @app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats():
@@ -324,8 +336,6 @@ def calculate_era(runs_allowed, outs_pitched):
     else:
         return 0
 
-
-## === Detailed stats ===
 '''
 @ Description: Returns games that fit the parameters
 @ Params:
@@ -341,7 +351,7 @@ def calculate_era(runs_allowed, outs_pitched):
     - List of games and highlevel info based on flags
 
 @ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
-'''
+
 @app.route('/games/', methods = ['GET'])
 def endpoint_games():
     # === validate passed parameters ===
@@ -379,6 +389,7 @@ def endpoint_games():
         # using list comprehension
         list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
         tuple_vs_user_ids = tuple(list_of_vs_user_id)
+
 
         recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
     except:
@@ -646,14 +657,10 @@ def endpoint_batter_position():
 '''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
-
     #Get pool of games to summarize stats from   
-    
     list_of_game_ids = list() # Holds IDs for all the games we want data from
     if (len(request.args.getlist('games')) != 0):
         list_of_game_ids = request.args.getlist('games')
-
-
         list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
         if (len(list_of_game_id_tuples) == 0):
             return abort(408, description='Provided GameIDs no found')
