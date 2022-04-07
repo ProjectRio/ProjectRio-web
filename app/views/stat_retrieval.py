@@ -330,7 +330,7 @@ def calculate_era(runs_allowed, outs_pitched):
 @ Description: Returns games that fit the parameters
 @ Params:
     - tag - list of tags to filter by
-    - exclude_tag (TODO) - List of tags to exclude from search
+    - exclude_tag - List of tags to exclude from search
     - start date - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
     - end_date - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
     - username - list of users who appear in games to retreive
@@ -642,29 +642,42 @@ def endpoint_batter_position():
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
 
-@ URL example: http://127.0.0.1:5000/user_character_stats/?username=demouser1&character=1&by_swing=1
+@ URL example: http://127.0.0.1:5000/detailed_stats/?username=demouser1&character=1&by_swing=1
 '''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
 
-    #Get pool of games to summarize stats from   
-    
-    list_of_game_ids = list() # Holds IDs for all the games we want data from
-    if (len(request.args.getlist('games')) != 0):
-        list_of_game_ids = request.args.getlist('games')
+    #Sanitize games params 
+    try:
+        list_of_game_ids = list() # Holds IDs for all the games we want data from
+        if (len(request.args.getlist('games')) != 0):
+            list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
+            list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
+            if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
+                return abort(408, description='Provided GameIDs not found')
 
+        else:
+            list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
+            for game_dict in list_of_games['games']:
+                list_of_game_ids.append(game_dict['Id'])
+    except:
+        abort(408, description='Invalid GameID')
 
-        list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
-        if (len(list_of_game_id_tuples) == 0):
-            return abort(408, description='Provided GameIDs no found')
+    # Sanitize character params
+    try:
+        list_of_char_ids = request.args.getlist('character')
+        for index, char_id in enumerate(list_of_char_ids):
+            sanitized_id = int(list_of_char_ids[index])
+            if sanitized_id in range (0,55):
+                list_of_char_ids[index] = sanitized_id
+            else:
+                return abort(400, description = "Char ID not in range")
+    except:
+        return abort(400, description="Invalid Char Id")
 
-    else:
-        list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
-        for game_dict in list_of_games['games']:
-            list_of_game_ids.append(game_dict['Id'])
 
     tuple_of_game_ids = tuple(list_of_game_ids)
-    tuple_char_ids = tuple(request.args.getlist('character'))
+    tuple_char_ids = tuple(list_of_char_ids)
     group_by_user = (request.args.get('by_user') == '1')
     group_by_swing = (request.args.get('by_swing') == '1')
     group_by_char = (request.args.get('by_char') == '1')
@@ -693,7 +706,7 @@ def endpoint_detailed_stats():
     return_dict = {}
     batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
     pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-    star_stats = query_detailed_star_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
+    misc_stats = query_detailed_misc_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
     fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
 
     pprint.pprint(return_dict)
@@ -822,7 +835,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
     return
 
-def query_detailed_star_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
     game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
     char_string, char_empty = format_tuple_for_SQL(char_ids, True)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
@@ -838,6 +851,10 @@ def query_detailed_star_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'user.username AS username, \n' 
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
+        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = user.id THEN 1 ELSE 0 END) AS away_wins, \n'
+        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = user.id THEN 1 ELSE 0 END) AS away_loses, \n'
+        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = user.id THEN 1 ELSE 0 END) AS home_wins, \n'
+        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = user.id THEN 1 ELSE 0 END) AS home_loses, \n'      
         'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
         'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
         'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
@@ -845,7 +862,8 @@ def query_detailed_star_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
         'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
         'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
-        'FROM character_game_summary \n'
+        'FROM game \n'
+        'JOIN character_game_summary ON character_game_summary.game_id = game.game_id \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN user ON user.id = character_game_summary.user_id \n'
         f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
@@ -856,7 +874,7 @@ def query_detailed_star_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
 
     results = db.session.execute(query).all()
     for result_row in results:
-        update_detailed_stats_dict(stat_dict, 'Star', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
 
     return
 
@@ -979,7 +997,7 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_b
                 else:
                     CHAR_DICT[type_of_result].update(data_dict)
             
-            elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Star'):
+            elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Misc'):
                 if type_of_result not in CHAR_DICT:
                     CHAR_DICT[type_of_result] = {}
                 CHAR_DICT[type_of_result].update(data_dict)
@@ -1032,7 +1050,7 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_b
             else:
                 CHAR_DICT[type_of_result].update(data_dict)
 
-        elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Star'):
+        elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Misc'):
             if type_of_result not in CHAR_DICT:
                 CHAR_DICT[type_of_result] = {}
             CHAR_DICT[type_of_result].update(data_dict)
