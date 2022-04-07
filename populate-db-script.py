@@ -20,6 +20,7 @@ print(
   f'            @@@@@@@@@@@@@@@@@\n'
 )
 print('               Batters up!')
+print('\n')
 
 
 # Create Character table

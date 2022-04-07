@@ -32,7 +32,7 @@ print('\n')
 
 if exists('./app/db.sqlite3'):
   response = input('You already have a db.sqlite3 instance...\nWould you like to delete it? (Y/N): ')
-  if response == 'Y' or 'y':
+  if response == 'Y' or response == 'y':
     #remove old database instance
     subprocess.run(['rm', './app/db.sqlite3'])
     print('db.sqlite3 instance deleted...')
