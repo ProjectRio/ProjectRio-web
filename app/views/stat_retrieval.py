@@ -29,6 +29,18 @@ def get_characters():
         }
 
 # API Request URL example: /profile/stats/?recent=10&username=demouser1
+'''
+    profile/stats returns an overview of a player that includes:
+        - recent games
+        - user totals for ranked normal, ranked superstar, unranked normal, unranked superstar, sum total
+        - top 6 pitchers by era
+        - top 6 batters by rbi
+        - top 3 captains by winrate
+
+    required attributes:
+    - recent: number of games to return
+    - username: first one is the primary user, successive ones are other users to consider
+'''
 @app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats():
@@ -425,8 +437,6 @@ def calculate_era(runs_allowed, outs_pitched):
     else:
         return 0
 
-
-## === Detailed stats ===
 '''
 @ Description: Returns games that fit the parameters
 @ Params:
@@ -442,7 +452,7 @@ def calculate_era(runs_allowed, outs_pitched):
     - List of games and highlevel info based on flags
 
 @ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
-'''
+
 @app.route('/games/', methods = ['GET'])
 def endpoint_games():
     # === validate passed parameters ===
@@ -480,6 +490,7 @@ def endpoint_games():
         # using list comprehension
         list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
         tuple_vs_user_ids = tuple(list_of_vs_user_id)
+
 
         recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
     except:
@@ -747,7 +758,6 @@ def endpoint_batter_position():
 '''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
-
     #Sanitize games params 
     try:
         list_of_game_ids = list() # Holds IDs for all the games we want data from
@@ -775,6 +785,7 @@ def endpoint_detailed_stats():
                 return abort(400, description = "Char ID not in range")
     except:
         return abort(400, description="Invalid Char Id")
+
 
 
     tuple_of_game_ids = tuple(list_of_game_ids)
@@ -829,7 +840,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char, by_swing]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-    query = (
+    contact_batting_query = (
         'SELECT \n'
         'user.id AS user_id, \n'
         'user.username AS username, \n'
@@ -851,13 +862,13 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
-        'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances \n'
+        'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
+        'SUM(event.result_rbi) AS rbi '
         #'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
         #'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total '
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        '   AND pitch_summary.type_of_swing != 4 \n'
         'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
        f"   {'AND contact_summary.primary_result != 1 AND contact_summary.primary_result != 3' if exclude_nonfair else ''} \n"
         'JOIN event ON character_game_summary.id = event.batter_id \n'
@@ -868,11 +879,34 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
        f"{group_by_statement}"
     )
 
-    results = db.session.execute(query).all()
+    #Redo groups, removing swing type
+    groups = ','.join(filter(None,[by_user, by_char]))
+    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    non_contact_batting_query = ( 
+        'SELECT \n'
+        'user.id AS user_id, \n'
+        'user.username AS username, \n'
+        'character_game_summary.char_id AS char_id, \n'
+        'character.name AS char_name, \n'
+        'SUM(character_game_summary.walks_bb) AS walks_bb, \n'
+        'SUM(character_game_summary.walks_hit) AS walks_hbp, \n'
+        'SUM(character_game_summary.strikeouts) AS strikeouts \n'
+        'FROM character_game_summary \n'
+        'JOIN character ON character_game_summary.char_id = character.char_id \n'
+        'JOIN user ON character_game_summary.user_id = user.id \n'
+       f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
+       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"{group_by_statement}"
+    )
+    contact_batting_results = db.session.execute(contact_batting_query).all()
+    non_contact_batting_results = db.session.execute(non_contact_batting_query).all()
 
     batting_stats = {}
-    for result_row in results:
+    for result_row in contact_batting_results:
         update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char, group_by_swing)
+    for result_row in non_contact_batting_results:
+        update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char)
 
     return batting_stats
 
