@@ -351,7 +351,7 @@ def calculate_era(runs_allowed, outs_pitched):
     - List of games and highlevel info based on flags
 
 @ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
-
+'''
 @app.route('/games/', methods = ['GET'])
 def endpoint_games():
     # === validate passed parameters ===
