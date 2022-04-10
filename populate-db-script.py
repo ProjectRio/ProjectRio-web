@@ -2,10 +2,29 @@ import os
 import subprocess
 import random
 import json
+print('\n')
+print(
+  f'             @@@@@@@@@@@@@@@@\n'        
+  f'        @@@@@@##  ##    ###@@@@@\n'
+  f'       @@@@# ##    ##      ####@@@@\n'  
+  f'    @@@@ ###        ##     ####@@@@@\n'
+  f'    @@@@########      ##    ####@@@@\n'
+  f'    @@    ##      ##        ##    @@\n'
+  f'    @@    ####      ##    ####    @@\n'
+  f'    @@    ######    ##  ######    @@\n'
+  f'    @@  ########@@@@@@@@########  @@\n'
+  f'    @@@@##@@    @@    @@    @@##@@\n' 
+  f'      @@@@@@    @@    @@    @@@@@@\n'
+  f'      @@@@@@    @@    @@    @@@@@@\n'
+  f'        @@@@@@            @@@@@@\n'
+  f'            @@@@@@@@@@@@@@@@@\n'
+)
+print('               Batters up!')
+print('\n')
 
 
 # Create Character table
-print('Creating Character Table:\n')
+print('Creating Character Table:')
 subprocess.run(["curl", "-i", 
     "--header", "Content-Type: application/json",
     "--request", "POST", 
@@ -13,14 +32,17 @@ subprocess.run(["curl", "-i",
     ])
 
 
+print('\n')
+
 # Create Default Tags
-print('Creating Tags:\n')
+print('Creating Tags:')
 subprocess.run(["curl", "-i", 
     "--header", "Content-Type: application/json",
     "--request", "POST", 
     "http://127.0.0.1:5000/create_tag_table/"
     ])
 
+print('\n')
 
 # create 6 demo users
 f = open("./json/sample-users.json")
@@ -42,7 +64,7 @@ for user in users["Users"]:
     stderr=subprocess.STDOUT
     )
   
-
+print('\n')
   
 print('Uploading Game data:')
 for file_path in os.listdir("./json/games/"):
