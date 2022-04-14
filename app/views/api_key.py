@@ -35,7 +35,9 @@ def send_verify_api_key_email(receiver_email, active_url):
     port = 465
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
-    password = 'PRWT1234!'
+
+    # password temporarily passed in api call until deployment
+    password = request.json['password']
 
     message = (
         'Subject: Verify your email to recieve your Project Rio API Key\n'
@@ -82,7 +84,9 @@ def send_api_key_email(receiver_email, api_key):
     port = 465
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
-    password = 'PRWT1234!'
+
+    # password temporarily passed in api call until deployment
+    password = request.json['password']
 
     message = (
         'Subject: Your email has been verifiec.\n'

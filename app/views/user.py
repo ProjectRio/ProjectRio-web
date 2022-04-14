@@ -42,7 +42,9 @@ def send_verify_account_email(receiver_username, receiver_email, active_url):
     port = 465
     smtp_server = 'smtp.gmail.com'
     sender_email = 'projectrio.webtest@gmail.com'
-    password = 'PRWT1234!'
+
+    # password temporarily passed in api call until deployment
+    password = request.json['password']
 
     message = (
         'Subject: Verify your Project Rio Account\n'
@@ -120,7 +122,9 @@ def send_password_reset_email(user):
     receiver_username = user.username
     active_url = user.active_url
      # Will be saved securely on server on roll out    
-    password = 'PRWT1234!'
+
+    # password temporarily passed in api call until deployment
+    password = request.json['password']
 
     message = (
         'Subject: Project Rio Password Reset\n'
