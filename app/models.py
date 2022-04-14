@@ -397,3 +397,18 @@ class Tag(db.Model):
     community_id = db.Column(db.Integer)
 
     game_tag = db.relationship('GameTag', backref='tag')
+
+class ApiKey(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(32), unique=True, nullable=False)
+    api_key = db.Column(db.String(32), unique=True)
+    date_created = db.Column(db.Integer)
+    pings_today = db.Column(db.Integer)
+    verified = db.Column(db.Boolean)
+    active_url = db.Column(db.String(32), unique=True)
+
+    def __init__(self, in_email, date_created):
+        self.email    = in_email
+        self.date_created = date_created
+        self.verified = False
+        self.active_url = secrets.token_urlsafe(32)

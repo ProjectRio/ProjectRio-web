@@ -29,6 +29,7 @@ def init_app():
         from .views import db_setup
         from .views import client_routes
         from .views import stat_retrieval
+        from .views import api_key
         
         #create sql tables for data models
         db.create_all()
