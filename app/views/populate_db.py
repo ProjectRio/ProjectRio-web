@@ -110,7 +110,7 @@ def populate_db2():
             # Defensive Stats
             batters_faced = defensive_stats['Batters Faced'],
             runs_allowed = defensive_stats['Runs Allowed'],
-            runs_allowed = defensive_stats['Earned Runs'],
+            earned_runs = defensive_stats['Earned Runs'],
             batters_walked = defensive_stats['Batters Walked'],
             batters_hit = defensive_stats['Batters Hit'],
             hits_allowed = defensive_stats['Hits Allowed'],
@@ -317,7 +317,7 @@ def populate_db2():
                     fielder_character_game_summary_id = teams['Home'][fielder_data['Fielder Roster Location']].id if event_data['Half Inning'] == 0 else teams['Away'][fielder_data['Fielder Roster Location']].id,
                     position = fielder_data['Fielder Position'],
                     action = fielder_data['Fielder Action'],
-                    bobble = fielder_data['Fielder Jump'],
+                    jump = fielder_data['Fielder Jump'],
                     bobble = fielder_data['Fielder Bobble'],
                     swap = False if fielder_data['Fielder Swap'] == 0 else True,
                     manual_select = fielder_data['Fielder Manual Selected'],

@@ -156,8 +156,8 @@ class Game(db.Model):
     away_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
     home_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
     date_time = db.Column(db.Integer)
-    ranked = db.Column(db.Bool)
-    netplay = db.Column(db.Bool)
+    ranked = db.Column(db.Boolean)
+    netplay = db.Column(db.Boolean)
     stadium_id = db.Column(db.Integer)
     away_score = db.Column(db.Integer)
     home_score = db.Column(db.Integer)
