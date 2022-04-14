@@ -29,7 +29,8 @@ def populate_db2():
         game_id = int(request.json['GameID'].replace(',', ''), 16),
         away_player_id = away_player.id,
         home_player_id = home_player.id,
-        date_time = request.json['Date'],
+        date_time_start = request.json['Date - Start'],
+        date_time_end = request.json['Date - End'],
         ranked = request.json['Ranked'],
         netplay = request.json['Netplay'],
         stadium_id = request.json['StadiumID'],
@@ -56,6 +57,7 @@ def populate_db2():
     characters = [character_game_stats['Team 0 Roster 0'], character_game_stats['Team 0 Roster 1'], character_game_stats['Team 0 Roster 2'], character_game_stats['Team 0 Roster 3'], character_game_stats['Team 0 Roster 4'], character_game_stats['Team 0 Roster 5'], character_game_stats['Team 0 Roster 6'], character_game_stats['Team 0 Roster 7'], character_game_stats['Team 0 Roster 8'], character_game_stats['Team 1 Roster 0'], character_game_stats['Team 1 Roster 1'], character_game_stats['Team 1 Roster 2'], character_game_stats['Team 1 Roster 3'], character_game_stats['Team 1 Roster 4'], character_game_stats['Team 1 Roster 5'], character_game_stats['Team 1 Roster 6'], character_game_stats['Team 1 Roster 7'], character_game_stats['Team 1 Roster 8']]    
     for character in characters:
         pitches_per_position = character['Defensive Stats']['Pitches Per Position'] if len(character['Defensive Stats']['Pitches Per Position']) == 1 else [{}]
+        batter_outs_per_position = character['Defensive Stats']['Batter Outs Per Position'] if len(character['Defensive Stats']['Batter Outs Per Position']) == 1 else [{}]
         outs_per_position = character['Defensive Stats']['Outs Per Position'] if len(character['Defensive Stats']['Outs Per Position']) == 1 else [{}]
 
         character_position_summary = CharacterPositionSummary(
@@ -68,6 +70,15 @@ def populate_db2():
             pitches_at_lf = 0 if 'LF' not in pitches_per_position[0] else pitches_per_position[0]['LF'],
             pitches_at_cf = 0 if 'CF' not in pitches_per_position[0] else pitches_per_position[0]['CF'],
             pitches_at_rf = 0 if 'RF' not in pitches_per_position[0] else pitches_per_position[0]['RF'],
+            batter_outs_at_p = 0 if 'P' not in batter_outs_per_position[0] else batter_outs_per_position[0]['P'],
+            batter_outs_at_c = 0 if 'C' not in batter_outs_per_position[0] else batter_outs_per_position[0]['C'],
+            batter_outs_at_1b = 0 if '1B' not in batter_outs_per_position[0] else batter_outs_per_position[0]['1B'],
+            batter_outs_at_2b = 0 if '2B' not in batter_outs_per_position[0] else batter_outs_per_position[0]['2B'],
+            batter_outs_at_3b = 0 if '3B' not in batter_outs_per_position[0] else batter_outs_per_position[0]['3B'],
+            batter_outs_at_ss = 0 if 'SS' not in batter_outs_per_position[0] else batter_outs_per_position[0]['SS'],
+            batter_outs_at_lf = 0 if 'LF' not in batter_outs_per_position[0] else batter_outs_per_position[0]['LF'],
+            batter_outs_at_cf = 0 if 'CF' not in batter_outs_per_position[0] else batter_outs_per_position[0]['CF'],
+            batter_outs_at_rf = 0 if 'RF' not in batter_outs_per_position[0] else batter_outs_per_position[0]['RF'],
             outs_at_p = 0 if 'P' not in outs_per_position[0] else outs_per_position[0]['P'],
             outs_at_c = 0 if 'C' not in outs_per_position[0] else outs_per_position[0]['C'],
             outs_at_1b = 0 if '1B' not in outs_per_position[0] else outs_per_position[0]['1B'],
