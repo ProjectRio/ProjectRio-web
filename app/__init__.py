@@ -4,6 +4,8 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_marshmallow import Marshmallow
 from flask_jwt_extended import JWTManager
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Globally accessible libraries
 db = SQLAlchemy()
@@ -21,6 +23,12 @@ def init_app():
     bc.init_app(app)
     ma.init_app(app)
     jwt.init_app(app)
+
+    #Set logger properties
+    #Rotating log file
+    handler = RotatingFileHandler('endpoint_log.log', maxBytes=10000, backupCount=2)
+    handler.setLevel(logging.INFO)
+    app.logger.addHandler(handler)
 
     with app.app_context():
         #import routes
