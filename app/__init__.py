@@ -26,7 +26,7 @@ def init_app():
 
     #Set logger properties
     #Rotating log file
-    handler = RotatingFileHandler('endpoint_log.log', maxBytes=10000, backupCount=2)
+    handler = RotatingFileHandler('endpoint_log.log', maxBytes=10000000, backupCount=2) #10 MB file size
     handler.setLevel(logging.INFO)
     app.logger.addHandler(handler)
 
