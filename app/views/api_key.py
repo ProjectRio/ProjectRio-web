@@ -79,7 +79,8 @@ def verify_api_key():
 
 
 
-app.route('/api_key/reset/', methods=['POST'])
+# TODO: Send email with API Key, not active_url
+@app.route('/api_key/reset/', methods=['POST'])
 def reset_api_key():
     email_lowercase = request.json['Email'].lower()
     if '@' in email_lowercase:  
@@ -87,15 +88,26 @@ def reset_api_key():
         if not api_key:
             return abort(408, description= "Invalid email address.")
 
-        api_key.active_url = secrets.token_urlsafe(32)
-        api_key.api_key = None
+        api_key.api_key = secrets.token_urlsafe(32)
         db.session.add(api_key)
         db.session.commit()
+
+        message = (
+            'Subject: Your API Key has been reset.\n'
+            'Your new Project Rio API Key is listed below.\n'
+            f'{api_key.api_key}'
+            '\n'
+            'Happy Hitting!\n'
+            'Project Rio Web Team'
+        )
+        
+        # password temporarily passed in api call until deployment
+        password = request.json['password']
       
         try:
-            print(api_key.active_url)
+            send_email(api_key.email, message, password)
         except:
-            print('error')
+            abort(502, 'Failed to send email')
 
     else:
         return abort(409, description= "Not a valid email address.")
