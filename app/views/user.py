@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, User
 from ..email import send_email
+import os
 
 # === User registration endpoints ===
 @app.route('/register/', methods=['POST'])
@@ -39,8 +40,7 @@ def register():
             'Project Rio Web Team'
         )
 
-        # password temporarily passed in api call until deployment
-        password = request.json['password']
+        password = os.getenv("EMAIL_PASSWORD")
 
         try:
             send_email(in_email, message, password)
@@ -102,8 +102,7 @@ def request_password_change():
         'Project Rio Web Team'
     )
     
-    # password temporarily passed in api call until deployment
-    password = request.json['password']
+    password = os.getenv("EMAIL_PASSWORD")
 
     try:
         send_email(user.email, message, password)

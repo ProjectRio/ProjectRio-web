@@ -31,8 +31,7 @@ def request_apikey():
         'Project Rio Web Team'
     )
 
-    # password temporarily passed in api call until deployment
-    password = request.json['password']
+    password = os.getenv("EMAIL_PASSWORD")
 
     try:
         send_email(in_email, message, password)
@@ -67,8 +66,7 @@ def verify_api_key():
         'Project Rio Web Team'
     )
 
-    # password temporarily passed in api call until deployment
-    password = request.json['password']
+    password = os.getenv("EMAIL_PASSWORD")
 
     try:
         send_email(api_key.email, message, password)
@@ -101,8 +99,7 @@ def reset_api_key():
             'Project Rio Web Team'
         )
         
-        # password temporarily passed in api call until deployment
-        password = request.json['password']
+        password = os.getenv("EMAIL_PASSWORD")
       
         try:
             send_email(api_key.email, message, password)
