@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, User, Character, Game, ChemistryTable, Tag, GameTag
+from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag
 from ..consts import *
 import pprint
 
@@ -50,7 +50,7 @@ def user_stats():
     # # Get User row
     username = request.args.get('username')
     in_username_lowercase = username.lower()
-    user_to_query = User.query.filter_by(username_lowercase=in_username_lowercase).first()
+    user_to_query = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 
     # If user doesn't exist, abort
     if not user_to_query:
@@ -95,10 +95,10 @@ def get_users_sorted_games(user_id):
         'SUM(CASE WHEN game_tag.tag_id = 2 THEN 1 END) AS unranked, '
         'SUM(CASE WHEN game_tag.tag_id = 3 THEN 1 END) AS superstar, '
         'SUM(CASE WHEN game_tag.tag_id = 4 THEN 1 END) AS normal '
-        'FROM user '
-        'JOIN game ON user.id = game.home_player_id OR user.id = game.away_player_id '
+        'FROM rio_user '
+        'JOIN game ON rio_user.id = game.home_player_id OR rio_user.id = game.away_player_id '
         'JOIN game_tag ON game.game_id = game_tag.game_id '
-        f'WHERE user.id = {user_id} '
+        f'WHERE rio_user.id = {user_id} '
         'GROUP BY game.game_id '
     )
     games = db.session.execute(query).all()
@@ -179,8 +179,7 @@ def get_top_captains(user_id, game_tuples):
     for captain in summed_captains_by_tags:
         if captain.wins + captain.losses >= 5:
             stats = {
-                    "name": captain.name,
-                    "wins": captain.wins,
+                    "name": captain.name,                    "wins": captain.wins,
                     "losses": captain.losses,
                     "homeruns": captain.homeruns,
                     "batting_average": captain.hits/captain.at_bats,
@@ -477,7 +476,7 @@ def endpoint_games():
         usernames = request.args.getlist('username')
         usernames_lowercase = tuple([username.lower() for username in usernames])
         #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-        list_of_user_id_tuples = db.session.query(User.id).filter(User.username_lowercase.in_(usernames_lowercase)).all()
+        list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
         # using list comprehension
         list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
         tuple_user_ids = tuple(list_of_user_id)
@@ -486,7 +485,7 @@ def endpoint_games():
         vs_usernames = request.args.getlist('vs_username')
         vs_usernames_lowercase = tuple([username.lower() for username in vs_usernames])
         #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-        list_of_vs_user_id_tuples = db.session.query(User.id).filter(User.username_lowercase.in_(vs_usernames_lowercase)).all()
+        list_of_vs_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(vs_usernames_lowercase)).all()
         # using list comprehension
         list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
         tuple_vs_user_ids = tuple(list_of_vs_user_id)
@@ -587,8 +586,8 @@ def endpoint_games():
         'home_captain.name AS home_captain \n'   
         'FROM game '
         f'{join_tags} '
-        'JOIN user AS away_player ON game.away_player_id = away_player.id \n'
-        'JOIN user AS home_player ON game.home_player_id = home_player.id \n'
+        'JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
+        'JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
         'JOIN character_game_summary AS away_captain_game_summary \n'
             'ON game.game_id = away_captain_game_summary.game_id \n'
             'AND away_captain_game_summary.user_id = away_player.id \n'
@@ -798,7 +797,7 @@ def endpoint_detailed_stats():
     usernames = request.args.getlist('username')
     usernames_lowercase = tuple([username.lower() for username in usernames])
     #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-    list_of_user_id_tuples = db.session.query(User.id).filter(User.username_lowercase.in_(usernames_lowercase)).all()
+    list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
     # using list comprehension
     list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
 
@@ -842,8 +841,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     contact_batting_query = (
         'SELECT \n'
-        'user.id AS user_id, \n'
-        'user.username AS username, \n'
+        'rio_user.id AS user_id, \n'
+        'rio_user.username AS username, \n'
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
         'pitch_summary.type_of_swing AS type_of_swing, \n'
@@ -872,7 +871,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
        f"   {'AND contact_summary.primary_result != 1 AND contact_summary.primary_result != 3' if exclude_nonfair else ''} \n"
         'JOIN event ON character_game_summary.id = event.batter_id \n'
-        'JOIN user ON character_game_summary.user_id = user.id \n'
+        'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
        f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
@@ -884,8 +883,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     non_contact_batting_query = ( 
         'SELECT \n'
-        'user.id AS user_id, \n'
-        'user.username AS username, \n'
+        'rio_user.id AS user_id, \n'
+        'rio_user.username AS username, \n'
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
         'SUM(character_game_summary.walks_bb) AS walks_bb, \n'
@@ -893,7 +892,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'SUM(character_game_summary.strikeouts) AS strikeouts \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN user ON character_game_summary.user_id = user.id \n'
+        'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
        f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
@@ -924,7 +923,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     pitching_summary_query = (
         'SELECT '
-        'user.username AS username, \n' 
+        'rio_user.username AS username, \n' 
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
         'SUM(character_game_summary.batters_faced) AS batters_faced, \n'
@@ -936,7 +935,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'SUM(character_game_summary.pitches_thrown) AS total_pitches \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN user ON user.id = character_game_summary.user_id \n'
+        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
         f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
@@ -945,7 +944,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
 
     pitch_breakdown_query = (
         'SELECT '
-        'user.username AS username, \n' 
+        'rio_user.username AS username, \n' 
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
         'COUNT(CASE WHEN pitch_summary.pitch_result < 2 THEN 1 ELSE NULL END) AS walks, \n'
@@ -955,7 +954,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN event ON character_game_summary.id = event.pitcher_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'JOIN user ON user.id = character_game_summary.user_id \n'
+        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
         f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
@@ -983,13 +982,13 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     query = (
         'SELECT '
-        'user.username AS username, \n' 
+        'rio_user.username AS username, \n' 
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
-        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = user.id THEN 1 ELSE 0 END) AS away_wins, \n'
-        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = user.id THEN 1 ELSE 0 END) AS away_loses, \n'
-        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = user.id THEN 1 ELSE 0 END) AS home_wins, \n'
-        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = user.id THEN 1 ELSE 0 END) AS home_loses, \n'      
+        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
+        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
+        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
+        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses, \n'      
         'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
         'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
         'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
@@ -1000,7 +999,7 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'FROM game \n'
         'JOIN character_game_summary ON character_game_summary.game_id = game.game_id \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN user ON user.id = character_game_summary.user_id \n'
+        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
         f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
@@ -1027,7 +1026,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     position_query = (
         'SELECT '
-        'user.username AS username, \n' 
+        'rio_user.username AS username, \n' 
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
         'SUM(pitches_at_p) AS pitches_per_p, \n'
@@ -1052,7 +1051,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN character_position_summary ON character_position_summary.id = character_game_summary.character_position_summary_id \n'
-        'JOIN user ON user.id = character_game_summary.user_id \n'
+        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
        f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
@@ -1061,7 +1060,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
 
     fielding_query = (
         'SELECT '
-        'user.username AS username, \n' 
+        'rio_name AS username, \n' 
         'character_game_summary.char_id AS char_id, \n'
         'character.name AS char_name, \n'
         'COUNT(CASE WHEN fielding_summary.action = 1 THEN 1 ELSE NULL END) AS jump_catches, \n'
@@ -1073,7 +1072,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN fielding_summary ON fielding_summary.fielder_character_game_summary_id = character_game_summary.id \n'
-        'JOIN user ON user.id = character_game_summary.user_id \n'
+        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
        f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
        f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
        f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"

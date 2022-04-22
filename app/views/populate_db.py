@@ -1,6 +1,6 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
-from ..models import db, User, Character, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, Tag, GameTag
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, Tag, GameTag
 import json
 from ..consts import *
 
@@ -12,8 +12,8 @@ def populate_db2():
     is_superstar_game = False
     
     # Get players from db User table
-    home_player = User.query.filter_by(username=request.json['Home Player']).first()
-    away_player = User.query.filter_by(username=request.json['Away Player']).first()
+    home_player = RioUser.query.filter_by(username=request.json['Home Player']).first()
+    away_player = RioUser.query.filter_by(username=request.json['Away Player']).first()
 
     # Check if players exist
     if home_player is None or away_player is None:

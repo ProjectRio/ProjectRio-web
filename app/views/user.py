@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, set_access_cookies, jwt_requ
 import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
-from ..models import db, User
+from ..models import db, RioUser
 from ..email import send_email
 import os
 
@@ -16,8 +16,8 @@ def register():
     in_password = request.json['Password']
     in_email    = request.json['Email'].lower()
 
-    user = User.query.filter_by(username_lowercase=username_lowercase).first()
-    user_by_email = User.query.filter_by(email=in_email).first()
+    user = RioUser.query.filter_by(username_lowercase=username_lowercase).first()
+    user_by_email = RioUser.query.filter_by(email=in_email).first()
 
     if user or user_by_email:
         return abort(409, description='Username or Email has already been taken')
@@ -25,7 +25,7 @@ def register():
         return abort(406, description='Provided username is not alphanumeric')
     else:
         # === Create User row ===
-        new_user = User(in_username, username_lowercase, in_email, in_password)
+        new_user = RioUser(in_username, username_lowercase, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
 
@@ -55,7 +55,7 @@ def register():
 def verify_email():
     try:
         active_url = request.json['active_url']
-        user = User.query.filter_by(active_url=active_url).first()
+        user = RioUser.query.filter_by(active_url=active_url).first()
         user.verified = True
         user.active_url = None
 
@@ -73,10 +73,10 @@ def verify_email():
 def request_password_change():
     if '@' in request.json['username or email']:
         email_lowercase = request.json['username or email'].lower()
-        user = User.query.filter_by(email=email_lowercase).first()
+        user = RioUser.query.filter_by(email=email_lowercase).first()
     else:
         username_lower = request.json['username or email'].lower()
-        user = User.query.filter_by(username_lowercase=username_lower).first()
+        user = RioUser.query.filter_by(username_lowercase=username_lower).first()
 
     if not user:
         abort(408, 'Corresponding user does not exist')
@@ -119,7 +119,7 @@ def change_password():
     active_url = request.json['active_url']
     password = request.json['password']
 
-    user = User.query.filter_by(active_url=active_url).first()
+    user = RioUser.query.filter_by(active_url=active_url).first()
 
     if not user:
         return abort(422, 'Invalid Key')
@@ -146,10 +146,10 @@ def login():
     in_email    = request.json['Email'].lower()
 
     # filter User out of database through username
-    user = User.query.filter_by(username_lowercase=in_username).first()
+    user = RioUser.query.filter_by(username_lowercase=in_username).first()
 
     # filter User out of database through email
-    user_by_email = User.query.filter_by(email=in_email).first()
+    user_by_email = RioUser.query.filter_by(email=in_email).first()
 
     if user == user_by_email:
         if bc.check_password_hash(user.password, in_password):            
@@ -205,7 +205,7 @@ def refresh_expiring_jwts(response):
 @jwt_required()
 def update_rio_key():
     current_user_username = get_jwt_identity()
-    current_user = User.query.filter_by(username=current_user_username).first()
+    current_user = RioUser.query.filter_by(username=current_user_username).first()
 
     if request.method == 'GET':
         return jsonify({
@@ -223,7 +223,7 @@ def update_rio_key():
 @jwt_required()
 def set_privacy():
     current_user_username = get_jwt_identity()
-    current_user = User.query.filter_by(username=current_user_username).first()
+    current_user = RioUser.query.filter_by(username=current_user_username).first()
 
     if request.method == 'GET':
         return jsonify({

@@ -126,7 +126,7 @@ class ChemistryTable(db.Model):
 
     character = db.relationship('Character', backref = 'character')
 
-class User(db.Model, UserMixin):
+class RioUser(db.Model, UserMixin):
     id       = db.Column(db.Integer,     primary_key=True)
     username = db.Column(db.String(64),  unique = True)
     username_lowercase = db.Column(db.String(64), unique = True)
@@ -135,9 +135,9 @@ class User(db.Model, UserMixin):
     rio_key  = db.Column(db.String(50), unique = True)
     private = db.Column(db.Boolean)
     verified = db.Column(db.Boolean)
-    active_url = db.Column(db.String(32), unique = True)
+    active_url = db.Column(db.String(50), unique = True)
 
-    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'user', lazy = 'dynamic')
+    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'rio_user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
 
@@ -153,8 +153,8 @@ class User(db.Model, UserMixin):
 
 class Game(db.Model):
     game_id = db.Column(db.Integer, primary_key = True)
-    away_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
-    home_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
+    away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
+    home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
     date_time = db.Column(db.Integer)
     ranked = db.Column(db.Boolean)
     netplay = db.Column(db.Boolean)
@@ -186,7 +186,7 @@ class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
     char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)
     character_position_summary_id = db.Column(db.Integer, db.ForeignKey('character_position_summary.id'), nullable=False)
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8

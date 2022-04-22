@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, User, Tag, GameTag
+from ..models import db, RioUser, Tag, GameTag
 
 # Evaluate users provided to Client
 # example: /validateuserfromclient/?username=demouser1&rio_key=fI8WbLJ3Ti2gkcEuMh1DvcMGl4LQvYFRJvlpgwcCnpw
@@ -10,7 +10,7 @@ def validate_user_from_client():
     in_username_lower = in_username.lower()
     in_rio_key = request.args.get('rio_key')
 
-    user = User.query.filter_by(username_lowercase = in_username_lower, rio_key = in_rio_key).first()
+    user = RioUser.query.filter_by(username_lowercase = in_username_lower, rio_key = in_rio_key).first()
 
     if user is None:
         abort(404, 'Invalid UserID or RioKey')
