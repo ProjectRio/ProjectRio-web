@@ -2,7 +2,6 @@ from decouple import config
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-from flask_marshmallow import Marshmallow
 from flask_jwt_extended import JWTManager
 import logging
 from logging.handlers import RotatingFileHandler
@@ -10,7 +9,6 @@ from logging.handlers import RotatingFileHandler
 # Globally accessible libraries
 db = SQLAlchemy()
 bc = Bcrypt()
-ma = Marshmallow()
 jwt = JWTManager()
 
 def init_app():
@@ -21,7 +19,6 @@ def init_app():
     # Initialize Plugins
     db.init_app(app)
     bc.init_app(app)
-    ma.init_app(app)
     jwt.init_app(app)
 
     #Set logger properties
