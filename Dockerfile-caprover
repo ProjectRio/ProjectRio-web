@@ -1,0 +1,42 @@
+# STEP 1: Install base image. Optimized for Python.
+FROM python:3.8.3-slim-buster
+
+# STEP 2: Copy the source code in the current directory to the container.  Store it in a folder named /app.
+ADD . /app
+
+# STEP 3: Set working directory to /app so we can execute commands in it
+WORKDIR /app
+
+# STEP 4: Install necessary requirements (Flask, etc)
+RUN apt-get update && \
+    apt-get install -y libpq-dev python3-dev gcc
+RUN pip3 install -r requirements.txt 
+
+# STEP 5: Declare environment variables
+ENV FLASK_APP=wsgi.py
+ENV FLASK_ENV=development
+
+ENV POSTGRES_URL=$POSTGRES_URL
+ENV POSTGRES_USER=$POSTGRES_USER
+ENV POSTGRES_PW=$POSTGRES_PW
+ENV POSTGRES_DB=$POSTGRES_DB
+ENV EMAIL_PASSWORD=$EMAIL_PASSWORD
+
+ENV SQLALCHEMY_DATABASE_URI=DB_URL
+ENV SQLALCHEMY_TRACK_MODIFICATIONS=False
+ENV DEBUG=True
+
+ENV SECRET_KEY=$SECRET_KEY
+
+ENV JWT_SECRET_KEY = $JWT_SECRET_KEY
+ENV JWT_TOKEN_LOCATION = $JWT_TOKEN_LOCATION
+ENV JWT_COOKIE_SECURE = True
+ENV JWT_COOKIE_CSRF_PROTECT = True
+ENV JWT_ACCESS_TOKEN_EXPIRES = timedelta(weeks=2)
+
+
+# STEP 6: Expose the port that Flask is running on
+EXPOSE 5000 
+
+# STEP 7: Run Flask!
+CMD ["flask", "run", "--host=0.0.0.0"]
