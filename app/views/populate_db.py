@@ -125,6 +125,7 @@ def populate_db2():
             outs_pitched = defensive_stats['Outs Pitched'],
             # Offensive Stats
             at_bats = offensive_stats['At Bats'],
+            plate_appearances = 0,
             hits = offensive_stats['Hits'],
             singles = offensive_stats['Singles'],
             doubles = offensive_stats['Doubles'],
@@ -252,6 +253,9 @@ def populate_db2():
 
                     if key == 'Runner Batter':
                         event.runner_on_0 = runner.id
+                        # Increment batter plate appearances on new appearance
+                        batter_character_game_summary = teams['Away'][event_data[key]['Runner Roster Loc']] if event_data['Half Inning'] == 0 else teams['Home'][event_data[key]['Runner Roster Loc']]
+                        batter_character_game_summary.plate_appearances += 1
                     elif key == 'Runner 1B':
                         event.runner_on_1 = runner.id
                     elif key == 'Runner 2B':

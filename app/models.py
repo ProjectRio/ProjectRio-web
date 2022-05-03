@@ -152,7 +152,7 @@ class RioUser(db.Model, UserMixin):
         self.active_url = secrets.token_urlsafe(32)
 
 class Game(db.Model):
-    game_id = db.Column(db.Integer, primary_key = True)
+    game_id = db.Column(db.BigInteger, primary_key = True)
     away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
     home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
     date_time_start = db.Column(db.Integer)
@@ -186,7 +186,7 @@ class Game(db.Model):
 
 class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)
     character_position_summary_id = db.Column(db.Integer, db.ForeignKey('character_position_summary.id'), nullable=False)
@@ -213,6 +213,7 @@ class CharacterGameSummary(db.Model):
     outs_pitched = db.Column(db.Integer)
     #Offensive Stats
     at_bats = db.Column(db.Integer)
+    plate_appearances = db.Column(db.Integer)
     hits = db.Column(db.Integer)
     singles = db.Column(db.Integer)
     doubles = db.Column(db.Integer)
@@ -288,7 +289,7 @@ class CharacterPositionSummary(db.Model):
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False) #Based on "Pitcher Roster Loc" in JSON
     batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     catcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
@@ -387,7 +388,7 @@ class Runner(db.Model):
 
 class GameTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.ForeignKey('game.game_id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     tag_id = db.Column(db.ForeignKey('tag.id'), nullable=False)
 
 class Tag(db.Model):
