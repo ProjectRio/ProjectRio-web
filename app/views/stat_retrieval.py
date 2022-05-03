@@ -502,8 +502,15 @@ def endpoint_games():
     user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
     vs_user_id_string, vs_user_empty = format_tuple_for_SQL(tuple_vs_user_ids)
 
-    where_user_sql_statement = f"(game.away_player_id {'NOT' if user_empty else ''} IN {user_id_string} OR game.home_player_id {'NOT' if user_empty else ''} IN {user_id_string}) \n"
-    where_vs_user_sql_statement = f"AND (game.away_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string} OR game.home_player_id {'NOT' if vs_user_empty else ''} IN {vs_user_id_string}) \n"
+    where_statement = 'WHERE '
+    if (not user_empty):
+        where_statement_empty = False
+        where_statement += f"(game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
+    if (not user_empty):
+        if (not where_statement_empty): 
+            where_statement += "AND "
+        where_statement_empty = False
+        where_statement += f"(game.away_player_id IN {vs_user_id_string} OR game.home_player_id IN {vs_user_id_string}) \n"
 
     #Build GameTime strings
     start_time_unix = 0
@@ -526,12 +533,21 @@ def endpoint_games():
             end_time_unix = round(time.mktime(dt.timetuple()))
         except:
             return abort(408, 'Invalid end time format')
-    
+
     #Set start time to now if its 0
     if (start_time_unix == 0):
         start_time_unix = round(time.time())
-    where_start_time_sql_statement = f"AND game.date_time < {start_time_unix} \n" if start_time_unix != 0 else ''
-    where_end_time_sql_statement = f"AND game.date_time > {end_time_unix} \n" if end_time_unix != 0 else ''
+    
+    if (start_time_unix != 0):
+        if (not where_statement_empty): 
+            where_statement += "AND "
+        where_statement_empty = False
+        where_statement += f"game.date_time < {start_time_unix} \n"
+    if (end_time_unix != 0):
+        if (not where_statement_empty): 
+            where_statement += "AND "
+        where_statement_empty = False
+        where_statement += f"game.date_time > {end_time_unix} \n"
     
     tag_cases = str()
     having_tags = str()
@@ -598,7 +614,7 @@ def endpoint_games():
             'AND home_captain_game_summary.captain = True \n'
         'JOIN character AS away_captain ON away_captain_game_summary.char_id = away_captain.char_id \n'
         'JOIN character AS home_captain ON home_captain_game_summary.char_id = home_captain.char_id \n'
-        f'WHERE {where_user_sql_statement} {where_vs_user_sql_statement} {where_start_time_sql_statement} {where_end_time_sql_statement} '
+        f'{where_statement} \n'
         f'{group_by} \n'
         f'{having_tags} {having_exclude_tags} \n'
         f'ORDER BY game.date_time DESC \n'
@@ -845,14 +861,14 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
             other_conditions = True
             where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.char_id IN {char_string} \n"
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
@@ -942,14 +958,14 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
             other_conditions = True
             where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.char_id IN {char_string} \n"
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
@@ -1016,14 +1032,14 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
             other_conditions = True
             where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.char_id IN {char_string} \n"
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
@@ -1077,14 +1093,14 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
             other_conditions = True
             where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
         if (not user_empty):
-            other_conditions = True
             if (other_conditions):
                 where_statement += 'AND '
+            other_conditions = True
             where_statement += f"character_game_summary.char_id IN {char_string} \n"
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
