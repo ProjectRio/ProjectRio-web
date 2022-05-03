@@ -42,6 +42,7 @@ def populate_db2():
         valid = is_valid,
         average_ping = request.json['Average Ping'],
         lag_spikes = request.json['Lag Spikes'],
+        version = request.json['Version'],
     )
 
     db.session.add(game)
