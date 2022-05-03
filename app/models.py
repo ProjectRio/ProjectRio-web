@@ -168,6 +168,7 @@ class Game(db.Model):
     valid = db.Column(db.Boolean)
     average_ping = db.Column(db.Integer)
     lag_spikes = db.Column(db.Integer)
+    version = db.Column(db.String(50))
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
     game_tag = db.relationship('GameTag', backref='game')
