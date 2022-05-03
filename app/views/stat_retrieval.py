@@ -836,6 +836,25 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     by_char = 'character_game_summary.char_id' if group_by_char else ''
     by_swing = 'pitch_summary.type_of_swing' if group_by_swing else ''
 
+    #If at least one group is populated produce the WHERE statement
+    where_statement = ''
+    if not (game_empty and user_empty and char_empty):
+        where_statement = 'WHERE '
+        other_conditions = False
+        if (not game_empty):
+            other_conditions = True
+            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.char_id IN {char_string} \n"
+
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char, by_swing]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
@@ -872,9 +891,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
        f"   {'AND contact_summary.primary_result != 1 AND contact_summary.primary_result != 3' if exclude_nonfair else ''} \n"
         'JOIN event ON character_game_summary.id = event.batter_id \n'
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
-       f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
-       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
-       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"{where_statement}"
        f"{group_by_statement}"
     )
 
@@ -893,9 +910,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
-       f"   WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
-       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
-       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"{where_statement}"
        f"{group_by_statement}"
     )
     contact_batting_results = db.session.execute(contact_batting_query).all()
@@ -918,6 +933,25 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     by_user = 'character_game_summary.user_id' if group_by_user else ''
     by_char = 'character_game_summary.char_id' if group_by_char else ''
 
+    #If at least one group is populated produce the WHERE statement
+    where_statement = ''
+    if not (game_empty and user_empty and char_empty):
+        where_statement = 'WHERE '
+        other_conditions = False
+        if (not game_empty):
+            other_conditions = True
+            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.char_id IN {char_string} \n"
+
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
@@ -936,9 +970,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-        f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
-       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
-       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"{where_statement}"
        f"{group_by_statement}"
     )
 
@@ -955,9 +987,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'JOIN event ON character_game_summary.id = event.pitcher_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-        f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
-       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
-       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"{where_statement}"
        f"{group_by_statement}"
     )
 
@@ -976,6 +1006,25 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
 
     by_user = 'character_game_summary.user_id' if group_by_user else ''
     by_char = 'character_game_summary.char_id' if group_by_char else ''
+
+    #If at least one group is populated produce the WHERE statement
+    where_statement = ''
+    if not (game_empty and user_empty and char_empty):
+        where_statement = 'WHERE '
+        other_conditions = False
+        if (not game_empty):
+            other_conditions = True
+            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.char_id IN {char_string} \n"
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char]))
@@ -1000,9 +1049,7 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'JOIN character_game_summary ON character_game_summary.game_id = game.game_id \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-        f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
-       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
-       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
+       f"{where_statement}"
        f"{group_by_statement}"
     )
 
@@ -1020,6 +1067,25 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
 
     by_user = 'character_game_summary.user_id' if group_by_user else ''
     by_char = 'character_game_summary.char_id' if group_by_char else ''
+
+    #If at least one group is populated produce the WHERE statement
+    where_statement = ''
+    if not (game_empty and user_empty and char_empty):
+        where_statement = 'WHERE '
+        other_conditions = False
+        if (not game_empty):
+            other_conditions = True
+            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
+        if (not user_empty):
+            other_conditions = True
+            if (other_conditions):
+                where_statement += 'AND '
+            where_statement += f"character_game_summary.char_id IN {char_string} \n"
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char]))
@@ -1052,9 +1118,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN character_position_summary ON character_position_summary.id = character_game_summary.character_position_summary_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
-       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
-       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"{where_statement}"
        f"{group_by_statement}"
     )
 
@@ -1073,9 +1137,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN fielding_summary ON fielding_summary.fielder_character_game_summary_id = character_game_summary.id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"WHERE character_game_summary.game_id {'NOT' if game_empty else ''} IN {game_id_string} \n"
-       f"   AND character_game_summary.user_id {'NOT' if user_empty else ''} IN {user_id_string} \n"
-       f"   AND character_game_summary.char_id {'NOT' if char_empty else ''} IN {char_string} \n"
+       f"{where_statement}"
        f"{group_by_statement}"
     )
 
