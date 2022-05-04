@@ -4,11 +4,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag
 from ..consts import *
 import pprint
-
 import time
 import datetime
-
-import pprint
 import itertools
 
 # == Helper functions for SQL query formatting
@@ -506,7 +503,7 @@ def endpoint_games():
     if (not user_empty):
         where_statement_empty = False
         where_statement += f"(game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
-    if (not user_empty):
+    if (not vs_user_empty):
         if (not where_statement_empty): 
             where_statement += "AND "
         where_statement_empty = False
@@ -542,12 +539,12 @@ def endpoint_games():
         if (not where_statement_empty): 
             where_statement += "AND "
         where_statement_empty = False
-        where_statement += f"game.date_time < {start_time_unix} \n"
+        where_statement += f"game.date_time_start < {start_time_unix} \n"
     if (end_time_unix != 0):
         if (not where_statement_empty): 
             where_statement += "AND "
         where_statement_empty = False
-        where_statement += f"game.date_time > {end_time_unix} \n"
+        where_statement += f"game.date_time_end > {end_time_unix} \n"
     
     tag_cases = str()
     having_tags = str()
@@ -591,7 +588,8 @@ def endpoint_games():
         'game.game_id AS game_id, \n'
         f'{tag_cases} \n'
         f'{exclude_tag_cases} \n'
-        'game.date_time AS date_time, \n'
+        'game.date_time_start AS date_time_start, \n'
+        'game.date_time_end AS date_time_end, \n'
         'game.away_score AS away_score, \n'
         'game.home_score AS home_score, \n'
         'game.innings_played AS innings_played, \n'
@@ -617,7 +615,7 @@ def endpoint_games():
         f'{where_statement} \n'
         f'{group_by} \n'
         f'{having_tags} {having_exclude_tags} \n'
-        f'ORDER BY game.date_time DESC \n'
+        f'ORDER BY game.date_time_start DESC \n'
         f"{('LIMIT ' + str(recent)) if recent != None else ''}" #Limit values if limit provided, otherwise return all
     )
 
@@ -632,7 +630,8 @@ def endpoint_games():
 
         games.append({
             'Id': game.game_id,
-            'Datetime': game.date_time,
+            'date_time_start': game.date_time_start,
+            'date_time_end': game.date_time_end,
             'Away User': game.away_player,
             'Away Captain': game.away_captain,
             'Away Score': game.away_score,
@@ -662,7 +661,7 @@ def endpoint_games():
             'FROM game_tag '
             'LEFT JOIN tag ON game_tag.tag_id = tag.id '
             f'{where_game_id}'
-            'GROUP BY game_id, tag_id'
+            'GROUP BY game_id, tag_id, name'
         )
 
         tag_results = db.session.execute(tags_query).all()
@@ -902,10 +901,10 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         #'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total '
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
+        'JOIN event ON character_game_summary.id = event.batter_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
         'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
        f"   {'AND contact_summary.primary_result != 1 AND contact_summary.primary_result != 3' if exclude_nonfair else ''} \n"
-        'JOIN event ON character_game_summary.id = event.batter_id \n'
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
        f"{where_statement}"
        f"{group_by_statement}"
