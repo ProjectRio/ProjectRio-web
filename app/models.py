@@ -57,7 +57,7 @@ class Character(db.Model):
             'throwing_arm': self.throwing_arm,
             'character_class': self.character_class,
             'weight': self.weight,
-            'captain': 'True' if self.captain == '1' else 'False',
+            'captain': 'True' if self.captain == 1 else 'False',
             'captain_star_hit_or_pitch': self.captain_star_hit_or_pitch,
             'non_captain_star_swing': self.non_captain_star_swing,
             'non_captain_star_pitch': self.non_captain_star_pitch,
