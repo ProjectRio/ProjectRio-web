@@ -1,4 +1,3 @@
-from decouple import config
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
@@ -36,8 +35,17 @@ def init_app():
         from .views import stat_retrieval
         from .views import api_key
         from .views import log
+        from .models import Character, Tag
         
         #create sql tables for data models
         db.create_all()
+
+        #Populate character, chemistry, and tag tables
+        if (Character.query.all() == None):
+            print("Loading character tables")
+            db_setup.create_character_tables()
+        if (Tag.query.filter(Tag.name.in_(["Ranked", "Unranked", "Superstar", "Normal"])).all() == None):
+            print("Loading standard tags")
+            db_setup.create_default_tags()
 
         return app
