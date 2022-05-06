@@ -133,10 +133,24 @@ def create_default_tags():
         desc = "Tag for Normal games"
     )
 
+    netplay = Tag(
+        name = "Netplay",
+        name_lowercase = "netplay",
+        desc = "Tag for Netplay games"
+    )
+
+    local = Tag(
+        name = "Local",
+        name_lowercase = "local",
+        desc = "Tag for Local games"
+    )
+
     db.session.add(ranked)
     db.session.add(unranked)
     db.session.add(superstar)
     db.session.add(normal)
+    db.session.add(netplay)
+    db.session.add(local)
     db.session.commit()
 
     return 'Tags created... \n'

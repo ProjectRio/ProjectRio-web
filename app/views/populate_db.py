@@ -10,14 +10,16 @@ def populate_db2():
 
     # Boolean used to assign a GameTag after creating CharacterGameSummary rows
     is_superstar_game = False
-    
-    # Get players from db User table
-    home_player = RioUser.query.filter_by(username=request.json['Home Player']).first()
-    away_player = RioUser.query.filter_by(username=request.json['Away Player']).first()
 
-    # Check if players exist
-    if home_player is None or away_player is None:
-        abort(400, 'Invalid Username')
+    # Check if rio_keys exist in the db and get associated players
+    home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
+    away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
+
+    # If provided rio_keys did not exist, use the corresponding generic user
+    if home_player is None:
+        home_player = RioUser.query.filter_by(username="GenericHomeUser").first()
+    if away_player is None:
+        away_player = RioUser.query.filter_by(username="GenericAwayUser").first()
 
     # Detect invalid games
     innings_selected = request.json['Innings Selected']
@@ -176,6 +178,11 @@ def populate_db2():
     else:
         tags.append('Normal')
     
+    if request.json['Netplay'] == True:
+        tags.append('Netplay')
+    else:
+        tags.append('Local')
+
     for name in tags:
         tag = Tag.query.filter_by(name=name).first()
         if tag:
