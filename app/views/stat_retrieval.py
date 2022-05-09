@@ -442,6 +442,7 @@ def calculate_era(runs_allowed, outs_pitched):
     - end_date - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
     - username - list of users who appear in games to retreive
     - vs_username - list of users who MUST also appear in the game along with users
+    - exclude_username - list of users to NOT include in query results
     - recent - Int of number of games
 
 @ Output:
@@ -487,6 +488,14 @@ def endpoint_games():
         list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
         tuple_vs_user_ids = tuple(list_of_vs_user_id)
 
+        #Get user ids from list of users
+        exclude_usernames = request.args.getlist('exclude_username')
+        exclude_usernames_lowercase = tuple([username.lower() for username in exclude_usernames])
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        list_of_exclude_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(exclude_usernames_lowercase)).all()
+        # using list comprehension
+        list_of_exclude_user_id = list(itertools.chain(*list_of_exclude_user_id_tuples))
+        tuple_exclude_user_ids = tuple(list_of_exclude_user_id)
 
         recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
     except:
@@ -498,16 +507,25 @@ def endpoint_games():
     #Build User strings
     user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
     vs_user_id_string, vs_user_empty = format_tuple_for_SQL(tuple_vs_user_ids)
+    exclude_user_id_string, exclude_user_empty = format_tuple_for_SQL(tuple_exclude_user_ids)
 
     where_statement = 'WHERE '
+    where_statement_empty = True
     if (not user_empty):
         where_statement_empty = False
         where_statement += f"(game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
     if (not vs_user_empty):
-        if (not where_statement_empty): 
+        if where_statement_empty == False: 
             where_statement += "AND "
-        where_statement_empty = False
+        else:
+            where_statement_empty = False
         where_statement += f"(game.away_player_id IN {vs_user_id_string} OR game.home_player_id IN {vs_user_id_string}) \n"
+    if (not exclude_user_empty):
+        if where_statement_empty == False:
+            where_statement += "AND "
+        else:
+            where_statement_empty = False
+        where_statement += f"(game.away_player_id NOT IN {exclude_user_id_string} AND game.home_player_id NOT IN {exclude_user_id_string}) \n"
 
     #Build GameTime strings
     start_time_unix = 0
@@ -619,8 +637,6 @@ def endpoint_games():
         f"{('LIMIT ' + str(recent)) if recent != None else ''}" #Limit values if limit provided, otherwise return all
     )
 
-    #print(query)
-
     results = db.session.execute(query).all()
     
     games = []
@@ -681,7 +697,6 @@ def endpoint_games():
     - TypeOfHit (list):   List of contact types to get data for
     - TypeOfSwing (list): List of swing types to get data for
     - Hand (list):        List of batterhands
-
 '''
 @app.route('/batter_position_data/', methods = ['GET'])
 def endpoint_batter_position():
