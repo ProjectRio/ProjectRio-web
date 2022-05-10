@@ -40,12 +40,12 @@ def init_app():
         #create sql tables for data models
         db.create_all()
 
-        #Populate character, chemistry, and tag tables
-        if (Character.query.all() == None):
-            print("Loading character tables")
-            db_setup.create_character_tables()
-        if (Tag.query.filter(Tag.name.in_(["Ranked", "Unranked", "Superstar", "Normal"])).all() == None):
-            print("Loading standard tags")
-            db_setup.create_default_tags()
+        # #Populate character, chemistry, and tag tables
+        # if (Character.query.all() == None):
+        #     print("Loading character tables")
+        #     db_setup.create_character_tables()
+        # if (Tag.query.filter(Tag.name.in_(["Ranked", "Unranked", "Superstar", "Normal"])).all() == None):
+        #     print("Loading standard tags")
+        #     db_setup.create_default_tags()
 
         return app
