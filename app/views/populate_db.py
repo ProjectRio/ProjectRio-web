@@ -21,6 +21,10 @@ def populate_db2():
     if away_player is None:
         away_player = RioUser.query.filter_by(username="GenericAwayUser").first()
 
+    # Check if players exist - TODO Add back after closed beta to validate users
+    #if home_player is None or away_player is None:
+    #    abort(400, 'Invalid RioKey')
+
     # Detect invalid games
     innings_selected = request.json['Innings Selected']
     innings_played = request.json['Innings Played']
@@ -283,6 +287,10 @@ def populate_db2():
             charge_pitch_type = event_data['Pitch']['Charge Type'],
             star_pitch = event_data['Pitch']['Star Pitch'],
             pitch_speed = event_data['Pitch']['Pitch Speed'],
+            pitch_ball_x_pos = event_data['Pitch']['Ball Position - X'],
+            pitch_ball_z_pos = event_data['Pitch']['Ball Position - Z'],
+            pitch_batter_x_pos = event_data['Pitch']['Batter Position - X'],
+            pitch_batter_z_pos = event_data['Pitch']['Batter Position - Z'],
             pitch_result = event_data['Pitch']['Pitch Result'],
             type_of_swing = event_data['Pitch']['Type of Swing']
         )
@@ -308,10 +316,6 @@ def populate_db2():
                 ball_y_pos = event_data['Pitch']['Contact']['Ball Landing Position - Y'],
                 ball_z_pos = event_data['Pitch']['Contact']['Ball Landing Position - Z'],
                 ball_max_height = event_data['Pitch']['Contact']['Ball Max Height'],
-                ball_x_pos_upon_hit = event_data['Pitch']['Contact']['Ball Position Upon Contact - X'],
-                ball_z_pos_upon_hit = event_data['Pitch']['Contact']['Ball Position Upon Contact - Z'],
-                batter_x_pos_upon_hit = event_data['Pitch']['Contact']['Batter Position Upon Contact - X'],
-                batter_z_pos_upon_hit = event_data['Pitch']['Contact']['Batter Position Upon Contact - Z'],
                 multi_out = event_data['Pitch']['Contact']['Multi-out'],
                 primary_result = event_data['Pitch']['Contact']['Contact Result - Primary'],
                 secondary_result = event_data['Pitch']['Contact']['Contact Result - Secondary']
