@@ -33,9 +33,10 @@ def init_app():
         from .views import db_setup
         from .views import client_routes
         from .views import stat_retrieval
+        from .views.stats import box_score
+        from .views.stats import user_summary
         from .views import api_key
         from .views import log
-        from .models import Character, Tag
         
         #create sql tables for data models
         db.create_all()
