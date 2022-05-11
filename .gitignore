@@ -2,3 +2,6 @@
 .DS_Store
 TODO.md
 .env
+local_postgres_setup_instructions.md.rtf
+endpoint_log.log
+Dockerfile
