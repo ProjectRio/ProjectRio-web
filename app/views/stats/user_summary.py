@@ -6,16 +6,18 @@ from ...helper_functions import calculate_era
 
 # API Request URL example: /profile/stats/?recent=10&username=demouser1
 '''
-    profile/stats returns an overview of a player that includes:
-        - recent games
-        - user totals for ranked normal, ranked superstar, unranked normal, unranked superstar, sum total
-        - top 6 pitchers by era
-        - top 6 batters by rbi
-        - top 3 captains by winrate
-
-    required attributes:
-    - recent: number of games to return
-    - username: first one is the primary user, successive ones are other users to consider
+    @ Description: Returns a player overview
+    @ Params:
+        - recent - Int of number of games
+        - username - list of users who appear in games to retreive
+    @ Output:
+        - N most recent games
+        - N username
+        - user totals (split into ranked normal, ranked superstar, unranked normal, unranked superstar, all)
+        - top batters (split into ranked normal ranked superstar, unranked normal, unranked superstar, all)
+        - top pitchers (split into ranked normal ranked superstar, unranked normal, unranked superstar, all)
+        - top captains (split into ranked normal ranked superstar, unranked normal, unranked superstar, all)
+    @ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
 '''
 @app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
@@ -58,8 +60,8 @@ def user_stats():
         "recent_games": recent_games,
         "username": user_to_query.username,
         "user_totals": user_totals,
-    #     "top_batters": char_totals['batters'],
-        # "top_pitchers": char_totals['pitchers'],
+        "top_batters": char_totals['batters'],
+        "top_pitchers": char_totals['pitchers'],
         "top_captains": captain_totals,
     }
 
