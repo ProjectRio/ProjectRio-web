@@ -22,6 +22,7 @@ flask-bcrypt = "*"
 python-decouple = "*"
 flask-jwt-extended = "*"
 psycopg2 = "*"
+sendgrid = "*"
 
 [dev-packages]
 
