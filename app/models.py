@@ -404,11 +404,11 @@ class Tag(db.Model):
 class ApiKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(32), unique=True, nullable=False)
-    api_key = db.Column(db.String(32), unique=True)
+    api_key = db.Column(db.String(50), unique=True)
     date_created = db.Column(db.Integer)
     pings_today = db.Column(db.Integer)
     verified = db.Column(db.Boolean)
-    active_url = db.Column(db.String(32), unique=True)
+    active_url = db.Column(db.String(50), unique=True)
 
     def __init__(self, in_email, date_created):
         self.email    = in_email

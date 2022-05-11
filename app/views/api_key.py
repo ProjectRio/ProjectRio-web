@@ -22,8 +22,9 @@ def request_apikey():
     db.session.add(new_api_key)
     db.session.commit()
 
-    message = (
-        'Subject: Verify your email to recieve your Project Rio API Key\n'
+    subject = 'Verify your email to recieve your Project Rio API Key'
+
+    html_content = (
         'Please click the following link to verify your email address and get your Project Rio API Key.\n'
         f'{new_api_key.active_url}'
         '\n'
@@ -31,10 +32,8 @@ def request_apikey():
         'Project Rio Web Team'
     )
 
-    password = os.getenv("EMAIL_PASSWORD")
-
     try:
-        send_email(in_email, message, password)
+        send_email(in_email, subject, html_content)
     except:
         return abort(502, 'Failed to send email')
 
@@ -57,8 +56,9 @@ def verify_api_key():
     db.session.add(api_key)
     db.session.commit()
 
-    message = (
-        'Subject: Your email has been verified.\n'
+    subject = 'Your email has been verified'
+
+    html_content = (
         'Your Project Rio API Key is listed below.\n'
         f'{api_key.api_key}'
         '\n'
@@ -66,10 +66,8 @@ def verify_api_key():
         'Project Rio Web Team'
     )
 
-    password = os.getenv("EMAIL_PASSWORD")
-
     try:
-        send_email(api_key.email, message, password)
+        send_email(api_key.email, subject, html_content)
     except:
         abort(502, 'Failed to send email')
 
@@ -90,19 +88,18 @@ def reset_api_key():
         db.session.add(api_key)
         db.session.commit()
 
-        message = (
-            'Subject: Your API Key has been reset.\n'
+        subject = 'Your Project Rio API Key has been reset'
+
+        html_content = (
             'Your new Project Rio API Key is listed below.\n'
             f'{api_key.api_key}'
             '\n'
             'Happy Hitting!\n'
             'Project Rio Web Team'
         )
-        
-        password = os.getenv("EMAIL_PASSWORD")
       
         try:
-            send_email(api_key.email, message, password)
+            send_email(api_key.email, subject, html_content)
         except:
             abort(502, 'Failed to send email')
 

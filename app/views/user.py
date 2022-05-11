@@ -29,8 +29,9 @@ def register():
         db.session.add(new_user)
         db.session.commit()
 
-        message = (
-            'Subject: Verify your Project Rio Account\n'
+        subject = 'Verify your Project Rio Account'
+
+        html_content = (
             f'Dear {in_username},\n'
             '\n'
             'Please click the following link to verify your email address and get your Rio Key.\n'
@@ -40,10 +41,8 @@ def register():
             'Project Rio Web Team'
         )
 
-        password = os.getenv("EMAIL_PASSWORD")
-
         try:
-            send_email(in_email, message, password)
+            send_email(in_email, subject, html_content)
         except:
             return abort(502, 'Failed to send email')
         
@@ -89,23 +88,21 @@ def request_password_change():
     db.session.add(user)
     db.session.commit()
 
-    message =  (
-        'Subject: Project Rio Password Reset\n'
+    subject = 'Project Rio Password Reset Request'
 
+    html_content =  (
         f'Dear {user.email},\n'
         '\n'
-        'We received a password reset request. If you did not make this request, please ignore this email.\n'
-        'Otherwise, follow this link to reset your account\n'
+        'We received a password reset request for your account. If you did not make this request, please ignore this email.\n'
+        'Otherwise, follow this link to reset your password:\n'
         f'{user.active_url}\n'
         '\n'
         'Happy hitting!\n'
         'Project Rio Web Team'
     )
     
-    password = os.getenv("EMAIL_PASSWORD")
-
     try:
-        send_email(user.email, message, password)
+        send_email(user.email, subject, html_content)
     except:
         abort(502, 'Failed to send email')
 
