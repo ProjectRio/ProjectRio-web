@@ -6,8 +6,7 @@ from sendgrid.helpers.mail import Mail
 def send_email(to_email, subject, html_content):
     message = Mail(
         from_email='email@projectrio.app',
-        # to email change
-        to_emails='projectrio.webtest@gmail.com',
+        to_emails=os.getenv("SEND_GRID_KEY"),
         subject=subject,
         html_content=html_content
     )
