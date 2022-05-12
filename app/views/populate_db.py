@@ -282,74 +282,77 @@ def populate_db2():
 
             
         # ==== Pitch Summary ====
-        pitch_summary = PitchSummary(
-            pitch_type = event_data['Pitch']['Pitch Type'],
-            charge_pitch_type = event_data['Pitch']['Charge Type'],
-            star_pitch = event_data['Pitch']['Star Pitch'],
-            pitch_speed = event_data['Pitch']['Pitch Speed'],
-            pitch_ball_x_pos = event_data['Pitch']['Ball Position - X'],
-            pitch_ball_z_pos = event_data['Pitch']['Ball Position - Z'],
-            pitch_batter_x_pos = event_data['Pitch']['Batter Position - X'],
-            pitch_batter_z_pos = event_data['Pitch']['Batter Position - Z'],
-            pitch_result = event_data['Pitch']['Pitch Result'],
-            type_of_swing = event_data['Pitch']['Type of Swing']
-        )
-
-        # if the batter made contact with the pitch
-        if 'Contact' in event_data['Pitch']:
-            #  ==== Contact Summary ====
-            contact_summary = ContactSummary(
-                type_of_contact = event_data['Pitch']['Contact']['Type of Contact'],
-                charge_power_up = event_data['Pitch']['Contact']['Charge Power Up'],
-                charge_power_down = event_data['Pitch']['Contact']['Charge Power Down'],
-                star_swing_five_star = event_data['Pitch']['Contact']['Star Swing Five-Star'],
-                input_direction = event_data['Pitch']['Contact']['Input Direction - Push/Pull'],
-                input_direction_stick = event_data['Pitch']['Contact']['Input Direction - Stick'],
-                frame_of_swing_upon_contact = event_data['Pitch']['Contact']['Frame of Swing Upon Contact'],
-                ball_angle = int(event_data['Pitch']['Contact']['Ball Angle'].replace(',', '')),
-                ball_horiz_power = int(event_data['Pitch']['Contact']['Ball Horizontal Power'].replace(',', '')),
-                ball_vert_power = int(event_data['Pitch']['Contact']['Ball Vertical Power'].replace(',', '')),
-                ball_x_velocity = event_data['Pitch']['Contact']['Ball Velocity - X'],
-                ball_y_velocity = event_data['Pitch']['Contact']['Ball Velocity - Y'],
-                ball_z_velocity = event_data['Pitch']['Contact']['Ball Velocity - Z'],
-                ball_x_pos = event_data['Pitch']['Contact']['Ball Landing Position - X'],
-                ball_y_pos = event_data['Pitch']['Contact']['Ball Landing Position - Y'],
-                ball_z_pos = event_data['Pitch']['Contact']['Ball Landing Position - Z'],
-                ball_max_height = event_data['Pitch']['Contact']['Ball Max Height'],
-                multi_out = event_data['Pitch']['Contact']['Multi-out'],
-                primary_result = event_data['Pitch']['Contact']['Contact Result - Primary'],
-                secondary_result = event_data['Pitch']['Contact']['Contact Result - Secondary']
+        if 'Pitch' in event_data:
+            pitch_summary = PitchSummary(
+                pitch_type = event_data['Pitch']['Pitch Type'],
+                charge_pitch_type = event_data['Pitch']['Charge Type'],
+                star_pitch = event_data['Pitch']['Star Pitch'],
+                pitch_speed = event_data['Pitch']['Pitch Speed'],
+                pitch_ball_x_pos = event_data['Pitch']['Ball Position - X'],
+                pitch_ball_z_pos = event_data['Pitch']['Ball Position - Z'],
+                pitch_batter_x_pos = event_data['Pitch']['Batter Position - X'],
+                pitch_batter_z_pos = event_data['Pitch']['Batter Position - Z'],
+                pitch_result = event_data['Pitch']['Pitch Result'],
+                type_of_swing = event_data['Pitch']['Type of Swing']
             )
 
-            db.session.add(contact_summary)
+            db.session.add(pitch_summary)
             db.session.commit()
-            pitch_summary.contact_summary_id = contact_summary.id
 
-            # ==== Fielding Summary ====
-            if 'First Fielder' in event_data['Pitch']['Contact']:
-                fielder_data = event_data['Pitch']['Contact']['First Fielder']
-
-                fielding_summary = FieldingSummary(
-                    fielder_character_game_summary_id = teams['Home'][fielder_data['Fielder Roster Location']].id if event_data['Half Inning'] == 0 else teams['Away'][fielder_data['Fielder Roster Location']].id,
-                    position = fielder_data['Fielder Position'],
-                    action = fielder_data['Fielder Action'],
-                    jump = fielder_data['Fielder Jump'],
-                    bobble = fielder_data['Fielder Bobble'],
-                    swap = False if fielder_data['Fielder Swap'] == 0 else True,
-                    manual_select = fielder_data['Fielder Manual Selected'],
-                    fielder_x_pos = fielder_data['Fielder Position - X'],
-                    fielder_y_pos = fielder_data['Fielder Position - Y'],
-                    fielder_z_pos = fielder_data['Fielder Position - Z']
+            # if the batter made contact with the pitch
+            if 'Contact' in event_data['Pitch']:
+                #  ==== Contact Summary ====
+                contact_summary = ContactSummary(
+                    type_of_contact = event_data['Pitch']['Contact']['Type of Contact'],
+                    charge_power_up = event_data['Pitch']['Contact']['Charge Power Up'],
+                    charge_power_down = event_data['Pitch']['Contact']['Charge Power Down'],
+                    star_swing_five_star = event_data['Pitch']['Contact']['Star Swing Five-Star'],
+                    input_direction = event_data['Pitch']['Contact']['Input Direction - Push/Pull'],
+                    input_direction_stick = event_data['Pitch']['Contact']['Input Direction - Stick'],
+                    frame_of_swing_upon_contact = event_data['Pitch']['Contact']['Frame of Swing Upon Contact'],
+                    ball_angle = int(event_data['Pitch']['Contact']['Ball Angle'].replace(',', '')),
+                    ball_horiz_power = int(event_data['Pitch']['Contact']['Ball Horizontal Power'].replace(',', '')),
+                    ball_vert_power = int(event_data['Pitch']['Contact']['Ball Vertical Power'].replace(',', '')),
+                    ball_x_velocity = event_data['Pitch']['Contact']['Ball Velocity - X'],
+                    ball_y_velocity = event_data['Pitch']['Contact']['Ball Velocity - Y'],
+                    ball_z_velocity = event_data['Pitch']['Contact']['Ball Velocity - Z'],
+                    ball_x_pos = event_data['Pitch']['Contact']['Ball Landing Position - X'],
+                    ball_y_pos = event_data['Pitch']['Contact']['Ball Landing Position - Y'],
+                    ball_z_pos = event_data['Pitch']['Contact']['Ball Landing Position - Z'],
+                    ball_max_height = event_data['Pitch']['Contact']['Ball Max Height'],
+                    multi_out = event_data['Pitch']['Contact']['Multi-out'],
+                    primary_result = event_data['Pitch']['Contact']['Contact Result - Primary'],
+                    secondary_result = event_data['Pitch']['Contact']['Contact Result - Secondary']
                 )
 
-                db.session.add(fielding_summary)
-                db.session.commit()
-                contact_summary.fielding_summary_id = fielding_summary.id
                 db.session.add(contact_summary)
+                db.session.commit()
+                pitch_summary.contact_summary_id = contact_summary.id
+
+                # ==== Fielding Summary ====
+                if 'First Fielder' in event_data['Pitch']['Contact']:
+                    fielder_data = event_data['Pitch']['Contact']['First Fielder']
+
+                    fielding_summary = FieldingSummary(
+                        fielder_character_game_summary_id = teams['Home'][fielder_data['Fielder Roster Location']].id if event_data['Half Inning'] == 0 else teams['Away'][fielder_data['Fielder Roster Location']].id,
+                        position = fielder_data['Fielder Position'],
+                        action = fielder_data['Fielder Action'],
+                        jump = fielder_data['Fielder Jump'],
+                        bobble = fielder_data['Fielder Bobble'],
+                        swap = False if fielder_data['Fielder Swap'] == 0 else True,
+                        manual_select = fielder_data['Fielder Manual Selected'],
+                        fielder_x_pos = fielder_data['Fielder Position - X'],
+                        fielder_y_pos = fielder_data['Fielder Position - Y'],
+                        fielder_z_pos = fielder_data['Fielder Position - Z']
+                    )
+
+                    db.session.add(fielding_summary)
+                    db.session.commit()
+                    contact_summary.fielding_summary_id = fielding_summary.id
+                    db.session.add(contact_summary)
             
-        db.session.add(pitch_summary)
-        db.session.commit()
-        event.pitch_summary_id = pitch_summary.id
+            db.session.add(pitch_summary)
+            event.pitch_summary_id = pitch_summary.id
         db.session.add(event)
         db.session.commit()
 
