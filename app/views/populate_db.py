@@ -6,6 +6,10 @@ from ..consts import *
 
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
+    # Ignore game if it's a CPU game
+    if request.json['Home Player'] == "CPU" or request.json['Away Player'] == "CPU":
+        return abort(400, 'Database does not accept CPU games')
+
     tags = []
 
     # Boolean used to assign a GameTag after creating CharacterGameSummary rows

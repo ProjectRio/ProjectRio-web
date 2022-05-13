@@ -42,7 +42,7 @@ def user_stats():
 
     # if not user_to_query.private or user_to_query.username == logged_in_user:
     # Returns dict with most 10 recent games for the user and summary data
-    recent_games = endpoint_games()
+    recent_games = endpoint_games(False)
 
     # returns tuples of game_ids for ranked_normals, ranked_superstar, unranked_normals, unranked_superstar games
     by_types_case_statement = get_users_sorted_games(user_to_query.id)

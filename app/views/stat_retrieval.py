@@ -45,7 +45,7 @@ def get_characters():
 @ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
 '''
 @app.route('/games/', methods = ['GET'])
-def endpoint_games():
+def endpoint_games(limit_games_returned=True):
     # === validate passed parameters ===
     try:
         # Check if tags are valid and get a list of corresponding ids
@@ -91,7 +91,11 @@ def endpoint_games():
         list_of_exclude_user_id = list(itertools.chain(*list_of_exclude_user_id_tuples))
         tuple_exclude_user_ids = tuple(list_of_exclude_user_id)
 
-        recent = int(request.args.get('recent')) if request.args.get('recent') is not None else None
+        recent = int()
+        if request.args.get('recent') is None:
+            recent = 50 if limit_games_returned is True else None
+        else:
+            recent = int(request.args.get('recent'))
     except:
        return abort(400, 'Invalid Username or Tag')
 
@@ -299,7 +303,7 @@ def endpoint_batter_position():
         return abort(404, description='Endpoint not ready for production')
 
         # === Construct query === 
-    list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
+    list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
     list_of_game_ids = list() # Holds IDs for all the games we want data from
 
     print(list_of_games)
@@ -398,7 +402,7 @@ def endpoint_detailed_stats():
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
+            list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
             for game_dict in list_of_games['games']:
                 list_of_game_ids.append(game_dict['Id'])
     except:

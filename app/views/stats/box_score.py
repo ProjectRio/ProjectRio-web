@@ -38,7 +38,7 @@ def box_score():
 
     #     if request.args.get('recent') is None:
     #         abort(400, 'Must add recent=1 to url')
-    #     game = endpoint_games()
+    #     game = endpoint_games(False)
     #     if game is None:
     #         abort(400, 'No corresponding game found')
     # else:

@@ -3,7 +3,7 @@ from flask import current_app as app
 from ..models import db, RioUser, Tag, GameTag
 
 # Evaluate users provided to Client
-# example: /validateuserfromclient/?username=demouser1&rio_key=fI8WbLJ3Ti2gkcEuMh1DvcMGl4LQvYFRJvlpgwcCnpw
+# example: /validate_user_from_client/?username=demouser1&rio_key=_______
 @app.route('/validate_user_from_client/', methods=['GET'])
 def validate_user_from_client():
     in_username = request.args.get('username')
