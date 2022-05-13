@@ -294,6 +294,9 @@ def endpoint_games():
 '''
 @app.route('/batter_position_data/', methods = ['GET'])
 def endpoint_batter_position():
+    #Not ready for production
+    if (app.env == "production"):
+        return abort(404, description='Endpoint not ready for production')
 
         # === Construct query === 
     list_of_games = endpoint_games()   # List of dicts of games we want data from and info about those games
@@ -381,6 +384,10 @@ def endpoint_batter_position():
 '''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
+    #Not ready for production
+    if (app.env == "production"):
+        return abort(404, description='Endpoint not ready for production')
+
     #Sanitize games params 
     try:
         list_of_game_ids = list() # Holds IDs for all the games we want data from
@@ -408,8 +415,6 @@ def endpoint_detailed_stats():
                 return abort(400, description = "Char ID not in range")
     except:
         return abort(400, description="Invalid Char Id")
-
-
 
     tuple_of_game_ids = tuple(list_of_game_ids)
     tuple_char_ids = tuple(list_of_char_ids)
@@ -457,8 +462,13 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
     by_user = 'character_game_summary.user_id' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+
     by_char = 'character_game_summary.char_id' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
+
     by_swing = 'pitch_summary.type_of_swing' if group_by_swing else ''
+    select_swing = 'pitch_summary.type_of_swing AS type_of_swing, \n' if group_by_swing else ''
 
     #If at least one group is populated produce the WHERE statement
     where_statement = ''
@@ -473,7 +483,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
                 where_statement += 'AND '
             other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not user_empty):
+        if (not char_empty):
             if (other_conditions):
                 where_statement += 'AND '
             other_conditions = True
@@ -484,11 +494,9 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     contact_batting_query = (
         'SELECT \n'
-        'rio_user.id AS user_id, \n'
-        'rio_user.username AS username, \n'
-        'character_game_summary.char_id AS char_id, \n'
-        'character.name AS char_name, \n'
-        'pitch_summary.type_of_swing AS type_of_swing, \n'
+        f"{select_user}"
+        f"{select_char}"
+        f"{select_swing}"
         'COUNT(CASE WHEN pitch_summary.pitch_result = 1 THEN 1 ELSE NULL END) AS walks_bb, \n'
         'COUNT(CASE WHEN pitch_summary.pitch_result = 0 THEN 1 ELSE NULL END) AS walks_hit, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 0 THEN 1 ELSE NULL END) AS outs, \n'
@@ -506,8 +514,6 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
         'SUM(event.result_rbi) AS rbi '
-        #'SUM(ABS(contact_summary.ball_x_pos)) AS ball_x_pos_total, '
-        #'SUM(ABS(contact_summary.ball_z_pos)) AS ball_z_pos_total '
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN event ON character_game_summary.id = event.batter_id \n'
@@ -524,10 +530,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     non_contact_batting_query = ( 
         'SELECT \n'
-        'rio_user.id AS user_id, \n'
-        'rio_user.username AS username, \n'
-        'character_game_summary.char_id AS char_id, \n'
-        'character.name AS char_name, \n'
+        f"{select_user}"
+        f"{select_char}"
         'SUM(character_game_summary.walks_bb) AS walks_bb, \n'
         'SUM(character_game_summary.walks_hit) AS walks_hbp, \n'
         'SUM(character_game_summary.strikeouts) AS strikeouts \n'
@@ -555,7 +559,10 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
     by_user = 'character_game_summary.user_id' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+
     by_char = 'character_game_summary.char_id' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
 
     #If at least one group is populated produce the WHERE statement
     where_statement = ''
@@ -570,7 +577,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
                 where_statement += 'AND '
             other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not user_empty):
+        if (not char_empty):
             if (other_conditions):
                 where_statement += 'AND '
             other_conditions = True
@@ -581,9 +588,8 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     pitching_summary_query = (
         'SELECT '
-        'rio_user.username AS username, \n' 
-        'character_game_summary.char_id AS char_id, \n'
-        'character.name AS char_name, \n'
+        f"{select_user}"
+        f"{select_char}"
         'SUM(character_game_summary.batters_faced) AS batters_faced, \n'
         'SUM(character_game_summary.runs_allowed) AS runs_allowed, \n'
         'SUM(character_game_summary.hits_allowed) AS hits_allowed, \n'
@@ -600,9 +606,8 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
 
     pitch_breakdown_query = (
         'SELECT '
-        'rio_user.username AS username, \n' 
-        'character_game_summary.char_id AS char_id, \n'
-        'character.name AS char_name, \n'
+        f"{select_user}"
+        f"{select_char}"
         'COUNT(CASE WHEN pitch_summary.pitch_result < 2 THEN 1 ELSE NULL END) AS walks, \n'
         'COUNT(CASE WHEN pitch_summary.pitch_result = 2 THEN 1 ELSE NULL END) AS balls, \n'
         'COUNT(CASE WHEN (pitch_summary.pitch_result = 3 OR pitch_summary.pitch_result = 4 OR pitch_summary.pitch_result = 5) THEN 1 ELSE NULL END) AS strikes \n'
@@ -629,7 +634,10 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
     by_user = 'character_game_summary.user_id' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+
     by_char = 'character_game_summary.char_id' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
 
     #If at least one group is populated produce the WHERE statement
     where_statement = ''
@@ -644,7 +652,7 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
                 where_statement += 'AND '
             other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not user_empty):
+        if (not char_empty):
             if (other_conditions):
                 where_statement += 'AND '
             other_conditions = True
@@ -655,9 +663,8 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     query = (
         'SELECT '
-        'rio_user.username AS username, \n' 
-        'character_game_summary.char_id AS char_id, \n'
-        'character.name AS char_name, \n'
+        f"{select_user}"
+        f"{select_char}"
         'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
         'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
         'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
@@ -690,7 +697,10 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
     by_user = 'character_game_summary.user_id' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+
     by_char = 'character_game_summary.char_id' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
 
     #If at least one group is populated produce the WHERE statement
     where_statement = ''
@@ -705,7 +715,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
                 where_statement += 'AND '
             other_conditions = True
             where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not user_empty):
+        if (not char_empty):
             if (other_conditions):
                 where_statement += 'AND '
             other_conditions = True
@@ -716,9 +726,8 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     position_query = (
         'SELECT '
-        'rio_user.username AS username, \n' 
-        'character_game_summary.char_id AS char_id, \n'
-        'character.name AS char_name, \n'
+        f"{select_user}"
+        f"{select_char}"
         'SUM(pitches_at_p) AS pitches_per_p, \n'
         'SUM(pitches_at_c) AS pitches_per_c, \n'
         'SUM(pitches_at_1b) AS pitches_per_1b, \n'
@@ -748,9 +757,8 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
 
     fielding_query = (
         'SELECT '
-        'rio_name AS username, \n' 
-        'character_game_summary.char_id AS char_id, \n'
-        'character.name AS char_name, \n'
+        f"{select_user}"
+        f"{select_char}"
         'COUNT(CASE WHEN fielding_summary.action = 1 THEN 1 ELSE NULL END) AS jump_catches, \n'
         'COUNT(CASE WHEN fielding_summary.action = 2 THEN 1 ELSE NULL END) AS diving_catches, \n'
         'COUNT(CASE WHEN fielding_summary.action = 3 THEN 1 ELSE NULL END) AS wall_jumps, \n'

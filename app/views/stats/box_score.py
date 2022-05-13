@@ -18,6 +18,10 @@ from ...helper_functions import calculate_era
 # === Box Score ===
 @app.route('/box_score/', methods = ['GET'])
 def box_score():
+    #Not ready for production
+    if (app.env == "production"):
+        return abort(404, description='Endpoint not ready for production')
+
     if request.args.get('game_id') is not None:
         game_id = request.args.get('game_id', type=int)
         game = Game.query.filter_by(game_id=game_id).first()
