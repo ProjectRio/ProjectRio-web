@@ -14,7 +14,7 @@ RUN pip3 install -r requirements.txt
 
 # STEP 5: Declare environment variables
 ENV FLASK_APP=wsgi.py
-ENV FLASK_ENV=development
+ENV FLASK_ENV=production
 
 ENV POSTGRES_URL=$POSTGRES_URL
 ENV POSTGRES_USER=$POSTGRES_USER
