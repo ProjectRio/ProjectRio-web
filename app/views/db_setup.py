@@ -3,7 +3,13 @@ from ..models import db, Character, ChemistryTable, Tag, GameTag
 import json
 
 # === Initalize Character Tables And Ranked/Superstar Tags ===
-@app.route('/create_character_table/', methods = ['POST'])
+@app.route('/reset_db/', methods=['POST'])
+def reset_db():
+    db.drop_all()
+    db.create_all()
+    create_character_tables()
+    create_default_tags()
+
 def create_character_tables():
     f = open('./json/characters.json')
     character_list = json.load(f)["Characters"]
@@ -107,7 +113,6 @@ def create_character_tables():
 
     return 'Characters added...\n'
 
-@app.route('/create_tag_table/', methods =['POST'])
 def create_default_tags():
     ranked = Tag(
         name = "Ranked",
