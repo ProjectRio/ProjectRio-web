@@ -14,7 +14,7 @@ def after_request_func(response):
     
     #If HTTP request was not successful for any reason log a warning
     if (response.status_code >= 300):
-        app.logger.warning(f'WARNING Datatime: {dt_string}  Endpoint: {request.endpoint:15}  RC: {response.status:15}  IP: {request.remote_addr:13} Response Body: {response.data}')
+        app.logger.warning(f'WARNING Datatime: {dt_string}  Endpoint: {request.endpoint:15}  RC: {response.status:15}  IP: {request.remote_addr:13}')
     elif (request.endpoint in cLoggedEndpoints):
         app.logger.info(f'INFO    Datatime: {dt_string}  Endpoint: {request.endpoint:15}  RC: {response.status:15}  IP: {request.remote_addr:13}  Args: {request.args} ')
     elif (request.endpoint in cLoggedEndpointsNoArgs):
