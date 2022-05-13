@@ -1,14 +1,23 @@
+from flask import request, abort
 from flask import current_app as app
 from ..models import db, Character, ChemistryTable, Tag, GameTag
 import json
+import os
 
 # === Initalize Character Tables And Ranked/Superstar Tags ===
 @app.route('/reset_db/', methods=['POST'])
 def reset_db():
-    db.drop_all()
-    db.create_all()
-    create_character_tables()
-    create_default_tags()
+    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+        try:
+            db.drop_all()
+            db.create_all()
+            create_character_tables()
+            create_default_tags()
+        except:
+            abort()  
+    else:
+        return 'Invalid password'
+    return 'Success...'
 
 def create_character_tables():
     f = open('./json/characters.json')
