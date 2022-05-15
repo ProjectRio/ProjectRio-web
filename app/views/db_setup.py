@@ -1,9 +1,24 @@
+from flask import request, abort
 from flask import current_app as app
 from ..models import db, Character, ChemistryTable, Tag, GameTag
 import json
+import os
 
 # === Initalize Character Tables And Ranked/Superstar Tags ===
-@app.route('/create_character_table/', methods = ['POST'])
+@app.route('/reset_db/', methods=['POST'])
+def reset_db():
+    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+        try:
+            db.drop_all()
+            db.create_all()
+            create_character_tables()
+            create_default_tags()
+        except:
+            abort()  
+    else:
+        return 'Invalid password'
+    return 'Success...'
+
 def create_character_tables():
     f = open('./json/characters.json')
     character_list = json.load(f)["Characters"]
@@ -107,7 +122,6 @@ def create_character_tables():
 
     return 'Characters added...\n'
 
-@app.route('/create_tag_table/', methods =['POST'])
 def create_default_tags():
     ranked = Tag(
         name = "Ranked",
@@ -133,10 +147,24 @@ def create_default_tags():
         desc = "Tag for Normal games"
     )
 
+    netplay = Tag(
+        name = "Netplay",
+        name_lowercase = "netplay",
+        desc = "Tag for Netplay games"
+    )
+
+    local = Tag(
+        name = "Local",
+        name_lowercase = "local",
+        desc = "Tag for Local games"
+    )
+
     db.session.add(ranked)
     db.session.add(unranked)
     db.session.add(superstar)
     db.session.add(normal)
+    db.session.add(netplay)
+    db.session.add(local)
     db.session.commit()
 
     return 'Tags created... \n'

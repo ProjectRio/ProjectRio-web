@@ -57,7 +57,7 @@ class Character(db.Model):
             'throwing_arm': self.throwing_arm,
             'character_class': self.character_class,
             'weight': self.weight,
-            'captain': 'True' if self.captain == '1' else 'False',
+            'captain': 'True' if self.captain == 1 else 'False',
             'captain_star_hit_or_pitch': self.captain_star_hit_or_pitch,
             'non_captain_star_swing': self.non_captain_star_swing,
             'non_captain_star_pitch': self.non_captain_star_pitch,
@@ -126,7 +126,7 @@ class ChemistryTable(db.Model):
 
     character = db.relationship('Character', backref = 'character')
 
-class User(db.Model, UserMixin):
+class RioUser(db.Model, UserMixin):
     id       = db.Column(db.Integer,     primary_key=True)
     username = db.Column(db.String(64),  unique = True)
     username_lowercase = db.Column(db.String(64), unique = True)
@@ -135,9 +135,9 @@ class User(db.Model, UserMixin):
     rio_key  = db.Column(db.String(50), unique = True)
     private = db.Column(db.Boolean)
     verified = db.Column(db.Boolean)
-    active_url = db.Column(db.String(32), unique = True)
+    active_url = db.Column(db.String(50), unique = True)
 
-    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'user', lazy = 'dynamic')
+    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'rio_user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
 
@@ -152,11 +152,13 @@ class User(db.Model, UserMixin):
         self.active_url = secrets.token_urlsafe(32)
 
 class Game(db.Model):
-    game_id = db.Column(db.Integer, primary_key = True)
-    away_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
-    home_player_id = db.Column(db.ForeignKey('user.id'), nullable=False) #One-to-One
-    date_time = db.Column(db.Integer)
-    ranked = db.Column(db.Integer)
+    game_id = db.Column(db.BigInteger, primary_key = True)
+    away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
+    home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
+    date_time_start = db.Column(db.Integer)
+    date_time_end = db.Column(db.Integer)
+    ranked = db.Column(db.Boolean)
+    netplay = db.Column(db.Boolean)
     stadium_id = db.Column(db.Integer)
     away_score = db.Column(db.Integer)
     home_score = db.Column(db.Integer)
@@ -166,6 +168,7 @@ class Game(db.Model):
     valid = db.Column(db.Boolean)
     average_ping = db.Column(db.Integer)
     lag_spikes = db.Column(db.Integer)
+    version = db.Column(db.String(50))
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
     game_tag = db.relationship('GameTag', backref='game')
@@ -183,9 +186,9 @@ class Game(db.Model):
 
 class CharacterGameSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)
     character_position_summary_id = db.Column(db.Integer, db.ForeignKey('character_position_summary.id'), nullable=False)
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8
@@ -196,6 +199,7 @@ class CharacterGameSummary(db.Model):
     #Defensive Stats
     batters_faced = db.Column(db.Integer)
     runs_allowed = db.Column(db.Integer)
+    earned_runs = db.Column(db.Integer)
     batters_walked = db.Column(db.Integer)
     batters_hit = db.Column(db.Integer)
     hits_allowed = db.Column(db.Integer)
@@ -209,6 +213,7 @@ class CharacterGameSummary(db.Model):
     outs_pitched = db.Column(db.Integer)
     #Offensive Stats
     at_bats = db.Column(db.Integer)
+    plate_appearances = db.Column(db.Integer)
     hits = db.Column(db.Integer)
     singles = db.Column(db.Integer)
     doubles = db.Column(db.Integer)
@@ -235,13 +240,11 @@ class CharacterGameSummary(db.Model):
     defensive_star_chances = db.Column(db.Integer)
     defensive_star_chances_won = db.Column(db.Integer)
 
-    batter_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.batter_id', backref = 'character_game_summary_batter')
-    pitcher_summary = db.relationship('PitchSummary', foreign_keys = 'PitchSummary.pitcher_id', backref = 'character_game_summary_pitcher')
     fielding_summary = db.relationship('FieldingSummary', backref = 'fielding_summary')
     events_when_pitcher = db.relationship('Event', foreign_keys = 'Event.pitcher_id', backref='character_game_summary_of_event_pitcher')
     events_when_catcher = db.relationship('Event', foreign_keys = 'Event.catcher_id', backref='character_game_summary_of_event_catcher')
+    events_when_batter = db.relationship('Event', foreign_keys = 'Event.batter_id', backref = 'character_game_summary_of_event_batter')
     runner = db.relationship('Runner', foreign_keys = 'Runner.runner_character_game_summary_id', backref = 'character_game_summary_runner')
-    catcher = db.relationship('Runner', foreign_keys = 'Runner.catcher_character_game_summary_id', backref = 'character_game_summary_catcher')
 
     def to_dict(self):
         return {
@@ -253,32 +256,42 @@ class CharacterGameSummary(db.Model):
         }
 
 class CharacterPositionSummary(db.Model):
-    id            = db.Column(db.Integer, primary_key=True)
-    pitches_at_p  = db.Column(db.Integer)
-    pitches_at_c  = db.Column(db.Integer)
-    pitches_at_1b = db.Column(db.Integer)
-    pitches_at_2b = db.Column(db.Integer)
-    pitches_at_3b = db.Column(db.Integer)
-    pitches_at_ss = db.Column(db.Integer)
-    pitches_at_lf = db.Column(db.Integer)
-    pitches_at_cf = db.Column(db.Integer)
-    pitches_at_rf = db.Column(db.Integer)
-    outs_at_p     = db.Column(db.Integer)
-    outs_at_c     = db.Column(db.Integer)
-    outs_at_1b    = db.Column(db.Integer)
-    outs_at_2b    = db.Column(db.Integer)
-    outs_at_3b    = db.Column(db.Integer)
-    outs_at_ss    = db.Column(db.Integer)
-    outs_at_lf    = db.Column(db.Integer)
-    outs_at_cf    = db.Column(db.Integer)
-    outs_at_rf    = db.Column(db.Integer)
+    id                   = db.Column(db.Integer, primary_key=True)
+    pitches_at_p         = db.Column(db.Integer)
+    pitches_at_c         = db.Column(db.Integer)
+    pitches_at_1b        = db.Column(db.Integer)
+    pitches_at_2b        = db.Column(db.Integer)
+    pitches_at_3b        = db.Column(db.Integer)
+    pitches_at_ss        = db.Column(db.Integer)
+    pitches_at_lf        = db.Column(db.Integer)
+    pitches_at_cf        = db.Column(db.Integer)
+    pitches_at_rf        = db.Column(db.Integer)
+    batter_outs_at_p     = db.Column(db.Integer)
+    batter_outs_at_c     = db.Column(db.Integer)
+    batter_outs_at_1b    = db.Column(db.Integer)
+    batter_outs_at_2b    = db.Column(db.Integer)
+    batter_outs_at_3b    = db.Column(db.Integer)
+    batter_outs_at_ss    = db.Column(db.Integer)
+    batter_outs_at_lf    = db.Column(db.Integer)
+    batter_outs_at_cf    = db.Column(db.Integer)
+    batter_outs_at_rf    = db.Column(db.Integer)
+    outs_at_p            = db.Column(db.Integer)
+    outs_at_c            = db.Column(db.Integer)
+    outs_at_1b           = db.Column(db.Integer)
+    outs_at_2b           = db.Column(db.Integer)
+    outs_at_3b           = db.Column(db.Integer)
+    outs_at_ss           = db.Column(db.Integer)
+    outs_at_lf           = db.Column(db.Integer)
+    outs_at_cf           = db.Column(db.Integer)
+    outs_at_rf           = db.Column(db.Integer)
 
     character_game_summary = db.relationship('CharacterGameSummary', backref = 'character_position_summary')
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False) #Based on "Pitcher Roster Loc" in JSON
+    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     catcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     runner_on_0 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=False)
     runner_on_1 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=True)
@@ -303,13 +316,15 @@ class Event(db.Model):
 
 class PitchSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
-    pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=True)
     pitch_type = db.Column(db.Integer)
     charge_pitch_type = db.Column(db.Integer)
     star_pitch = db.Column(db.Integer)
     pitch_speed = db.Column(db.Integer)
+    pitch_ball_x_pos = db.Column(db.Float)
+    pitch_ball_z_pos = db.Column(db.Float)
+    pitch_batter_x_pos = db.Column(db.Float)
+    pitch_batter_z_pos = db.Column(db.Float)
     pitch_result = db.Column(db.Integer)
     type_of_swing = db.Column(db.Integer)
 
@@ -323,6 +338,7 @@ class ContactSummary(db.Model):
     charge_power_down = db.Column(db.Float)
     star_swing_five_star = db.Column(db.Integer)
     input_direction = db.Column(db.Integer)
+    input_direction_stick = db.Column(db.Integer)
     frame_of_swing_upon_contact = db.Column(db.Integer)
     ball_angle = db.Column(db.Integer)
     ball_horiz_power = db.Column(db.Integer)
@@ -333,10 +349,7 @@ class ContactSummary(db.Model):
     ball_x_pos = db.Column(db.Float)
     ball_y_pos = db.Column(db.Float)
     ball_z_pos = db.Column(db.Float)
-    ball_x_pos_upon_hit = db.Column(db.Float)
-    ball_z_pos_upon_hit = db.Column(db.Float)
-    batter_x_pos_upon_hit = db.Column(db.Float)
-    batter_z_pos_upon_hit = db.Column(db.Float)
+    ball_max_height = db.Column(db.Float)
     multi_out = db.Column(db.Integer)
     primary_result = db.Column(db.Integer)
     secondary_result = db.Column(db.Integer)
@@ -348,8 +361,10 @@ class FieldingSummary(db.Model):
     fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     position = db.Column(db.Integer)
     action = db.Column(db.Integer)
+    jump = db.Column(db.Integer)
     bobble = db.Column(db.Integer)
     swap = db.Column(db.Boolean)
+    manual_select = db.Column(db.Integer)
     fielder_x_pos = db.Column(db.Float)
     fielder_y_pos = db.Column(db.Float)
     fielder_z_pos = db.Column(db.Float)
@@ -359,8 +374,6 @@ class FieldingSummary(db.Model):
 class Runner(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     runner_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
-    # Catcher nullable til future update
-    catcher_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=True)
     initial_base = db.Column(db.Integer)
     result_base = db.Column(db.Integer)
     out_type = db.Column(db.Integer)
@@ -375,7 +388,7 @@ class Runner(db.Model):
 
 class GameTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.ForeignKey('game.game_id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     tag_id = db.Column(db.ForeignKey('tag.id'), nullable=False)
 
 class Tag(db.Model):
@@ -387,3 +400,18 @@ class Tag(db.Model):
     community_id = db.Column(db.Integer)
 
     game_tag = db.relationship('GameTag', backref='tag')
+
+class ApiKey(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(32), unique=True, nullable=False)
+    api_key = db.Column(db.String(50), unique=True)
+    date_created = db.Column(db.Integer)
+    pings_today = db.Column(db.Integer)
+    verified = db.Column(db.Boolean)
+    active_url = db.Column(db.String(50), unique=True)
+
+    def __init__(self, in_email, date_created):
+        self.email    = in_email
+        self.date_created = date_created
+        self.verified = False
+        self.active_url = secrets.token_urlsafe(32)

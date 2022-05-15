@@ -1,34 +1,24 @@
 {
   "Users": [
     {
-      "Username": "DemoUser1",
-      "Email": "DemoUser1@",
-      "Password": "DemoUser1"
+      "Username": "GenericHomeUser",
+      "Email": "GenericHomeUser@fakeemail",
+      "Password": "password"
     },
     {
-      "Username": "DemoUser2",
-      "Email": "DemoUser2@",
-      "Password": "DemoUser2"
+      "Username": "GenericAwayUser",
+      "Email": "GenericAwayUser@fakeemail",
+      "Password": "password"
     },
     {
-      "Username": "DemoUser3",
-      "Email": "DemoUser3@",
-      "Password": "DemoUser3"
+      "Username": "PeacockSlayer",
+      "Email": "PeacockSlayer@fakeemail",
+      "Password": "password"
     },
     {
-      "Username": "DemoUser4",
-      "Email": "DemoUser4@",
-      "Password": "DemoUser4"
-    },
-    {
-      "Username": "DemoUser5",
-      "Email": "DemoUser5@",
-      "Password": "DemoUser5"
-    },
-    {
-      "Username": "DemoUser6",
-      "Email": "DemoUser6@",
-      "Password": "DemoUser6"
+      "Username": "PeacockSavior",
+      "Email": "PeacockSavior@fakeemail",
+      "Password": "password"
     }
   ]
 }

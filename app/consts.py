@@ -23,3 +23,11 @@ cPLAY_RESULT_BUNT = {0xD: 'Bunt'}
 # Consts used to create profile query
 cCharacters = 1
 cCaptains = 2
+
+cTYPE_OF_SWING = {
+    0: "None",
+    1: "Slap",
+    2: "Charge",
+    3: "Star",
+    4: "Bunt"
+}
