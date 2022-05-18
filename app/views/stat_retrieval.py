@@ -465,11 +465,11 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     char_string, char_empty = format_tuple_for_SQL(char_ids)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     by_swing = 'pitch_summary.type_of_swing' if group_by_swing else ''
     select_swing = 'pitch_summary.type_of_swing AS type_of_swing, \n' if group_by_swing else ''
@@ -497,6 +497,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     groups = ','.join(filter(None,[by_user, by_char, by_swing]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     contact_batting_query = (
+        
         'SELECT \n'
         f"{select_user}"
         f"{select_char}"
@@ -562,11 +563,11 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     char_string, char_empty = format_tuple_for_SQL(char_ids, True)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     #If at least one group is populated produce the WHERE statement
     where_statement = ''
@@ -637,11 +638,11 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     char_string, char_empty = format_tuple_for_SQL(char_ids, True)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     #If at least one group is populated produce the WHERE statement
     where_statement = ''
@@ -700,11 +701,11 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
     char_string, char_empty = format_tuple_for_SQL(char_ids, True)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     #If at least one group is populated produce the WHERE statement
     where_statement = ''
@@ -766,7 +767,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
         'COUNT(CASE WHEN fielding_summary.action = 1 THEN 1 ELSE NULL END) AS jump_catches, \n'
         'COUNT(CASE WHEN fielding_summary.action = 2 THEN 1 ELSE NULL END) AS diving_catches, \n'
         'COUNT(CASE WHEN fielding_summary.action = 3 THEN 1 ELSE NULL END) AS wall_jumps, \n'
-        'SUM(fielding_summary.swap) AS swap_successes, \n'
+        'SUM(CASE WHEN fielding_summary.swap = True THEN 1 ELSE 0 END) AS swap_successes, \n'
         'COUNT(CASE WHEN fielding_summary.bobble != 0 THEN 1 ELSE NULL END) AS bobbles \n'
         #SUM( Insert other stats once questions addressed
         'FROM character_game_summary \n'
