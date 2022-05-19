@@ -2,7 +2,7 @@ from asyncio import events
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag
+from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag, Event
 from ..consts import *
 from ..helper_functions import calculate_era
 import pprint
@@ -356,10 +356,6 @@ def endpoint_games(limit_games_returned=True):
 '''
 @app.route('/event/', methods = ['GET'])
 def endpoint_event():
-    #Not ready for production
-    if (app.env == "production"):
-        return abort(404, description='Endpoint not ready for production')
-
     # === Construct query === 
     #Sanitize games params 
     try:
@@ -486,13 +482,11 @@ def endpoint_event():
         where_statement = 'WHERE '
         and_needed = False
         for item in where_list:
-            print(type(item[0]), item[0])
             formatted_tuple, empty = format_list_for_SQL(item[0])
             if empty:
                 continue
             if and_needed:
                 where_statement += 'AND '
-            print('HERE')
             #Check if there are values that will represent null (contact=5 is not a real value, but its used to represent 'no contact' AKA null in the table)
             null_statement = ''
             if ((item[2] != None) and (item[2] in item[0])):
@@ -507,11 +501,6 @@ def endpoint_event():
 
     where_statement = build_where_statement(where_list)
 
-    # Apply filters
-    #   WHERE batter.hand in input_hand
-    #   WHERE contact.type_of_contact in input_typeofcontact
-    #   WHERE pitch.type_of_swing in input_typeofswing
-    #   WHERE character.char_id in input_char_ids
     query = (
         'SELECT \n'
         'event.id AS event_id \n'
@@ -531,10 +520,66 @@ def endpoint_event():
     event_nums = []
     for entry in result:
         event_nums.append(entry.event_id )
-        print(entry._asdict())
     return {
         'Events': event_nums
     }
+
+
+@app.route('/plate_data/', methods = ['GET'])
+def endpoint_plate_data():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'event.game_id AS game_id, \n'
+        'event.id AS event_id, \n'
+        'batter.char_id, \n'
+        'pitcher.char_id, \n'
+        'batter.batting_hand, \n'
+        'pitcher.fielding_hand, \n'
+        'pitch.pitch_ball_x_pos, \n'
+        'pitch.pitch_ball_z_pos, \n'
+        'pitch.pitch_batter_x_pos, \n'
+        'pitch.pitch_batter_z_pos, \n'
+        'pitch.type_of_swing, \n'
+        'contact.type_of_contact, \n'
+        'pitch.pitch_result\n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
+        'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+       f'WHERE event.id IN {event_id_string}'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
+
 
 #Format output data and return
 '''
