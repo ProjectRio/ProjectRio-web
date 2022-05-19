@@ -32,8 +32,8 @@ def get_characters():
 
 # Helpers for detailed stats
 def build_where_statement(game_ids, char_ids, user_ids):
-    game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
-    char_string, char_empty = format_tuple_for_SQL(char_ids, True)
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
+    char_string, char_empty = format_tuple_for_SQL(char_ids)
     user_id_string, user_empty = format_tuple_for_SQL(user_ids)
 
     #If at least one group is populated produce the WHERE statement
@@ -573,9 +573,6 @@ Format:
 '''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
-    #Not ready for production
-    if (app.env == "production"):
-        return abort(404, description='Endpoint not ready for production')
 
     #Sanitize games params 
     try:
