@@ -23,7 +23,18 @@ def format_list_for_SQL(in_list):
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
     characters = []
-    for character in Character.query.all():
+    
+    character_names = request.args.getlist('name')
+    if character_names:
+        try:
+            character_names_lowercase = tuple([name.lower() for name in character_names])
+            character_rows = db.session.query(Character).filter(Character.name_lowercase.in_(character_names_lowercase)).all()
+        except:
+            abort(400, 'Invalid Character name')
+    else:
+        character_rows = Character.query.all()
+
+    for character in character_rows:
         characters.append(character.to_dict())
 
     return {
