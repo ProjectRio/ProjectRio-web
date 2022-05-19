@@ -1,3 +1,4 @@
+from asyncio import events
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -11,10 +12,13 @@ import itertools
 
 # == Helper functions for SQL query formatting
 # Returns tuple in SQL ready string and a bool to indicate if query is empty
-def format_tuple_for_SQL(in_tuple, none_on_empty=False):
+def format_tuple_for_SQL(in_tuple):
     sql_tuple = "(" + ",".join(repr(v) for v in in_tuple) + ")"
     
     return (sql_tuple, (len(in_tuple) == 0))
+
+def format_list_for_SQL(in_list):
+    return format_tuple_for_SQL(tuple(in_list))
 
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
@@ -53,6 +57,8 @@ def build_where_statement(game_ids, char_ids, user_ids):
     return where_statement
 
 def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
+    if int_list == None or len(int_list) == 0:
+        return [], ''
     try:
         for index, item in enumerate(int_list):
             sanitized_id = int(int_list[index])
@@ -60,7 +66,7 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
                 int_list[index] = sanitized_id
             else:
                 return None, error_msg
-        return int_list
+        return int_list, ''
     except:
         return None, error_msg
 
@@ -327,11 +333,28 @@ def endpoint_games(limit_games_returned=True):
 
 # == Functions to return coordinates for graphing ==
 '''
-    - Game params (args): Same params as games. Use to get games with proper tags/users/etc
-    - Char Id (list):     List of characters to get coordinates for
-    - TypeOfContact (list):   List of contact types to get data for
-    - TypeOfSwing (list): List of swing types to get data for
-    - Hand (list):        List of batterhands
+@Endpoint: Events
+@Description: Used to pick out events that fit the given params
+@Params:
+    - Game params:           Params for /games/ (tags/users/date/etc)
+    - games:        [0-x],   games if not using the game endpoint params
+    - pitcher_char: [0-54],  pitcher char ids
+    - batter_char:  [0-54],  batter char ids
+    - fielder_char: [0-54],  fielder char ids
+    - fielder_pos:  [0-54],  fielder pos
+    - contact:      [0-5],   contact types (0-4: in-game values, 5: no contact)
+    - swing:        [0-4],   swing types ()
+    - pitch:        [0-4],   pitch types (TODO)
+    - chem_link:    [0-4],   chemistry on base values
+    - pitcher_hand: [0-1],   pitchers handedness ()
+    - batter_hand:  [0-1],   batters handedness ()
+    - inning:       [0-50],  innings to collect from
+    - half_inning:  [0-1],   half inning to collect from
+    - balls:        [0-3],   balls
+    - strikes:      [0-2],   strikes
+    - outs:         [0-2],   outs
+    - multi_out     [0-1],   bool for double plays
+    - star_chance   [0-1],   bool for star chance
 '''
 @app.route('/event/', methods = ['GET'])
 def endpoint_event():
@@ -356,11 +379,8 @@ def endpoint_event():
     except:
         return abort(408, description='Invalid GameID')
 
-    list_of_game_ids = tuple(list_of_game_ids)
-    print(list_of_game_ids)
-
     # Pitcher Char Id
-    list_of_pitcher_char_ids, error = sanitize_int_list(request.args.getlist('batter_char'), "Pitcher Char ID not in range", 55)
+    list_of_pitcher_char_ids, error = sanitize_int_list(request.args.getlist('pitcher_char'), "Pitcher Char ID not in range", 55)
     if list_of_pitcher_char_ids == None:
         return abort(400, description = error)
 
@@ -404,10 +424,90 @@ def endpoint_event():
     if list_of_fielder_char_ids == None:
         return abort(400, description = error)
 
-    #Fielder Id
+    #Fielder Pos
     list_of_fielder_pos, error = sanitize_int_list(request.args.getlist('fielder_pos'), "Fielder position not in range", 9)
     if list_of_fielder_pos == None:
         return abort(400, description = error)
+
+    #Inning list
+    list_of_innings, error = sanitize_int_list(request.args.getlist('innings'), "Innings not in range", 50)
+    if list_of_innings == None:
+        return abort(400, description = error)
+
+    #Half Inning list
+    list_of_half_inning, error = sanitize_int_list(request.args.getlist('half_inning'), "Half Inning not in range", 2)
+    if list_of_half_inning == None:
+        return abort(400, description = error)
+
+    #Strike list
+    list_of_balls, error = sanitize_int_list(request.args.getlist('balls'), "Balls not in range", 4)
+    if list_of_balls == None:
+        return abort(400, description = error)
+
+    #Strike list
+    list_of_strikes, error = sanitize_int_list(request.args.getlist('strikes'), "Strikes not in range", 3)
+    if list_of_strikes == None:
+        return abort(400, description = error)
+
+    #Outs list
+    list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
+    if list_of_outs == None:
+        return abort(400, description = error)
+
+    #this might be riduculous but I want everything in a list for the next function
+    multi_out_flag   = [1] if (request.args.get('multi_out') == '1') else []
+    star_chance_flag = [1] if (request.args.get('star_chance') == '1') else []
+
+    #list of args, the attribute to select from, null value
+    where_list = [
+        (list_of_game_ids, 'event.game_id', None),
+        (list_of_pitcher_char_ids, 'pitcher.char_id', None),
+        (list_of_batter_char_ids, 'batter.char_id', None),
+        (list_of_contact, 'contact.type_of_contact', 5),
+        (list_of_swings, 'pitch.type_of_swing', None),
+       #(list_of_pitches, 'pitch.type_of_swing', None) #This one needs a DB rework. Manually add later
+        (list_of_chem, 'event.chem_links_ob', None),
+        (list_of_bh, 'batter.batting_hand', None),
+        (list_of_ph, 'pitcher.fielding_hand', None),
+        (list_of_fielder_char_ids, 'fielder.char_id', None),
+        (list_of_fielder_pos, 'fielder.position', None),
+        (list_of_innings, 'event.inning', None),
+        (list_of_half_inning, 'event.half_inning', None),
+        (list_of_balls, 'event.balls', None),
+        (list_of_strikes, 'event.strikes', None),
+        (list_of_outs, 'event.outs', None),
+        (multi_out_flag, 'contact.multi_out', None),
+        (star_chance_flag, 'event.star_chance', None),
+    ]
+
+    #Go through all of the lists from the args
+    #If they are empty, skip entire list, do not add to the statement
+    #If not empty, use the SQL provided in tuple[1] to write a where statement and append it
+    #Grab NULL values for column if tuple[3] is provided and also present in the list
+    def build_where_statement(where_list):
+        where_statement = 'WHERE '
+        and_needed = False
+        for item in where_list:
+            print(type(item[0]), item[0])
+            formatted_tuple, empty = format_list_for_SQL(item[0])
+            if empty:
+                continue
+            if and_needed:
+                where_statement += 'AND '
+            print('HERE')
+            #Check if there are values that will represent null (contact=5 is not a real value, but its used to represent 'no contact' AKA null in the table)
+            null_statement = ''
+            if ((item[2] != None) and (item[2] in item[0])):
+                null_statement = f' OR {item[1]} IS NULL'
+            where_statement += f'({item[1]} IN {formatted_tuple}{null_statement})\n'
+            and_needed = True
+        
+        #If we have at least a single where statement, return it
+        if and_needed:
+            return where_statement
+        return ''
+
+    where_statement = build_where_statement(where_list)
 
     # Apply filters
     #   WHERE batter.hand in input_hand
@@ -415,61 +515,58 @@ def endpoint_event():
     #   WHERE pitch.type_of_swing in input_typeofswing
     #   WHERE character.char_id in input_char_ids
     query = (
-        'SELECT '
-        'event.id AS event_id, '
-        #'character.char_id AS char_id, '
-        #'pitch.pitch_ball_x_pos AS batter_x_pos, '
-        #'pitch.pitch_ball_z_pos AS batter_z_pos, '
-        #'pitch.pitch_batter_x_pos AS ball_x_pos, '
-        #'pitch.pitch_batter_z_pos AS ball_z_pos, '
-        #'contact.type_of_contact AS type_of_contact, '
-        #'pitch.pitch_result AS pitch_result, '
-        #'pitch.type_of_swing AS type_of_swing '
-        'FROM event '
-        'JOIN pitch_summary AS pitch ON pitch.id = event.pitch_summary_id '
-        'JOIN contact_summary AS contact ON contact.id = pitch.contact_summary_id '
-        'JOIN character_game_summary AS batter ON batter.id = pitch.batter_id '
-        'JOIN character_game_summary AS pitcher ON pitcher.id = pitch.batter_id '
-       f'WHERE (event.game_id IN {list_of_game_ids}) '
+        'SELECT \n'
+        'event.id AS event_id \n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n' #Fielding gets a left joiin for HRs and misses
+        'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
+        'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+        'LEFT JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
+       f'{where_statement}'
     )
 
     print(query)
 
     result = db.session.execute(query).all()
-    print(result)
+    event_nums = []
     for entry in result:
+        event_nums.append(entry.event_id )
         print(entry._asdict())
+    return {
+        'Events': event_nums
+    }
 
-    #Format output data and return
-    '''
-    Format:
-        {
-            "Batter Character ID": 0-53,
-            "Ball upon hit X position": float,
-            "Ball upon hit Z position": float,
-            "Batter upon hit X position": float,
-            "Batter upon hit Z position": float,
-            "Batter hand": bool
-            "Type of contact": left-sour, left-nice, perfect...
-            "Type of swing": slap, star, charge
-        }
-    '''
+#Format output data and return
+'''
+Format:
+    {
+        "Batter Character ID": 0-53,
+        "Ball upon hit X position": float,
+        "Ball upon hit Z position": float,
+        "Batter upon hit X position": float,
+        "Batter upon hit Z position": float,
+        "Batter hand": bool
+        "Type of contact": left-sour, left-nice, perfect...
+        "Type of swing": slap, star, charge
+    }
+'''
 
 ## === Detailed stats ===
 '''
+@ Endpoint: detailed_stats
 @ Description: Returns batting, pitching, fielding, and star stats on configurable levels
 @ Params:
-    - Username (list):  List of users to get stats for. All users if blank
-    - Character (list): List of character ids to get stats for. All charas if blank
-    - Games (list):     List of game ids to use. If not provided arguments for /games/ endpoint will be expected and used
-    - by_user (bool):   When true stats will be organized by user. When false, all users will be 
-                        combined
-    - by_char (bool):   When true stats will be organized by character. When false, 
-                        all characters will be combined
-    - by_swing (bool):  When true batting stats will be organized by swing type (slap, charge, star). When false, 
-                        all swings will be combined. Only considered for swings
-    - exlude_nonfair:   Exlude foul and unknown hits from the return
-    - Games parms:      All params for /games/ endpoint. Determines the games that will be considered
+    - Game params:                  Params for /games/ (tags/users/date/etc)
+    - games:          [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
+    - username:       [],           users to get stats for. All users if blank
+    - character:      [0-54],       character ids to get stats for. All charas if blank
+    - by_user:        [bool],       When true stats will be grouped by user. When false, all users will be separate
+    - by_char:        [bool],       When true stats will be grouped by character. When false, all characters will be separate
+    - by_swing:       [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
+                                    all swings will be combined. Only considered for swings
+    - exlude_nonfair: [bool],       Exlude foul and unknown hits from the return
 @ Output:
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
