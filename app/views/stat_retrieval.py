@@ -75,11 +75,14 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
 @ Params:
     - tag - list of tags to filter by
     - exclude_tag - List of tags to exclude from search
-    - start date - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
-    - end_date - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
+    - start_time - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
+    - end_time - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
     - username - list of users who appear in games to retreive
     - vs_username - list of users who MUST also appear in the game along with users
     - exclude_username - list of users to NOT include in query results
+    - captain - captain name to appear in games to retrieve
+    - vs_captain - captain name who MUST appear in game along with captain
+    - exclude_captian -  captain name to EXLCUDE from results
     - recent - Int of number of games
 
 @ Output:
@@ -134,6 +137,25 @@ def endpoint_games(limit_games_returned=True):
         list_of_exclude_user_id = list(itertools.chain(*list_of_exclude_user_id_tuples))
         tuple_exclude_user_ids = tuple(list_of_exclude_user_id)
 
+        #Get captain ids from Captain
+        captains = request.args.getlist('captain')
+        captains_lowercase = tuple([captain.lower() for captain in captains])
+        list_of_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(captains_lowercase)).all()
+        list_of_captain_ids = list(itertools.chain(*list_of_captain_id_tuples))
+        tuple_captain_ids = tuple(list_of_captain_ids)
+
+        vs_captains = request.args.getlist('vs_captain')
+        vs_captains_lowercase = tuple([vs_captain.lower() for vs_captain in vs_captains])
+        list_of_vs_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(vs_captains_lowercase)).all()
+        list_of_vs_captain_ids = list(itertools.chain(*list_of_vs_captain_id_tuples))
+        tuple_vs_captain_ids = tuple(list_of_vs_captain_ids)
+        
+        exclude_captains = request.args.getlist('exclude_captain')
+        exclude_captains_lowercase = tuple([exclude_captain.lower() for exclude_captain in exclude_captains])
+        list_of_exclude_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(exclude_captains_lowercase)).all()
+        list_of_exclude_captain_ids =list(itertools.chain(*list_of_exclude_captain_id_tuples))
+        tuple_exclude_captain_ids = tuple(list_of_exclude_captain_ids)
+
         recent = int()
         if limit_games_returned == False:
             recent = None
@@ -143,7 +165,33 @@ def endpoint_games(limit_games_returned=True):
             else:
                 recent = int(request.args.get('recent'))
     except:
-       return abort(400, 'Invalid Username or Tag')
+       return abort(400, 'Invalid Username, Captain, or Tag')
+
+
+    # Build WHERE statement
+    where_statement = 'WHERE '
+
+    #Get and validate start_time and end_time parameters from URL
+    start_time_unix = 1
+    if (request.args.get('start_time') != None):
+        try:
+            start_time = request.args.get('start_time')
+            start_time_unix = int(start_time)
+        except:
+            return abort(408, 'Invalid start time format')
+    
+    end_time_unix = 0
+    if (request.args.get('end_time') != None):
+        try:
+            end_time = request.args.get('end_time')
+            end_time_unix = int(end_time)
+        except:
+            return abort(408, 'Invalid end time format')
+
+    # Add start and end_time parameters to WHERE statement
+    where_statement += f"game.date_time_start > {start_time_unix} \n"
+    if (end_time_unix != 0):
+        where_statement += f"AND game.date_time_end < {end_time_unix} \n"
 
 
     # === Set dynamic query values ===
@@ -152,13 +200,9 @@ def endpoint_games(limit_games_returned=True):
     having_matching_tags =  f'having_tag_count = {len(tag_ids)} ' if count_matching_tags != "" else ""
     having_exclude_tags = f'exclude_tag_count = 0' if count_matching_exclude_tags != "" else ""
     
-    where_statement = 'WHERE '
-    where_statement_empty = True
-    
     with_tags = str()
     where_tags = str()
     if count_matching_tags != "" or count_matching_exclude_tags != "":
-        where_statement_empty = False
         with_tags = (
             'WITH game_id_and_tag_counts AS ( \n'
             '   SELECT \n' 
@@ -171,7 +215,7 @@ def endpoint_games(limit_games_returned=True):
             ')  \n'
         )
         where_tags = (
-            'game.game_id IN ( \n'
+            'AND game.game_id IN ( \n'
             '  SELECT game_id  \n'
             '  FROM game_id_and_tag_counts \n'
             '  WHERE ' 
@@ -189,60 +233,23 @@ def endpoint_games(limit_games_returned=True):
     exclude_user_id_string, exclude_user_empty = format_tuple_for_SQL(tuple_exclude_user_ids)
 
     if (not user_empty):
-        if where_statement_empty == False: 
-            where_statement += "AND "
-        else:
-            where_statement_empty = False
-        where_statement += f"(game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
+        where_statement += f"AND (game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
     if (not vs_user_empty):
-        if where_statement_empty == False: 
-            where_statement += "AND "
-        else:
-            where_statement_empty = False
-        where_statement += f"(game.away_player_id IN {vs_user_id_string} OR game.home_player_id IN {vs_user_id_string}) \n"
+        where_statement += f"AND (game.away_player_id IN {vs_user_id_string} OR game.home_player_id IN {vs_user_id_string}) \n"
     if (not exclude_user_empty):
-        if where_statement_empty == False:
-            where_statement += "AND "
-        else:
-            where_statement_empty = False
-        where_statement += f"game.away_player_id NOT IN {exclude_user_id_string} AND game.home_player_id NOT IN {exclude_user_id_string} \n"
+        where_statement += f"AND game.away_player_id NOT IN {exclude_user_id_string} AND game.home_player_id NOT IN {exclude_user_id_string} \n"
 
-    #Build GameTime strings
-    start_time_unix = 0
-    if (request.args.get('start_time') != None):
-        try:
-            start_time = request.args.get('start_time')
-            start_time_strs = start_time.split('-') #YYYY-MM-DD
-            print(start_time_strs)
-            dt = datetime.datetime(year=int(start_time_strs[0]), month=int(start_time_strs[1]), day=int(start_time_strs[2]))
-            start_time_unix = round(time.mktime(dt.timetuple()))
-        except:
-            return abort(408, 'Invalid start time format')
-    
-    end_time_unix = 0
-    if (request.args.get('end_time') != None):
-        try:
-            end_time = request.args.get('end_time')
-            end_time_strs = end_time.split('-') #YYYY-MM-DD
-            dt = datetime.datetime(year=int(end_time_strs[0]), month=int(end_time_strs[1]), day=int(end_time_strs[2]))
-            end_time_unix = round(time.mktime(dt.timetuple()))
-        except:
-            return abort(408, 'Invalid end time format')
+    #Build captain strings
+    captain_id_string, captain_empty = format_tuple_for_SQL(tuple_captain_ids)
+    vs_captain_id_string, vs_captain_empty = format_tuple_for_SQL(tuple_vs_captain_ids)
+    exclude_captain_id_string, exclude_captain_empty = format_tuple_for_SQL(tuple_exclude_captain_ids)
 
-    #Set start time to now if its 0
-    if (start_time_unix == 0):
-        start_time_unix = round(time.time())
-    
-    if (start_time_unix != 0):
-        if (not where_statement_empty): 
-            where_statement += "AND "
-        where_statement_empty = False
-        where_statement += f"game.date_time_start < {start_time_unix} \n"
-    if (end_time_unix != 0):
-        if (not where_statement_empty): 
-            where_statement += "AND "
-        where_statement_empty = False
-        where_statement += f"game.date_time_end > {end_time_unix} \n"
+    if (not captain_empty):
+        where_statement += f"AND (away_captain.char_id IN {captain_id_string} OR home_captain.char_id IN {captain_id_string}) \n"
+    if (not vs_captain_empty):
+        where_statement += f"AND (away_captain.char_id IN {vs_captain_id_string} OR home_captain.char_id IN {vs_captain_id_string}) \n"
+    if (not exclude_captain_empty):
+        where_statement += f"AND away_captain.char_id NOT IN {exclude_captain_id_string} AND home_captain.char_id NOT IN {exclude_captain_id_string} \n"
 
     # === Construct query === 
     query = (
