@@ -353,24 +353,26 @@ def endpoint_games(limit_games_returned=True):
 @Description: Used to pick out events that fit the given params
 @Params:
     - Game params:           Params for /games/ (tags/users/date/etc)
-    - games:        [0-x],   games if not using the game endpoint params
-    - pitcher_char: [0-54],  pitcher char ids
-    - batter_char:  [0-54],  batter char ids
-    - fielder_char: [0-54],  fielder char ids
-    - fielder_pos:  [0-54],  fielder pos
-    - contact:      [0-5],   contact types (0-4: in-game values, 5: no contact)
-    - swing:        [0-4],   swing types ()
-    - pitch:        [0-4],   pitch types (TODO)
-    - chem_link:    [0-4],   chemistry on base values
-    - pitcher_hand: [0-1],   pitchers handedness ()
-    - batter_hand:  [0-1],   batters handedness ()
-    - inning:       [0-50],  innings to collect from
-    - half_inning:  [0-1],   half inning to collect from
-    - balls:        [0-3],   balls
-    - strikes:      [0-2],   strikes
-    - outs:         [0-2],   outs
-    - multi_out     [0-1],   bool for double plays
-    - star_chance   [0-1],   bool for star chance
+    - games:           [0-x],   games if not using the game endpoint params
+    - pitcher_char:    [0-54],  pitcher char ids
+    - batter_char:     [0-54],  batter char ids
+    - fielder_char:    [0-54],  fielder char ids
+    - fielder_pos:     [0-54],  fielder pos
+    - contact:         [0-5],   contact types (0-4: in-game values, 5: no contact)
+    - swing:           [0-4],   swing types ()
+    - pitch:           [0-4],   pitch types (TODO)
+    - chem_link:       [0-4],   chemistry on base values
+    - pitcher_hand:    [0-1],   pitchers handedness ()
+    - batter_hand:     [0-1],   batters handedness ()
+    - inning:          [0-50],  innings to collect from
+    - half_inning:     [0-1],   half inning to collect from
+    - balls:           [0-3],   balls
+    - strikes:         [0-2],   strikes
+    - outs:            [0-2],   outs
+    - multi_out        [0-1],   bool for double plays
+    - star_chance      [0-1],   bool for star chance
+    - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
+    - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
 '''
 @app.route('/event/', methods = ['GET'])
 def endpoint_event():
@@ -390,6 +392,34 @@ def endpoint_event():
                 list_of_game_ids.append(game_dict['Id'])
     except:
         return abort(408, description='Invalid GameID')
+
+    
+    list_of_batter_user_ids = []
+    list_of_pitcher_user_ids = []
+    if ( request.args.getlist('username') != None or request.args.getlist('vs_username') != None ):
+        #Get user ids from list of users
+        vs_usernames = request.args.getlist('vs_username')
+        vs_usernames_lowercase = tuple([username.lower() for username in vs_usernames])
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        list_of_vs_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(vs_usernames_lowercase)).all()
+        # using list comprehension
+        list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
+        if (request.args.get('users_as_batter') == "1"):
+            list_of_batter_user_ids += list_of_vs_user_id
+        if (request.args.get('users_as_pitcher') == "1"):
+            list_of_pitcher_user_ids += list_of_vs_user_id
+
+        #Get user ids from list of users
+        usernames = request.args.getlist('username')
+        usernames_lowercase = tuple([username.lower() for username in usernames])
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
+        # using list comprehension
+        list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
+        if (request.args.get('users_as_batter') == "1"):
+            list_of_batter_user_ids += list_of_user_id
+        if (request.args.get('users_as_pitcher') == "1"):
+            list_of_pitcher_user_ids += list_of_user_id
 
     # Pitcher Char Id
     list_of_pitcher_char_ids, error = sanitize_int_list(request.args.getlist('pitcher_char'), "Pitcher Char ID not in range", 55)
@@ -490,6 +520,9 @@ def endpoint_event():
         (list_of_outs, 'event.outs', None),
         (multi_out_flag, 'contact.multi_out', None),
         (star_chance_flag, 'event.star_chance', None),
+        (star_chance_flag, 'event.star_chance', None),
+        (list_of_batter_user_ids, 'batter.user_id', None),
+        (list_of_pitcher_user_ids, 'pitcher.user_id', None)
     ]
 
     #Go through all of the lists from the args
@@ -570,6 +603,7 @@ def endpoint_plate_data():
         'event.id AS event_id, \n'
         'batter.char_id, \n'
         'pitcher.char_id, \n'
+        'pitcher.user_id, \n'
         'batter.batting_hand, \n'
         'pitcher.fielding_hand, \n'
         'pitch.pitch_ball_x_pos, \n'
