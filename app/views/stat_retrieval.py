@@ -646,7 +646,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
     by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
     by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
     select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
@@ -723,7 +723,7 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
     by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
     by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
     select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
@@ -777,7 +777,7 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
     by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
     by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
     select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
@@ -819,7 +819,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
     where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
     by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
     by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
     select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
