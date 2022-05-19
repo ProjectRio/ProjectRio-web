@@ -785,14 +785,42 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+
+    #Where statement for win-loss
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
+    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+    win_loss_where_statement = ''
+    if not (game_empty and user_empty):
+        other_conditions = False
+        win_loss_where_statement = 'WHERE '
+        if (not game_empty):
+            other_conditions = True
+            win_loss_where_statement += f"game.game_id IN {game_id_string} \n"
+        if (not user_empty):
+            if (other_conditions):
+                win_loss_where_statement += 'AND '
+            other_conditions = True
+            win_loss_where_statement += f"rio_user.id IN {user_id_string} \n"
+    win_loss_query = (
+        'SELECT '
+        f"{'rio_user.username,' if group_by_user else ''}\n"
+        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
+        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
+        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
+        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses \n'
+        'FROM game \n'
+        'JOIN rio_user AS rio_user ON (game.away_player_id = rio_user.id OR \n'
+        '                              game.home_player_id = rio_user.id) \n'
+       f"{win_loss_where_statement}"
+       f"{'GROUP BY rio_user.username' if group_by_user else ''}"
+    )
+
+    results_win_loss = db.session.execute(win_loss_query).all()
+
     query = (
         'SELECT '
         f"{select_user}"
         f"{select_char}"
-        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
-        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
-        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
-        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses, \n'      
         'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
         'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
         'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
@@ -809,6 +837,8 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     )
 
     results = db.session.execute(query).all()
+    for result_row in results_win_loss:
+        update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
     for result_row in results:
         update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
 
