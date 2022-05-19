@@ -17,7 +17,7 @@ from ...helper_functions import calculate_era
         - top batters (split into ranked normal ranked superstar, unranked normal, unranked superstar, all)
         - top pitchers (split into ranked normal ranked superstar, unranked normal, unranked superstar, all)
         - top captains (split into ranked normal ranked superstar, unranked normal, unranked superstar, all)
-    @ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
+    @ URL example: http://127.0.0.1:5000/profile/stats/?recent=5&username=demOuser4
 '''
 @app.route('/profile/stats/', methods = ['GET'])
 @jwt_required(optional=True)
