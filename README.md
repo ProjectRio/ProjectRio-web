@@ -213,7 +213,7 @@ Information...
 Project Rio, the only place you can...
 - prove to your friends that bobbles matter
 - see how many strikeouts you've thrown with PM
-- the only place you can see how lucky your friend got that game
+- measure how lucky your friend got that game
 
 # FAQ
 
