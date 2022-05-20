@@ -1,4 +1,3 @@
-from asyncio import events
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
@@ -631,22 +630,6 @@ def endpoint_plate_data():
     return {
         'Data': data
     }
-
-
-#Format output data and return
-'''
-Format:
-    {
-        "Batter Character ID": 0-53,
-        "Ball upon hit X position": float,
-        "Ball upon hit Z position": float,
-        "Batter upon hit X position": float,
-        "Batter upon hit Z position": float,
-        "Batter hand": bool
-        "Type of contact": left-sour, left-nice, perfect...
-        "Type of swing": slap, star, charge
-    }
-'''
 
 ## === Detailed stats ===
 '''
