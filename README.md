@@ -1,30 +1,31 @@
 #  Rio Web - A REST Api for Project Rio
 
-[Project Rio](https://www.projectrio.online) | [Patreon](https://www.patreon.com/projectrio) | [MSB Discord Server]() | [Project Rio Discord Server]()
+[Project Rio](https://www.projectrio.online) | [Patreon](https://www.patreon.com/projectrio) | [MSB Discord Server](https://discord.gg/ZMFCuvwAyH)
 
-Rio Web is a REST Api built to collect and return user stats from the Project Rio client. It's licensed under the terms of ...
+Rio Web is a REST Api built to collect and return user stats from the Project Rio client. 
 
-Please read the [FAQ]() before using the Api.
+With Rio Web you can... 
+- see how many games you've played with Shy Guy(Y)
+- see how many strikeouts you've thrown with PM
+- see how many games you've won against your friend with Peach as captain
+- see how lucky your friend was that one time they won
+- prove to your friends that bobbles matter
+
+Please read the [FAQ](#faq) before using the Api.
 
 ## Navigation
 - [Getting Started](#getting-started)
 - [Public Endpoints](#public-endpoints)
 	- [Characters](#characters)
 	- [Games](#games)
-	- [Detailed Stats](#detailed-stats)
-- [Why Rio Web?](#why-rio-web)
 - [FAQ](#faq)
 
 
-# Getting Started
-
-Rio Web is currently in beta and ...
 
 # Public Endpoints
 
 - [Characters](#characters)
 - [Games](#games)
-- [Detailed Stats](#detailed-stats)
 
 
 ## Characters
@@ -76,14 +77,14 @@ Rio Web is currently in beta and ...
 
 ### <u> Examples </u>
 
- **1. Get data-mined data for Mario**:
+ **1. Get data-mined stats for Mario**:
 - To get Mario's data you can use the _name_ parameter.
 	- name=Mario
 
 - Add that to the end of the API url and you’re ready to go: 
   - https://projectrio-api-1.api.projectrio.app/characters/?name=Mario
 
- **2. Get data-mined data for Mario and Luigi**:
+ **2. Get data-mined stats for Mario and Luigi**:
 - To get Mario and Luigi's data you can use the _name_ parameter twice.
 	- name=Mario
 	- name=Luigi
@@ -91,7 +92,7 @@ Rio Web is currently in beta and ...
 - Add these to the end of the API url and you’re ready to go:
   - https://projectrio-api-1.api.projectrio.app/characters/?name=Mario&name=Luigi
 
- **3. Get data-mined data for all 54 characters**:
+ **3. Get data-mined stats for all 54 characters**:
 - There's no need to pass any parameters to get all 54 characters back, so just use the following url to get all values.
   - https://projectrio-api-1.api.projectrio.app/characters/
 
@@ -168,7 +169,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 
 
 **4. Get 15 Ranked Normal Netplay games between 05/18 at 10:30pm EST and 05/19 at 1:00am EST between GenericHomeUser and GenericAwayUser** 
--  To specify what times you want games between, you must use unix time. You can use https://www.unixtimestamp.com/ or a different website to convert from MM/DD/YYYY HH:MM to a unix timestamp . 
+-  To specify what times you want games between, you must use unix time. You can use https://www.unixtimestamp.com/ or a different website to convert from MM/DD/YYYY HH:MM to a unix timestamp. 
 - To specify we want GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _recent_ to limit the return.
 	 - username=GenericHomeUser
 	 - vs_username=GenericAwayUser
@@ -183,38 +184,6 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
   - https://projectrio-api-1.api.projectrio.app/games/?recent=15&username=GenericHomeUser&vs_username=GenericAwayUser&start_time=1652927400&end_time=1652936400&tag=Ranked&tag=Normal&tag=Netplay
 
 
-
-
-## Detailed Stats
-
-
-### <u>Usage</u>
-
-Information...
-
-
-### <u>Parameters</u>
-- **Game params** : All parameters used in the [Games](#games) endpoint can be used with detailed stats. 
-- **games** : game_ids to use. If not provided, the parameters for the [Games](#games) endpoint will be expected.
-- **username** : Users to get stats for. All users if blank.
-- **character** : Character ids to get stats for. All characters if blank.
-- **by_user** _boolean_: When true stats will be grouped by user. When false, all users will be separated.
-- **by_char**  _boolean_: When true stats will be grouped by character. When false, all characters will be separate.
-- **by_swing** _boolean_: When true batting stats will be organized by swing type (slap, charge, star). When false, all swings will be combined. Only considered for swings
-- **exclude_nonfair** _boolean_ : Exclude foul and unknown hits from the return
-
-### <u>Examples</u>
-
-Information...
-
-
-# Why Rio Web?
-
-Project Rio, the only place you can...
-- prove to your friends that bobbles matter
-- see how many strikeouts you've thrown with PM
-- the only place you can see how lucky your friend got that game
-
 # FAQ
 
 **Q: How do I use parameters in a URL?**
@@ -226,7 +195,12 @@ For example, if you wanted to see Mario and Luigi's data-mined base stats using 
 https://projectrio-api-1.api.projectrio.app/?name=mario&name=luigi
 
 **Q: How do I convert a normal date to unix datetime?**
-Answer
+
+You can use https://www.unixtimestamp.com/ or a website of your choice to convert MM/DD/YYYY HH:MM to a unix timestamp. 
 	
 **Q: How do I see my personal stats?**
-Answer
+
+If you are a Patron you can use your username to retrieve your personal stats from the database. Otherwise, you can view the community's stats as a whole by using GenericHomeUser and GenericAwayUser as usernames. Once we leave Beta account creation will be available to everyone. Check out the [Public Endpoints](#public-endpoints) for more information!
+
+
+# Thanks for using Rio Web!
