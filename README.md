@@ -140,7 +140,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 
 ### <u>Examples</u>
 
- **1. Get GenericHomeUser's 5 most recent games**:
+ **1. Get GenericHomeUser's most recent games**:
 -  To get GenericHomeUser's most recent game we'll need to use the _username_ and _recent_ parameters.
 	 - username=GenericHomeUser
 	 - recent=1
@@ -148,7 +148,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 - Add these to the end of the API url and you're ready to go:
   - https://projectrio-api-1.api.projectrio.app/games/?recent=1&username=GenericHomeUser
 
-**2. Get the 5 most recent games including GenericHomeUser and/or GenericAwayUser** 
+**2. Get the 10 most recent games including GenericHomeUser and/or GenericAwayUser** 
 -  To get GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _recent_ to limit the return.
 	 - username=GenericHomeUser
 	 - username=GenericAwayUser
