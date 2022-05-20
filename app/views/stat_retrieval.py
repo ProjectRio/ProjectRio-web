@@ -530,7 +530,7 @@ def endpoint_event():
     #If not empty, use the SQL provided in tuple[1] to write a where statement and append it
     #Grab NULL values for column if tuple[3] is provided and also present in the list
     def build_where_statement(where_list):
-        where_statement = 'WHERE '
+        where_statement = 'WHERE ('
         and_needed = False
         for item in where_list:
             formatted_tuple, empty = format_list_for_SQL(item[0])
@@ -544,7 +544,7 @@ def endpoint_event():
                 null_statement = f' OR {item[1]} IS NULL'
             where_statement += f'({item[1]} IN {formatted_tuple}{null_statement})\n'
             and_needed = True
-        
+        where_statement += ')'
         #If we have at least a single where statement, return it
         if and_needed:
             return where_statement
@@ -601,9 +601,11 @@ def endpoint_plate_data():
         'SELECT \n'
         'event.game_id AS game_id, \n'
         'event.id AS event_id, \n'
-        'batter.char_id, \n'
-        'pitcher.char_id, \n'
-        'pitcher.user_id, \n'
+        'event.result_of_ab AS final_result, \n'
+        'batter.char_id AS batter_char_id, \n'
+        'pitcher.char_id AS pitcher_char_id, \n'
+        'pitcher_user.username AS pitcher_username, \n'
+        'batter_user.username AS batter_username, \n'
         'batter.batting_hand, \n'
         'pitcher.fielding_hand, \n'
         'pitch.pitch_ball_x_pos, \n'
@@ -618,6 +620,8 @@ def endpoint_plate_data():
         'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
         'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
         'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+        'JOIN rio_user AS pitcher_user ON pitcher.user_id = pitcher_user.id \n'
+        'JOIN rio_user AS batter_user ON batter.user_id = batter_user.id \n'
        f'WHERE event.id IN {event_id_string}'
     )
 
@@ -867,41 +871,15 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
 
-    #Where statement for win-loss
-    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
-    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
-    win_loss_where_statement = ''
-    if not (game_empty and user_empty):
-        other_conditions = False
-        win_loss_where_statement = 'WHERE '
-        if (not game_empty):
-            other_conditions = True
-            win_loss_where_statement += f"game.game_id IN {game_id_string} \n"
-        if (not user_empty):
-            if (other_conditions):
-                win_loss_where_statement += 'AND '
-            other_conditions = True
-            win_loss_where_statement += f"rio_user.id IN {user_id_string} \n"
-    win_loss_query = (
-        'SELECT '
-        f"{'rio_user.username,' if group_by_user else ''}\n"
-        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
-        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
-        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
-        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses \n'
-        'FROM game \n'
-        'JOIN rio_user AS rio_user ON (game.away_player_id = rio_user.id OR \n'
-        '                              game.home_player_id = rio_user.id) \n'
-       f"{win_loss_where_statement}"
-       f"{'GROUP BY rio_user.username' if group_by_user else ''}"
-    )
-
-    results_win_loss = db.session.execute(win_loss_query).all()
-
     query = (
         'SELECT '
-        f"{select_user}"
-        f"{select_char}"
+       f"{select_user}"
+       f"{select_char}"
+       f"COUNT(*) AS game_appearances{' /9' if group_by_char != True else ''}, \n "
+       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins{' /9' if group_by_char != True else ''}, \n"
+       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses{' /9' if group_by_char != True else ''}, \n"
+       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins{' /9' if group_by_char != True else ''}, \n"
+       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses{' /9' if group_by_char != True else ''}, \n"      
         'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
         'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
         'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
@@ -909,8 +887,8 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
         'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
         'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
-        'FROM game \n'
-        'JOIN character_game_summary ON character_game_summary.game_id = game.game_id \n'
+        'FROM character_game_summary \n'
+        'JOIN game ON character_game_summary.game_id = game.game_id \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
        f"{where_statement}"
@@ -918,8 +896,6 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     )
 
     results = db.session.execute(query).all()
-    for result_row in results_win_loss:
-        update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
     for result_row in results:
         update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
 
