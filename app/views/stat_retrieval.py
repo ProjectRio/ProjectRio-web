@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag
+from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag, Event
 from ..consts import *
 from ..helper_functions import calculate_era
 import pprint
@@ -11,32 +11,88 @@ import itertools
 
 # == Helper functions for SQL query formatting
 # Returns tuple in SQL ready string and a bool to indicate if query is empty
-def format_tuple_for_SQL(in_tuple, none_on_empty=False):
+def format_tuple_for_SQL(in_tuple):
     sql_tuple = "(" + ",".join(repr(v) for v in in_tuple) + ")"
     
     return (sql_tuple, (len(in_tuple) == 0))
 
+def format_list_for_SQL(in_list):
+    return format_tuple_for_SQL(tuple(in_list))
+
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
     characters = []
-    for character in Character.query.all():
+    
+    character_names = request.args.getlist('name')
+    if character_names:
+        try:
+            character_names_lowercase = tuple([name.lower() for name in character_names])
+            character_rows = db.session.query(Character).filter(Character.name_lowercase.in_(character_names_lowercase)).all()
+        except:
+            abort(400, 'Invalid Character name')
+    else:
+        character_rows = Character.query.all()
+
+    for character in character_rows:
         characters.append(character.to_dict())
 
     return {
         'characters': characters
         }
 
+# Helpers for detailed stats
+def build_where_statement(game_ids, char_ids, user_ids):
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
+    char_string, char_empty = format_tuple_for_SQL(char_ids)
+    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+
+    #If at least one group is populated produce the WHERE statement
+    where_statement = ''
+    if not (game_empty and user_empty and char_empty):
+        where_statement = 'WHERE '
+        other_conditions = False
+        if (not game_empty):
+            other_conditions = True
+            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
+        if (not user_empty):
+            if (other_conditions):
+                where_statement += 'AND '
+            other_conditions = True
+            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
+        if (not char_empty):
+            if (other_conditions):
+                where_statement += 'AND '
+            other_conditions = True
+            where_statement += f"character_game_summary.char_id IN {char_string} \n"
+    return where_statement
+
+def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
+    if int_list == None or len(int_list) == 0:
+        return [], ''
+    try:
+        for index, item in enumerate(int_list):
+            sanitized_id = int(int_list[index])
+            if sanitized_id in range (lower_bound,upper_bound):
+                int_list[index] = sanitized_id
+            else:
+                return None, error_msg
+        return int_list, ''
+    except:
+        return None, error_msg
 
 '''
 @ Description: Returns games that fit the parameters
 @ Params:
     - tag - list of tags to filter by
     - exclude_tag - List of tags to exclude from search
-    - start date - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
-    - end_date - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
+    - start_time - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
+    - end_time - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
     - username - list of users who appear in games to retreive
     - vs_username - list of users who MUST also appear in the game along with users
     - exclude_username - list of users to NOT include in query results
+    - captain - captain name to appear in games to retrieve
+    - vs_captain - captain name who MUST appear in game along with captain
+    - exclude_captian -  captain name to EXLCUDE from results
     - recent - Int of number of games
 
 @ Output:
@@ -52,7 +108,7 @@ def endpoint_games(limit_games_returned=True):
         tags = request.args.getlist('tag')
         tags_lowercase = tuple([tag.lower() for tag in tags])
         tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(tags_lowercase)).all()
-        tag_ids = tuple([tag.id for tag in tag_rows])
+        tag_ids = tuple([str(tag.id) for tag in tag_rows])
         if len(tag_ids) != len(tags):
             abort(400)
 
@@ -60,7 +116,7 @@ def endpoint_games(limit_games_returned=True):
         exclude_tags = request.args.getlist('exclude_tag')
         exclude_tags_lowercase = tuple([exclude_tag.lower() for exclude_tag in exclude_tags])
         exclude_tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(exclude_tags_lowercase)).all()
-        exclude_tag_ids = tuple([exclude_tag.id for exclude_tag in exclude_tag_rows])
+        exclude_tag_ids = tuple([str(exclude_tag.id) for exclude_tag in exclude_tag_rows])
         if len(exclude_tag_ids) != len(exclude_tags):
             abort(400)
 
@@ -91,49 +147,46 @@ def endpoint_games(limit_games_returned=True):
         list_of_exclude_user_id = list(itertools.chain(*list_of_exclude_user_id_tuples))
         tuple_exclude_user_ids = tuple(list_of_exclude_user_id)
 
+        #Get captain ids from Captain
+        captains = request.args.getlist('captain')
+        captains_lowercase = tuple([captain.lower() for captain in captains])
+        list_of_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(captains_lowercase)).all()
+        list_of_captain_ids = list(itertools.chain(*list_of_captain_id_tuples))
+        tuple_captain_ids = tuple(list_of_captain_ids)
+
+        vs_captains = request.args.getlist('vs_captain')
+        vs_captains_lowercase = tuple([vs_captain.lower() for vs_captain in vs_captains])
+        list_of_vs_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(vs_captains_lowercase)).all()
+        list_of_vs_captain_ids = list(itertools.chain(*list_of_vs_captain_id_tuples))
+        tuple_vs_captain_ids = tuple(list_of_vs_captain_ids)
+        
+        exclude_captains = request.args.getlist('exclude_captain')
+        exclude_captains_lowercase = tuple([exclude_captain.lower() for exclude_captain in exclude_captains])
+        list_of_exclude_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(exclude_captains_lowercase)).all()
+        list_of_exclude_captain_ids =list(itertools.chain(*list_of_exclude_captain_id_tuples))
+        tuple_exclude_captain_ids = tuple(list_of_exclude_captain_ids)
+
         recent = int()
-        if request.args.get('recent') is None:
-            recent = 50 if limit_games_returned is True else None
+        if limit_games_returned == False:
+            recent = None
         else:
-            recent = int(request.args.get('recent'))
+            if request.args.get('recent') is None:
+                recent = 50
+            else:
+                recent = int(request.args.get('recent'))
     except:
-       return abort(400, 'Invalid Username or Tag')
+       return abort(400, 'Invalid Username, Captain, or Tag')
 
 
-    # === Set dynamic query values ===
-
-    #Build User strings
-    user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
-    vs_user_id_string, vs_user_empty = format_tuple_for_SQL(tuple_vs_user_ids)
-    exclude_user_id_string, exclude_user_empty = format_tuple_for_SQL(tuple_exclude_user_ids)
-
+    # Build WHERE statement
     where_statement = 'WHERE '
-    where_statement_empty = True
-    if (not user_empty):
-        where_statement_empty = False
-        where_statement += f"(game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
-    if (not vs_user_empty):
-        if where_statement_empty == False: 
-            where_statement += "AND "
-        else:
-            where_statement_empty = False
-        where_statement += f"(game.away_player_id IN {vs_user_id_string} OR game.home_player_id IN {vs_user_id_string}) \n"
-    if (not exclude_user_empty):
-        if where_statement_empty == False:
-            where_statement += "AND "
-        else:
-            where_statement_empty = False
-        where_statement += f"(game.away_player_id NOT IN {exclude_user_id_string} AND game.home_player_id NOT IN {exclude_user_id_string}) \n"
 
-    #Build GameTime strings
-    start_time_unix = 0
+    #Get and validate start_time and end_time parameters from URL
+    start_time_unix = 1
     if (request.args.get('start_time') != None):
         try:
             start_time = request.args.get('start_time')
-            start_time_strs = start_time.split('-') #YYYY-MM-DD
-            print(start_time_strs)
-            dt = datetime.datetime(year=int(start_time_strs[0]), month=int(start_time_strs[1]), day=int(start_time_strs[2]))
-            start_time_unix = round(time.mktime(dt.timetuple()))
+            start_time_unix = int(start_time)
         except:
             return abort(408, 'Invalid start time format')
     
@@ -141,98 +194,103 @@ def endpoint_games(limit_games_returned=True):
     if (request.args.get('end_time') != None):
         try:
             end_time = request.args.get('end_time')
-            end_time_strs = end_time.split('-') #YYYY-MM-DD
-            dt = datetime.datetime(year=int(end_time_strs[0]), month=int(end_time_strs[1]), day=int(end_time_strs[2]))
-            end_time_unix = round(time.mktime(dt.timetuple()))
+            end_time_unix = int(end_time)
         except:
             return abort(408, 'Invalid end time format')
 
-    #Set start time to now if its 0
-    if (start_time_unix == 0):
-        start_time_unix = round(time.time())
-    
-    if (start_time_unix != 0):
-        if (not where_statement_empty): 
-            where_statement += "AND "
-        where_statement_empty = False
-        where_statement += f"game.date_time_start < {start_time_unix} \n"
+    # Add start and end_time parameters to WHERE statement
+    where_statement += f"game.date_time_start > {start_time_unix} \n"
     if (end_time_unix != 0):
-        if (not where_statement_empty): 
-            where_statement += "AND "
-        where_statement_empty = False
-        where_statement += f"game.date_time_end > {end_time_unix} \n"
+        where_statement += f"AND game.date_time_end < {end_time_unix} \n"
+
+
+    # === Set dynamic query values ===
+    count_matching_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(tag_ids)}) THEN 1 ELSE 0 END) AS having_tag_count \n" if len(tag_ids) > 0 else ""
+    count_matching_exclude_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(exclude_tag_ids)}) THEN 1 ELSE 0 END) AS exclude_tag_count \n" if len(exclude_tag_ids) > 0 else ""
+    having_matching_tags =  f'having_tag_count = {len(tag_ids)} ' if count_matching_tags != "" else ""
+    having_exclude_tags = f'exclude_tag_count = 0' if count_matching_exclude_tags != "" else ""
     
-    tag_cases = str()
-    having_tags = str()
-    join_tags = str()
-    group_by = str()
-    if tags:
-        join_tags = (
-            'JOIN game_tag ON game.game_id = game_tag.game_id \n'
-            'JOIN tag ON game_tag.tag_id = tag.id \n'
+    with_tags = str()
+    where_tags = str()
+    if count_matching_tags != "" or count_matching_exclude_tags != "":
+        with_tags = (
+            'WITH game_id_and_tag_counts AS ( \n'
+            '   SELECT \n' 
+            '       game_id, \n'
+                    f'{count_matching_tags}'
+                    f'{", " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
+                    f'{count_matching_exclude_tags}'
+            '   FROM game_tag \n'
+            '   GROUP BY game_id \n'
+            ')  \n'
         )
-        for index, tag_id in enumerate(tag_ids):
-            tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {tag_id} THEN 1 END) AS tag_{index}, '
-            having_tags += f'HAVING tag_{index} ' if index == 0 else f'AND tag_{index} '
+        where_tags = (
+            'AND game.game_id IN ( \n'
+            '  SELECT game_id  \n'
+            '  FROM game_id_and_tag_counts \n'
+            '  WHERE ' 
+            f'{having_matching_tags}'
+            f'{" AND " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
+            f'{having_exclude_tags}'
+            '\n)\n '
+        )
 
-        group_by = 'GROUP BY game_tag.game_id'
+        where_statement += where_tags
 
-    exclude_tag_cases = str()
-    having_exclude_tags = str()
+    #Build User strings
+    user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
+    vs_user_id_string, vs_user_empty = format_tuple_for_SQL(tuple_vs_user_ids)
+    exclude_user_id_string, exclude_user_empty = format_tuple_for_SQL(tuple_exclude_user_ids)
 
-    if exclude_tags:
-        if join_tags == "":
-            join_tags = (
-            'JOIN game_tag ON game.game_id = game_tag.game_id \n'
-            'JOIN tag ON game_tag.tag_id = tag.id \n'
-            )
+    if (not user_empty):
+        where_statement += f"AND (game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
+    if (not vs_user_empty):
+        where_statement += f"AND (game.away_player_id IN {vs_user_id_string} OR game.home_player_id IN {vs_user_id_string}) \n"
+    if (not exclude_user_empty):
+        where_statement += f"AND game.away_player_id NOT IN {exclude_user_id_string} AND game.home_player_id NOT IN {exclude_user_id_string} \n"
 
-        for index, exclude_tag_id in enumerate(exclude_tag_ids):
-            exclude_tag_cases += f'SUM(CASE WHEN game_tag.tag_id = {exclude_tag_id} THEN 1 ELSE 0 END) AS exclude_tag_{index}, '
+    #Build captain strings
+    captain_id_string, captain_empty = format_tuple_for_SQL(tuple_captain_ids)
+    vs_captain_id_string, vs_captain_empty = format_tuple_for_SQL(tuple_vs_captain_ids)
+    exclude_captain_id_string, exclude_captain_empty = format_tuple_for_SQL(tuple_exclude_captain_ids)
 
-            if having_tags == "":
-                having_exclude_tags += f'HAVING exclude_tag_{index} = 0' if index == 0 else f' AND exclude_tag_{index} = 0'
-            else:
-                having_exclude_tags += f' AND exclude_tag_{index} = 0'
-
-        if group_by == "":
-            group_by = 'GROUP BY game_tag.game_id'
+    if (not captain_empty):
+        where_statement += f"AND (away_captain.char_id IN {captain_id_string} OR home_captain.char_id IN {captain_id_string}) \n"
+    if (not vs_captain_empty):
+        where_statement += f"AND (away_captain.char_id IN {vs_captain_id_string} OR home_captain.char_id IN {vs_captain_id_string}) \n"
+    if (not exclude_captain_empty):
+        where_statement += f"AND away_captain.char_id NOT IN {exclude_captain_id_string} AND home_captain.char_id NOT IN {exclude_captain_id_string} \n"
 
     # === Construct query === 
     query = (
-        'SELECT '
-        'game.game_id AS game_id, \n'
-        f'{tag_cases} \n'
-        f'{exclude_tag_cases} \n'
-        'game.date_time_start AS date_time_start, \n'
-        'game.date_time_end AS date_time_end, \n'
-        'game.away_score AS away_score, \n'
-        'game.home_score AS home_score, \n'
-        'game.innings_played AS innings_played, \n'
-        'game.innings_selected AS innings_selected, \n'
-        'away_player.username AS away_player, \n'
-        'home_player.username AS home_player, \n'
-        'away_captain.name AS away_captain, \n'
-        'home_captain.name AS home_captain \n'   
-        'FROM game '
-        f'{join_tags} '
-        'JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
-        'JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
-        'JOIN character_game_summary AS away_captain_game_summary \n'
-            'ON game.game_id = away_captain_game_summary.game_id \n'
-            'AND away_captain_game_summary.user_id = away_player.id \n'
-            'AND away_captain_game_summary.captain = True \n'
-        'JOIN character_game_summary AS home_captain_game_summary \n'
-            'ON game.game_id = home_captain_game_summary.game_id \n'
-            'AND home_captain_game_summary.user_id = home_player.id \n'
-            'AND home_captain_game_summary.captain = True \n'
-        'JOIN character AS away_captain ON away_captain_game_summary.char_id = away_captain.char_id \n'
-        'JOIN character AS home_captain ON home_captain_game_summary.char_id = home_captain.char_id \n'
-        f'{where_statement} \n'
-        f'{group_by} \n'
-        f'{having_tags} {having_exclude_tags} \n'
-        f'ORDER BY game.date_time_start DESC \n'
-        f"{('LIMIT ' + str(recent)) if recent != None else ''}" #Limit values if limit provided, otherwise return all
+        f'{with_tags}'
+        'SELECT game.game_id, \n'
+        '   game.date_time_start AS date_time_start, \n'
+        '   game.date_time_end AS date_time_end, \n'
+        '   game.away_score AS away_score, \n'
+        '   game.home_score AS home_score, \n'
+        '   game.innings_played AS innings_played, \n'
+        '   game.innings_selected AS innings_selected, \n'
+        '   away_player.username AS away_player, \n'
+        '   home_player.username AS home_player, \n'
+        '   away_captain.name AS away_captain, \n'
+        '   home_captain.name AS home_captain \n'
+        'FROM game \n'
+        'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
+        'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
+        'LEFT JOIN character_game_summary AS away_captain_cgs \n'
+        '   ON game.game_id = away_captain_cgs.game_id \n'
+        '   AND away_captain_cgs.user_id = away_player.id \n'
+        '   AND away_captain_cgs.captain = True \n'
+        'LEFT JOIN character_game_summary AS home_captain_cgs \n'
+        '	ON game.game_id = home_captain_cgs.game_id \n'
+        '   AND home_captain_cgs.user_id = home_player.id \n'
+        '   AND home_captain_cgs.captain = True \n'
+        'LEFT JOIN character AS away_captain ON away_captain_cgs.char_id = away_captain.char_id \n'
+        'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
+        f'{where_statement} '
+        'ORDER BY game.date_time_start DESC \n'
+        f"{('LIMIT ' + str(recent)) if limit_games_returned == True else ''}"
     )
 
     results = db.session.execute(query).all()
@@ -290,96 +348,303 @@ def endpoint_games(limit_games_returned=True):
 
 # == Functions to return coordinates for graphing ==
 '''
-    - Game params (args): Same params as games. Use to get games with proper tags/users/etc
-    - Char Id (list):     List of characters to get coordinates for
-    - TypeOfHit (list):   List of contact types to get data for
-    - TypeOfSwing (list): List of swing types to get data for
-    - Hand (list):        List of batterhands
+@Endpoint: Events
+@Description: Used to pick out events that fit the given params
+@Params:
+    - Game params:           Params for /games/ (tags/users/date/etc)
+    - games:           [0-x],   games if not using the game endpoint params
+    - pitcher_char:    [0-54],  pitcher char ids
+    - batter_char:     [0-54],  batter char ids
+    - fielder_char:    [0-54],  fielder char ids
+    - fielder_pos:     [0-54],  fielder pos
+    - contact:         [0-5],   contact types (0-4: in-game values, 5: no contact)
+    - swing:           [0-4],   swing types ()
+    - pitch:           [0-4],   pitch types (TODO)
+    - chem_link:       [0-4],   chemistry on base values
+    - pitcher_hand:    [0-1],   pitchers handedness ()
+    - batter_hand:     [0-1],   batters handedness ()
+    - inning:          [0-50],  innings to collect from
+    - half_inning:     [0-1],   half inning to collect from
+    - balls:           [0-3],   balls
+    - strikes:         [0-2],   strikes
+    - outs:            [0-2],   outs
+    - multi_out        [0-1],   bool for double plays
+    - star_chance      [0-1],   bool for star chance
+    - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
+    - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
 '''
-@app.route('/batter_position_data/', methods = ['GET'])
-def endpoint_batter_position():
-    #Not ready for production
-    if (app.env == "production"):
-        return abort(404, description='Endpoint not ready for production')
+@app.route('/event/', methods = ['GET'])
+def endpoint_event():
+    # === Construct query === 
+    #Sanitize games params 
+    try:
+        list_of_game_ids = list() # Holds IDs for all the games we want data from
+        if (len(request.args.getlist('games')) != 0):
+            list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
+            list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
+            if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
+                return abort(408, description='Provided GameIDs not found')
 
-        # === Construct query === 
-    list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
-    list_of_game_ids = list() # Holds IDs for all the games we want data from
+        else:
+            list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
+            for game_dict in list_of_games['games']:
+                list_of_game_ids.append(game_dict['Id'])
+    except:
+        return abort(408, description='Invalid GameID')
 
-    print(list_of_games)
-    for game_dict in list_of_games['games']:
-        list_of_game_ids.append(game_dict['Id'])
+    
+    list_of_batter_user_ids = []
+    list_of_pitcher_user_ids = []
+    if ( request.args.getlist('username') != None or request.args.getlist('vs_username') != None ):
+        #Get user ids from list of users
+        vs_usernames = request.args.getlist('vs_username')
+        vs_usernames_lowercase = tuple([username.lower() for username in vs_usernames])
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        list_of_vs_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(vs_usernames_lowercase)).all()
+        # using list comprehension
+        list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
+        if (request.args.get('users_as_batter') == "1"):
+            list_of_batter_user_ids += list_of_vs_user_id
+        if (request.args.get('users_as_pitcher') == "1"):
+            list_of_pitcher_user_ids += list_of_vs_user_id
 
-    list_of_game_ids = tuple(list_of_game_ids)
-    print(list_of_game_ids)
+        #Get user ids from list of users
+        usernames = request.args.getlist('username')
+        usernames_lowercase = tuple([username.lower() for username in usernames])
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
+        # using list comprehension
+        list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
+        if (request.args.get('users_as_batter') == "1"):
+            list_of_batter_user_ids += list_of_user_id
+        if (request.args.get('users_as_pitcher') == "1"):
+            list_of_pitcher_user_ids += list_of_user_id
 
+    # Pitcher Char Id
+    list_of_pitcher_char_ids, error = sanitize_int_list(request.args.getlist('pitcher_char'), "Pitcher Char ID not in range", 55)
+    if list_of_pitcher_char_ids == None:
+        return abort(400, description = error)
 
-    #Get list of game_ids from list_of_games
+    # Batter Char Id
+    list_of_batter_char_ids, error = sanitize_int_list(request.args.getlist('batter_char'), "Batter Char ID not in range", 55)
+    if list_of_batter_char_ids == None:
+        return abort(400, description = error)
 
-    # Apply filters
-    #   WHERE batter.hand in input_hand
-    #   WHERE contact.type_of_contact in input_typeofcontact
-    #   WHERE pitch.type_of_swing in input_typeofswing
-    #   WHERE character.char_id in input_char_ids
+    #Contact Type
+    list_of_contact, error = sanitize_int_list(request.args.getlist('contact'), "Contact Type not in range", 6)
+    if list_of_contact == None:
+        return abort(400, description = error)
+    
+    #Swing Type
+    list_of_swings, error = sanitize_int_list(request.args.getlist('swing'), "Swing Type not in range", 5)
+    if list_of_swings == None:
+        return abort(400, description = error)
+
+    #Pitch Type - 0,1,2,3,4 (curve, slider, perfect charge, changeup, star swing)
+    list_of_pitches, error = sanitize_int_list(request.args.getlist('pitch'), "Pitch Type not in range", 5)
+    if list_of_pitches == None:
+        return abort(400, description = error)
+
+    #Chem Links
+    list_of_chem, error = sanitize_int_list(request.args.getlist('chem_link'), "Chem Links not in range", 4)
+    if list_of_chem == None:
+        return abort(400, description = error)
+
+    #Batter Handedness
+    list_of_bh, error = sanitize_int_list(request.args.getlist('batter_hand'), "Batter hand not in range", 2)
+    if list_of_bh == None:
+        return abort(400, description = error)
+
+    #Pitcher Handedness
+    list_of_ph, error = sanitize_int_list(request.args.getlist('pitcher_hand'), "Batter hand not in range", 2)
+    if list_of_ph == None:
+        return abort(400, description = error)
+
+    #Fielder Id
+    list_of_fielder_char_ids, error = sanitize_int_list(request.args.getlist('fielder_char'), "Fielder Char ID not in range", 55)
+    if list_of_fielder_char_ids == None:
+        return abort(400, description = error)
+
+    #Fielder Pos
+    list_of_fielder_pos, error = sanitize_int_list(request.args.getlist('fielder_pos'), "Fielder position not in range", 9)
+    if list_of_fielder_pos == None:
+        return abort(400, description = error)
+
+    #Inning list
+    list_of_innings, error = sanitize_int_list(request.args.getlist('innings'), "Innings not in range", 50)
+    if list_of_innings == None:
+        return abort(400, description = error)
+
+    #Half Inning list
+    list_of_half_inning, error = sanitize_int_list(request.args.getlist('half_inning'), "Half Inning not in range", 2)
+    if list_of_half_inning == None:
+        return abort(400, description = error)
+
+    #Strike list
+    list_of_balls, error = sanitize_int_list(request.args.getlist('balls'), "Balls not in range", 4)
+    if list_of_balls == None:
+        return abort(400, description = error)
+
+    #Strike list
+    list_of_strikes, error = sanitize_int_list(request.args.getlist('strikes'), "Strikes not in range", 3)
+    if list_of_strikes == None:
+        return abort(400, description = error)
+
+    #Outs list
+    list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
+    if list_of_outs == None:
+        return abort(400, description = error)
+
+    #this might be riduculous but I want everything in a list for the next function
+    multi_out_flag   = [1] if (request.args.get('multi_out') == '1') else []
+    star_chance_flag = [1] if (request.args.get('star_chance') == '1') else []
+
+    #list of args, the attribute to select from, null value
+    where_list = [
+        (list_of_game_ids, 'event.game_id', None),
+        (list_of_pitcher_char_ids, 'pitcher.char_id', None),
+        (list_of_batter_char_ids, 'batter.char_id', None),
+        (list_of_contact, 'contact.type_of_contact', 5),
+        (list_of_swings, 'pitch.type_of_swing', None),
+       #(list_of_pitches, 'pitch.type_of_swing', None) #This one needs a DB rework. Manually add later
+        (list_of_chem, 'event.chem_links_ob', None),
+        (list_of_bh, 'batter.batting_hand', None),
+        (list_of_ph, 'pitcher.fielding_hand', None),
+        (list_of_fielder_char_ids, 'fielder.char_id', None),
+        (list_of_fielder_pos, 'fielder.position', None),
+        (list_of_innings, 'event.inning', None),
+        (list_of_half_inning, 'event.half_inning', None),
+        (list_of_balls, 'event.balls', None),
+        (list_of_strikes, 'event.strikes', None),
+        (list_of_outs, 'event.outs', None),
+        (multi_out_flag, 'contact.multi_out', None),
+        (star_chance_flag, 'event.star_chance', None),
+        (star_chance_flag, 'event.star_chance', None),
+        (list_of_batter_user_ids, 'batter.user_id', None),
+        (list_of_pitcher_user_ids, 'pitcher.user_id', None)
+    ]
+
+    #Go through all of the lists from the args
+    #If they are empty, skip entire list, do not add to the statement
+    #If not empty, use the SQL provided in tuple[1] to write a where statement and append it
+    #Grab NULL values for column if tuple[3] is provided and also present in the list
+    def build_where_statement(where_list):
+        where_statement = 'WHERE '
+        and_needed = False
+        for item in where_list:
+            formatted_tuple, empty = format_list_for_SQL(item[0])
+            if empty:
+                continue
+            if and_needed:
+                where_statement += 'AND '
+            #Check if there are values that will represent null (contact=5 is not a real value, but its used to represent 'no contact' AKA null in the table)
+            null_statement = ''
+            if ((item[2] != None) and (item[2] in item[0])):
+                null_statement = f' OR {item[1]} IS NULL'
+            where_statement += f'({item[1]} IN {formatted_tuple}{null_statement})\n'
+            and_needed = True
+        
+        #If we have at least a single where statement, return it
+        if and_needed:
+            return where_statement
+        return ''
+
+    where_statement = build_where_statement(where_list)
+
     query = (
-        'SELECT '
-        'game.game_id AS game_id, '
-        'event.id AS event_id, '
-        'character.char_id AS char_id, '
-        'contact.batter_x_pos_upon_hit AS batter_x_pos, '
-        'contact.batter_z_pos_upon_hit AS batter_z_pos, '
-        'contact.ball_x_pos_upon_hit AS ball_x_pos, '
-        'contact.ball_z_pos_upon_hit AS ball_z_pos, '
-        'contact.type_of_contact AS type_of_contact, '
-        'pitch.pitch_result AS pitch_result, '
-        'pitch.type_of_swing AS type_of_swing '
-        'FROM game '
-        'JOIN event ON event.game_id = game.game_id '
-        'JOIN pitch_summary AS pitch ON pitch.id = event.pitch_summary_id '
-            'AND pitch.pitch_result = 6 ' #Pitch_result == 6 is contact TODO make constant
-        'JOIN contact_summary AS contact ON contact.id = pitch.contact_summary_id '
-        'JOIN character_game_summary AS batter ON batter.id = pitch.batter_id '
-        'JOIN character ON character.char_id = batter.char_id ' #Not sure we actually need this
-       f'WHERE (game.game_id IN {list_of_game_ids}) '
+        'SELECT \n'
+        'event.id AS event_id \n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n' #Fielding gets a left joiin for HRs and misses
+        'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
+        'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+        'LEFT JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
+       f'{where_statement}'
     )
 
     print(query)
 
     result = db.session.execute(query).all()
-    print(result)
+    event_nums = []
     for entry in result:
-        print(entry._asdict())
+        event_nums.append(entry.event_id )
+    return {
+        'Events': event_nums
+    }
 
-    #Format output data and return
-    '''
-    Format:
-        {
-            "Batter Character ID": 0-53,
-            "Ball upon hit X position": float,
-            "Ball upon hit Z position": float,
-            "Batter upon hit X position": float,
-            "Batter upon hit Z position": float,
-            "Batter hand": bool
-            "Type of contact": left-sour, left-nice, perfect...
-            "Type of swing": slap, star, charge
-        }
-    '''
+
+@app.route('/plate_data/', methods = ['GET'])
+def endpoint_plate_data():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'event.game_id AS game_id, \n'
+        'event.id AS event_id, \n'
+        'batter.char_id, \n'
+        'pitcher.char_id, \n'
+        'pitcher.user_id, \n'
+        'batter.batting_hand, \n'
+        'pitcher.fielding_hand, \n'
+        'pitch.pitch_ball_x_pos, \n'
+        'pitch.pitch_ball_z_pos, \n'
+        'pitch.pitch_batter_x_pos, \n'
+        'pitch.pitch_batter_z_pos, \n'
+        'pitch.type_of_swing, \n'
+        'contact.type_of_contact, \n'
+        'pitch.pitch_result\n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
+        'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+       f'WHERE event.id IN {event_id_string}'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
 
 ## === Detailed stats ===
 '''
+@ Endpoint: detailed_stats
 @ Description: Returns batting, pitching, fielding, and star stats on configurable levels
 @ Params:
-    - Username (list):  List of users to get stats for. All users if blank
-    - Character (list): List of character ids to get stats for. All charas if blank
-    - Games (list):     List of game ids to use. If not provided arguments for /games/ endpoint will be expected and used
-    - by_user (bool):   When true stats will be organized by user. When false, all users will be 
-                        combined
-    - by_char (bool):   When true stats will be organized by character. When false, 
-                        all characters will be combined
-    - by_swing (bool):  When true batting stats will be organized by swing type (slap, charge, star). When false, 
-                        all swings will be combined. Only considered for swings
-    - exlude_nonfair:   Exlude foul and unknown hits from the return
-    - Games parms:      All params for /games/ endpoint. Determines the games that will be considered
+    - Game params:                  Params for /games/ (tags/users/date/etc)
+    - games:          [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
+    - username:       [],           users to get stats for. All users if blank
+    - character:      [0-54],       character ids to get stats for. All charas if blank
+    - by_user:        [bool],       When true stats will be grouped by user. When false, all users will be separate
+    - by_char:        [bool],       When true stats will be grouped by character. When false, all characters will be separate
+    - by_swing:       [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
+                                    all swings will be combined. Only considered for swings
+    - exlude_nonfair: [bool],       Exlude foul and unknown hits from the return
 @ Output:
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
@@ -388,9 +653,6 @@ def endpoint_batter_position():
 '''
 @app.route('/detailed_stats/', methods = ['GET'])
 def endpoint_detailed_stats():
-    #Not ready for production
-    if (app.env == "production"):
-        return abort(404, description='Endpoint not ready for production')
 
     #Sanitize games params 
     try:
@@ -406,7 +668,7 @@ def endpoint_detailed_stats():
             for game_dict in list_of_games['games']:
                 list_of_game_ids.append(game_dict['Id'])
     except:
-        abort(408, description='Invalid GameID')
+        return abort(408, description='Invalid GameID')
 
     # Sanitize character params
     try:
@@ -461,42 +723,22 @@ def endpoint_detailed_stats():
 
 def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False, group_by_swing=False, exclude_nonfair=False):
 
-    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
-    char_string, char_empty = format_tuple_for_SQL(char_ids)
-    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+    where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     by_swing = 'pitch_summary.type_of_swing' if group_by_swing else ''
     select_swing = 'pitch_summary.type_of_swing AS type_of_swing, \n' if group_by_swing else ''
-
-    #If at least one group is populated produce the WHERE statement
-    where_statement = ''
-    if not (game_empty and user_empty and char_empty):
-        where_statement = 'WHERE '
-        other_conditions = False
-        if (not game_empty):
-            other_conditions = True
-            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
-        if (not user_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not char_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.char_id IN {char_string} \n"
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char, by_swing]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     contact_batting_query = (
+        
         'SELECT \n'
         f"{select_user}"
         f"{select_char}"
@@ -558,34 +800,13 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
 
 def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
 
-    game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
-    char_string, char_empty = format_tuple_for_SQL(char_ids, True)
-    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+    where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
-
-    #If at least one group is populated produce the WHERE statement
-    where_statement = ''
-    if not (game_empty and user_empty and char_empty):
-        where_statement = 'WHERE '
-        other_conditions = False
-        if (not game_empty):
-            other_conditions = True
-            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
-        if (not user_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not char_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.char_id IN {char_string} \n"
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char]))
@@ -633,46 +854,53 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     return
 
 def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
-    game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
-    char_string, char_empty = format_tuple_for_SQL(char_ids, True)
-    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+    where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
-
-    #If at least one group is populated produce the WHERE statement
-    where_statement = ''
-    if not (game_empty and user_empty and char_empty):
-        where_statement = 'WHERE '
-        other_conditions = False
-        if (not game_empty):
-            other_conditions = True
-            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
-        if (not user_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not char_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.char_id IN {char_string} \n"
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+
+    #Where statement for win-loss
+    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
+    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+    win_loss_where_statement = ''
+    if not (game_empty and user_empty):
+        other_conditions = False
+        win_loss_where_statement = 'WHERE '
+        if (not game_empty):
+            other_conditions = True
+            win_loss_where_statement += f"game.game_id IN {game_id_string} \n"
+        if (not user_empty):
+            if (other_conditions):
+                win_loss_where_statement += 'AND '
+            other_conditions = True
+            win_loss_where_statement += f"rio_user.id IN {user_id_string} \n"
+    win_loss_query = (
+        'SELECT '
+        f"{'rio_user.username,' if group_by_user else ''}\n"
+        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
+        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
+        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
+        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses \n'
+        'FROM game \n'
+        'JOIN rio_user AS rio_user ON (game.away_player_id = rio_user.id OR \n'
+        '                              game.home_player_id = rio_user.id) \n'
+       f"{win_loss_where_statement}"
+       f"{'GROUP BY rio_user.username' if group_by_user else ''}"
+    )
+
+    results_win_loss = db.session.execute(win_loss_query).all()
+
     query = (
         'SELECT '
         f"{select_user}"
         f"{select_char}"
-        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
-        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
-        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
-        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses, \n'      
         'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
         'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
         'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
@@ -689,6 +917,8 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     )
 
     results = db.session.execute(query).all()
+    for result_row in results_win_loss:
+        update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
     for result_row in results:
         update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
 
@@ -696,34 +926,13 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
 
 def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
 
-    game_id_string, game_empty = format_tuple_for_SQL(game_ids, True)
-    char_string, char_empty = format_tuple_for_SQL(char_ids, True)
-    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
+    where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
-    by_user = 'character_game_summary.user_id' if group_by_user else ''
-    select_user = 'rio_user.user_id AS user_id, \n' if group_by_user else ''
+    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
+    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
 
-    by_char = 'character_game_summary.char_id' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n' if group_by_char else ''
-
-    #If at least one group is populated produce the WHERE statement
-    where_statement = ''
-    if not (game_empty and user_empty and char_empty):
-        where_statement = 'WHERE '
-        other_conditions = False
-        if (not game_empty):
-            other_conditions = True
-            where_statement += f"character_game_summary.game_id IN {game_id_string} \n"
-        if (not user_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.user_id IN {user_id_string} \n"
-        if (not char_empty):
-            if (other_conditions):
-                where_statement += 'AND '
-            other_conditions = True
-            where_statement += f"character_game_summary.char_id IN {char_string} \n"
+    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
+    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
 
     # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
     groups = ','.join(filter(None,[by_user, by_char]))
@@ -766,7 +975,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
         'COUNT(CASE WHEN fielding_summary.action = 1 THEN 1 ELSE NULL END) AS jump_catches, \n'
         'COUNT(CASE WHEN fielding_summary.action = 2 THEN 1 ELSE NULL END) AS diving_catches, \n'
         'COUNT(CASE WHEN fielding_summary.action = 3 THEN 1 ELSE NULL END) AS wall_jumps, \n'
-        'SUM(fielding_summary.swap) AS swap_successes, \n'
+        'SUM(CASE WHEN fielding_summary.swap = True THEN 1 ELSE 0 END) AS swap_successes, \n'
         'COUNT(CASE WHEN fielding_summary.bobble != 0 THEN 1 ELSE NULL END) AS bobbles \n'
         #SUM( Insert other stats once questions addressed
         'FROM character_game_summary \n'
