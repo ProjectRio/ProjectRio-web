@@ -874,11 +874,11 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'SELECT '
        f"{select_user}"
        f"{select_char}"
-       f"COUNT(*) AS game_appearances{' /9' if group_by_char != True else ''}, \n "
-       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins{' /9' if group_by_char != True else ''}, \n"
-       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses{' /9' if group_by_char != True else ''}, \n"
-       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins{' /9' if group_by_char != True else ''}, \n"
-       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses{' /9' if group_by_char != True else ''}, \n"      
+       f"COUNT(*){'/9' if group_by_char != True else ''} AS game_appearances, \n "
+       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_wins, \n"
+       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_loses, \n"
+       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_wins, \n"
+       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_loses, \n"      
         'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
         'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
         'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
