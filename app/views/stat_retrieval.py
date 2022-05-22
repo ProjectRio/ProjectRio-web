@@ -168,7 +168,10 @@ def endpoint_games(limit_games_returned=True):
 
         recent = int()
         if limit_games_returned == False:
-            recent = None
+            if request.args.get('recent') is None:
+                recent = None
+            else:
+                recent = int(request.args.get('recent'))
         else:
             if request.args.get('recent') is None:
                 recent = 50
@@ -290,8 +293,10 @@ def endpoint_games(limit_games_returned=True):
         'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
         f'{where_statement} '
         'ORDER BY game.date_time_start DESC \n'
-        f"{('LIMIT ' + str(recent)) if limit_games_returned == True else ''}"
+        f"{('LIMIT ' + str(recent)) if recent != None else ''}"
     )
+
+    print(query)
 
     results = db.session.execute(query).all()
     
@@ -373,7 +378,7 @@ def endpoint_games(limit_games_returned=True):
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
 '''
-@app.route('/event/', methods = ['GET'])
+@app.route('/events/', methods = ['GET'])
 def endpoint_event():
     # === Construct query === 
     #Sanitize games params 
@@ -849,8 +854,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     non_contact_batting_query = ( 
         'SELECT \n'
-        f"{select_user}"
-        f"{select_char}"
+       f"{select_user}"
+       f"{select_char}"
         'SUM(character_game_summary.walks_bb) AS walks_bb, \n'
         'SUM(character_game_summary.walks_hit) AS walks_hbp, \n'
         'SUM(character_game_summary.strikeouts) AS strikeouts, \n'
