@@ -635,6 +635,77 @@ def endpoint_plate_data():
         'Data': data
     }
 
+@app.route('/landing_data/', methods = ['GET'])
+def endpoint_landing_data():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'event.game_id AS game_id, \n'
+        'event.id AS event_id, \n'
+        'event.result_of_ab AS final_result, \n'
+        'batter.char_id AS batter_char_id, \n'
+        'pitcher.char_id AS fielder_char_id, \n'
+        'pitcher_user.username AS pitcher_username, \n'
+        'batter_user.username AS batter_username, \n'
+        'batter.batting_hand, \n'
+        'pitcher.fielding_hand, \n'
+        'contact.ball_x_velocity AS x_velo, \n'
+        'contact.ball_y_velocity AS y_velo, \n'
+        'contact.ball_z_velocity AS z_velo, \n'
+        'contact.ball_x_pos AS x_pos, \n'
+        'contact.ball_y_pos AS y_pos, \n'
+        'contact.ball_z_pos AS z_pos, \n'
+        'contact.input_direction_stick AS stick_input, \n'
+        'pitch.type_of_swing, \n'
+        'contact.type_of_contact, \n'
+        #Add decoded action
+        'fielding.position AS fielder_position, \n'
+        'fielding.fielder_x_pos AS x_pos, \n'
+        'fielding.fielder_y_pos AS y_pos, \n'
+        'fielding.fielder_z_pos AS z_pos, \n'
+        'fielding.jump AS fielder_jump, \n'
+        'fielding.manual_select AS manual_select_state \n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n'
+        'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
+        'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+        'JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
+        'JOIN rio_user AS pitcher_user ON pitcher.user_id = pitcher_user.id \n'
+        'JOIN rio_user AS batter_user ON batter.user_id = batter_user.id \n'
+       f'WHERE event.id IN {event_id_string}'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
+
 ## === Detailed stats ===
 '''
 @ Endpoint: detailed_stats
@@ -747,12 +818,9 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         f"{select_user}"
         f"{select_char}"
         f"{select_swing}"
-        'COUNT(CASE WHEN pitch_summary.pitch_result = 1 THEN 1 ELSE NULL END) AS walks_bb, \n'
-        'COUNT(CASE WHEN pitch_summary.pitch_result = 0 THEN 1 ELSE NULL END) AS walks_hit, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 0 THEN 1 ELSE NULL END) AS outs, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 1 THEN 1 ELSE NULL END) AS foul_hits, \n'
-        'COUNT(CASE WHEN contact_summary.primary_result = 2 THEN 1 ELSE NULL END) AS fair_hits, \n'
-        'COUNT(CASE WHEN contact_summary.primary_result = 3 THEN 1 ELSE NULL END) AS unknown_hits, \n'
+        'COUNT(CASE WHEN (contact_summary.primary_result = 2 OR contact_summary.primary_result = 3) THEN 1 ELSE NULL END) AS fair_hits, \n'
         'COUNT(CASE WHEN (contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) THEN 1 ELSE NULL END) AS sour_hits, '
         'COUNT(CASE WHEN (contact_summary.type_of_contact = 1 OR contact_summary.type_of_contact = 3) THEN 1 ELSE NULL END) AS nice_hits, '
         'COUNT(CASE WHEN contact_summary.type_of_contact = 2 THEN 1 ELSE NULL END) AS perfect_hits, '
@@ -762,6 +830,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
+        #'SUM (character_game_summary.strikeouts) AS strikeouts, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
         'SUM(event.result_rbi) AS rbi '
         'FROM character_game_summary \n'
@@ -784,7 +853,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         f"{select_char}"
         'SUM(character_game_summary.walks_bb) AS walks_bb, \n'
         'SUM(character_game_summary.walks_hit) AS walks_hbp, \n'
-        'SUM(character_game_summary.strikeouts) AS strikeouts \n'
+        'SUM(character_game_summary.strikeouts) AS strikeouts, \n'
+        'SUM(character_game_summary.hits) AS hits \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
