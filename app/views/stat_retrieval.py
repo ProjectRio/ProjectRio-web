@@ -717,14 +717,18 @@ def endpoint_landing_data():
 @ Description: Returns batting, pitching, fielding, and star stats on configurable levels
 @ Params:
     - Game params:                  Params for /games/ (tags/users/date/etc)
-    - games:          [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
-    - username:       [],           users to get stats for. All users if blank
-    - character:      [0-54],       character ids to get stats for. All charas if blank
-    - by_user:        [bool],       When true stats will be grouped by user. When false, all users will be separate
-    - by_char:        [bool],       When true stats will be grouped by character. When false, all characters will be separate
-    - by_swing:       [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
+    - games:             [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
+    - username:          [],           users to get stats for. All users if blank
+    - character:         [0-54],       character ids to get stats for. All charas if blank
+    - by_user:           [bool],       When true stats will be grouped by user. When false, all users will be separate
+    - by_char:           [bool],       When true stats will be grouped by character. When false, all characters will be separate
+    - by_swing:          [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
                                     all swings will be combined. Only considered for swings
-    - exlude_nonfair: [bool],       Exlude foul and unknown hits from the return
+    - exlude_nonfair:    [bool],       Exlude foul and unknown hits from the return
+    - exclude_batting:   [bool],       Do not return stats from the batting section
+    - exclude_pitching:  [bool],       Do not return stats from the pitching section
+    - exclude_misc:      [bool],       Do not return stats from the misc section
+    - exclude_fielding:  [bool],       Do not return stats from the fielding section
 @ Output:
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
@@ -752,7 +756,7 @@ def endpoint_detailed_stats():
 
     # Sanitize character params
     try:
-        list_of_char_ids = request.args.getlist('character')
+        list_of_char_ids = request.args.getlist('char_id')
         for index, char_id in enumerate(list_of_char_ids):
             sanitized_id = int(list_of_char_ids[index])
             if sanitized_id in range (0,55):
@@ -769,6 +773,12 @@ def endpoint_detailed_stats():
     group_by_char = (request.args.get('by_char') == '1')
     exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
 
+    #Stat exclussion flags
+    exclude_batting_stats = (request.args.get('exclude_batting') == '1')
+    exclude_pitching_stats = (request.args.get('exclude_pitching') == '1')
+    exclude_misc_stats = (request.args.get('exclude_misc') == '1')
+    exclude_fielding_stats = (request.args.get('exclude_fielding') == '1')
+
     usernames = request.args.getlist('username')
     usernames_lowercase = tuple([username.lower() for username in usernames])
     #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
@@ -780,7 +790,7 @@ def endpoint_detailed_stats():
 
     #If we didn't find every user provided in the DB, abort
     if (len(tuple_user_ids) != len(usernames)):
-        return abort(408, description='Provided Usernames no found')
+        return abort(408, description='Provided Usernames not found')
 
     #If a char was provided that is not 0-54 abort
     invalid_chars=[i for i in tuple_char_ids if int(i) not in range(0,55)]
@@ -790,12 +800,14 @@ def endpoint_detailed_stats():
     
     # Individual functions create queries to get their respective stats
     return_dict = {}
-    batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
-    pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-    misc_stats = query_detailed_misc_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-    fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-
-    pprint.pprint(return_dict)
+    if (not exclude_batting_stats):
+        batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
+    if (not exclude_pitching_stats):
+        pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
+    if (not exclude_misc_stats):
+        misc_stats = query_detailed_misc_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
+    if (not exclude_fielding_stats):
+        fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
 
     return {
         'Stats': return_dict
