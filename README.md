@@ -183,6 +183,125 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 - Add these to the end of the API url and you're ready to go:
   - https://projectrio-api-1.api.projectrio.app/games/?recent=15&username=GenericHomeUser&vs_username=GenericAwayUser&start_time=1652927400&end_time=1652936400&tag=Ranked&tag=Normal&tag=Netplay
 
+## Events
+
+### <u>Usage</u>
+
+/events/ is another foundamental endpoint that can be used in conjunction with games. This endpoint is mostly meant as a helper endpoint for other endpoints to get game data but we've decided to open it to the public as well. It returns just  list of IDs to uniquely identify an event that fits the given parameters
+
+### <u>Parameters</u>
+- **Game params**:     Params for /games/ (tags/users/date/etc)
+- **games**:           [0-x],   games if not using the game endpoint params
+- **pitcher_char**:    [0-54],  pitcher char ids
+- **batter_char**:     [0-54],  batter char ids
+- **fielder_char**:    [0-54],  fielder char ids
+- **fielder_pos**:     [0-54],  fielder pos
+- **contact**:         [0-5],   contact types (0-4: in-game values, 5: no contact)
+- **swing**:           [0-4],   swing types ()
+- **pitch**:           [0-4],   pitch types (TODO, not implemented)
+- **chem_link**:       [0-4],   chemistry on base values
+- **pitcher_hand**:    [0-1],   pitchers handedness ()
+- **batter_hand**:     [0-1],   batters handedness ()
+- **inning**:          [0-50],  innings to collect from
+- **half_inning**:     [0-1],   half inning to collect from
+- **balls**:           [0-3],   balls
+- **strikes**:         [0-2],   strikes
+- **outs**:            [0-2],   outs
+- **multi_out**:       [0-1],   bool for double plays
+- **star_chance**:     [0-1],   bool for star chance
+- **users_as_batter**: [0-1],   bool if you want to only get the events for the given users when they are the batter
+- **users_as_pitcher** [0-1],   bool if you want to only get the events for the given users when they are the pitcher
+
+### <u>Examples</u>
+
+ **1. Get GenericHomeUser's events from their 5 most recent games**:
+-  To get GenericHomeUser's most recent game we'll need to use the _username_ and _recent_ parameters. These are game parameters, but used with the event endpoint
+	 - username=GenericHomeUser
+	 - recent=5
+ 
+- Add these to the end of the API url and you're ready to go:
+  - https://projectrio-api-1.api.projectrio.app/events/?recent=1&username=GenericHomeUser
+
+**2. Get the GenericHomeUser's events from 5 most recent games where they used the charge swing with a righty batter** 
+-  Give the parameters for games and then layer on the event parameters _type_of_swing_, _batter_hand_, users_as_batter_. Users as batters says only get the events where the given usernames are batting.
+	 - username=GenericHomeUser
+	 - recent=10
+	 - type_of_swing=2
+	 - batter_hand=1
+	 - users_as_batter=1
+
+## Plate Data
+
+```
+{
+    "Data": [
+        {
+            "batter_char_id": 0,
+            "batter_username": "GenericAwayUser",
+            "batting_hand": false,
+            "event_id": 99936,
+            "fielding_hand": false,
+            "final_result": 4,
+            "game_id": 1464990895,
+            "pitch_ball_x_pos": 1.03709,
+            "pitch_ball_z_pos": -0.240292,
+            "pitch_batter_x_pos": -1.92986,
+            "pitch_batter_z_pos": 0.207639,
+            "pitch_result": 6,
+            "pitcher_char_id": 3,
+            "pitcher_username": "GenericHomeUser",
+            "type_of_contact": 1,
+            "type_of_swing": 1
+        },
+	]
+}
+```
+### <u>Usage</u>
+
+/plate_data/ does not have any unique parameters, you can mix and match endpoints from `/games/` and `/events/` to narrow down the events to get data for. The endpoint returns the coordinates for the ball around the plate from the pitch.
+
+### <u>Parameters</u>
+- **Game params**:     Params for /games/ (tags/users/date/etc)
+- **Event params**:    Params for /events/ (swing_type/inning/)
+
+## Landing Data
+```
+{
+    "Data": [
+        {
+            "batter_char_id": 0,
+            "batter_username": "GenericAwayUser",
+            "batting_hand": false,
+            "event_id": 99936,
+            "fielder_char_id": 3,
+            "fielder_jump": 1,
+            "fielder_position": 3,
+            "fielding_hand": false,
+            "final_result": 4,
+            "game_id": 1464990895,
+            "manual_select_state": 0,
+            "pitcher_username": "GenericHomeUser",
+            "stick_input": 0,
+            "type_of_contact": 1,
+            "type_of_swing": 1,
+            "x_pos": 3.59528,
+            "x_velo": 0.0426119,
+            "y_pos": 0.0,
+            "y_velo": 0.0522467,
+            "z_pos": 37.1124,
+            "z_velo": 0.616323
+        },
+	]
+}
+```
+
+### <u>Usage</u>
+
+`/landing_data/` does not have any unique parameters like `/plate_data/`. This endpoint returns data on the landing spot of the hit and the fielder who fielded
+
+### <u>Parameters</u>
+- **Game params**:     Params for /games/ (tags/users/date/etc)
+- **Event params**:    Params for /events/ (swing_type/inning/)
 
 # FAQ
 
