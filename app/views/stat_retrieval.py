@@ -711,6 +711,94 @@ def endpoint_landing_data():
         'Data': data
     }
 
+
+@app.route('/star_chances/', methods = ['GET'])
+def endpoint_star_chances():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'COUNT(CASE WHEN (event.star_chance = 1 AND event.result_of_ab > 0) THEN 1 ELSE NULL END) AS star_chances, \n'
+        'COUNT ( DISTINCT event.game_id ) AS games \n'
+        'FROM event \n'
+       f'WHERE event.id IN {event_id_string}'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
+
+@app.route('/pitch_analysis/', methods = ['GET'])
+def endpoint_pitch_analysis():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'event.balls AS count_balls, \n'
+        'event.strikes AS count_strikes, \n'
+        'event.outs AS count_outs, \n'
+        'COUNT (CASE WHEN (pitch.pitch_result >= 3 AND pitch.pitch_result <= 6) THEN 1 ELSE NULL END) AS result_strike_or_hit, \n' #Hittable
+        'COUNT (CASE WHEN (pitch.pitch_result = 0) THEN 1 ELSE NULL END) AS result_hbp, \n'
+        'COUNT (CASE WHEN (pitch.pitch_result = 1 OR pitch.pitch_result = 2) THEN 1 ELSE NULL END) AS result_ball \n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+       f'WHERE event.id IN {event_id_string} \n'
+        'GROUP BY count_balls, count_strikes, count_outs'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
+
+
 ## === Detailed stats ===
 '''
 @ Endpoint: detailed_stats
