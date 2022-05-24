@@ -735,10 +735,17 @@ def endpoint_star_chances():
 
     query = (
         'SELECT \n'
+        'event.inning AS inning, \n'
+        'event.half_inning AS half_inning, \n'
+        'COUNT(CASE WHEN (event.runner_on_1 = NULL AND event.runner_on_2 = NULL \n'
+        '                 AND event.runner_on_3 = NULL AND event.event_num != 0) THEN 1 ELSE NULL END) AS elligible_event, \n'
         'COUNT(CASE WHEN (event.star_chance = 1 AND event.result_of_ab > 0) THEN 1 ELSE NULL END) AS star_chances, \n'
+        'COUNT(CASE WHEN (event.result_of_ab >= 1 AND event.result_of_ab <= 6 AND event.result_of_ab != 0) THEN 1 ELSE NULL END) AS pitcher_win, \n'
+        'COUNT(CASE WHEN (event.result_of_ab >= 7) THEN 1 ELSE NULL END) AS batter_win, \n'
         'COUNT ( DISTINCT event.game_id ) AS games \n'
         'FROM event \n'
        f'WHERE event.id IN {event_id_string}'
+        'GROUP BY event.inning, event.half_inning'
     )
 
     print(query)
