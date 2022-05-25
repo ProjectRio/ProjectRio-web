@@ -303,6 +303,80 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 - **Game params**:     Params for /games/ (tags/users/date/etc)
 - **Event params**:    Params for /events/ (swing_type/inning/)
 
+## Star Chances
+```
+{
+    "Data": [
+		{
+            "batter_win": 382,
+            "elligible_event": 0,
+            "games": 215,
+            "half_inning": 0,
+            "inning": 1,
+            "pitcher_win": 667,
+            "star_chances": 85
+        },
+	]
+}
+```
+
+### <u>Usage</u>
+
+`/star_chances/` does not have any unique parameters like `/plate_data/`. This endpoint returns data on star chances per inning/half inning and who won them
+
+### <u>Parameters</u>
+- **Game params**:     Params for /games/ (tags/users/date/etc)
+- **Event params**:    Params for /events/ (swing_type/inning/)
+
+
+## Pitch Analysis
+```
+{
+    "Data": [
+        {
+            "count_balls": 0,
+            "count_outs": 0,
+            "count_strikes": 0,
+            "result_ball": 728,
+            "result_hbp": 151,
+            "result_strike_or_hit": 4870
+        },
+	]
+}
+```
+
+### <u>Usage</u>
+
+`/pitch_analysis/` does not have any unique parameters like `/plate_data/`. This endpoint counts how often a pitcher throws result_(a,b,c) given count_(x,y,x)
+
+### <u>Parameters</u>
+- **Game params**:     Params for /games/ (tags/users/date/etc)
+- **Event params**:    Params for /events/ (swing_type/inning/)
+
+## Detailed Stats
+```
+VARIABLE DATA RETURN
+```
+
+### <u>Usage</u>
+
+`/detailed_stats/` is one of the more complex endpoints provided by the API, it has a variable output depending on the inputs. It can return stats on a per user, a per character, and per swing (for batting stats). In the standard case (with no params) it returns agregate stats of all users and characters. `by_user` will break stats up by user, and `by_char` will break them up by character. These flags can be combined for different levels of details. This endpoint leverages `/games/` and will only analyze games that satisfy the parameters given. 
+
+### <u>Parameters</u>
+- **Game params**:     Params for /games/ (tags/users/date/etc)\
+- **games**:             [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
+- **username**:          [],           users to get stats for. All users if blank
+- **character**:         [0-54],       character ids to get stats for. All chars if blank
+- **by_user**:           [bool],       When true stats will be grouped by user. When false, all users will be separate
+- **by_char**:           [bool],       When true stats will be grouped by character. When false, all characters will be separate
+- **by_swing**:          [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
+                                    all swings will be combined. Only considered for swings
+- **exlude_nonfair**:    [bool],       Exlude foul and unknown hits from the return
+- **exclude_batting**:   [bool],       Do not return stats from the batting section
+- **exclude_pitching**:  [bool],       Do not return stats from the pitching section
+- **exclude_misc**:      [bool],       Do not return stats from the misc section
+- **exclude_fielding**:  [bool],       Do not return stats from the fielding section
+
 # FAQ
 
 **Q: How do I use parameters in a URL?**
