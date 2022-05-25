@@ -18,6 +18,12 @@ Please read the [FAQ](#faq) before using the Api.
 - [Public Endpoints](#public-endpoints)
 	- [Characters](#characters)
 	- [Games](#games)
+	- [Events](#events)
+	- [Plate Data](#plate-data)
+	- [Landing Data](#landing-data)
+	- [Star Chances](#star-chances)
+	- [Pitch Analysis](#pitch-analysis)
+	- [Detailed Stats](#detailed-stats)
 - [FAQ](#faq)
 
 
@@ -26,6 +32,12 @@ Please read the [FAQ](#faq) before using the Api.
 
 - [Characters](#characters)
 - [Games](#games)
+- [Events](#events)
+- [Plate Data](#plate-data)
+- [Landing Data](#landing-data)
+- [Star Chances](#star-chances)
+- [Pitch Analysis](#pitch-analysis)
+- [Detailed Stats](#detailed-stats)
 
 
 ## Characters
