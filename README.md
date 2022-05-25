@@ -347,7 +347,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 
 ### <u>Usage</u>
 
-`/pitch_analysis/` does not have any unique parameters like `/plate_data/`. This endpoint counts how often a pitcher throws result_(a,b,c) given count_(x,y,x)
+`/pitch_analysis/` does not have any unique parameters like `/plate_data/`. This endpoint counts how often a pitcher throws result_(a,b,c) given count_(x,y,x). Count is the initial state of the pitch and result are the pitches that are thrown.
 
 ### <u>Parameters</u>
 - **Game params**:     Params for /games/ (tags/users/date/etc)
@@ -385,7 +385,7 @@ Add a ? to the end of the Rio Web address and then add your parameters by specif
 
 For example, if you wanted to see Mario and Luigi's data-mined base stats using the [/characters/](#characters) endpoint, you would type out the URL, followed by ?, then the parameter _name_ followed by =, followed by Mario, followed by &, followed by name=Luigi.
 
-https://projectrio-api-1.api.projectrio.app/?name=mario&name=luigi
+https://projectrio-api-1.api.projectrio.app/characters/?name=mario&name=luigi
 
 **Q: How do I convert a normal date to unix datetime?**
 
