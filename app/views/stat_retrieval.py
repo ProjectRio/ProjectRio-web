@@ -168,7 +168,10 @@ def endpoint_games(limit_games_returned=True):
 
         recent = int()
         if limit_games_returned == False:
-            recent = None
+            if request.args.get('recent') is None:
+                recent = None
+            else:
+                recent = int(request.args.get('recent'))
         else:
             if request.args.get('recent') is None:
                 recent = 50
@@ -290,8 +293,10 @@ def endpoint_games(limit_games_returned=True):
         'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
         f'{where_statement} '
         'ORDER BY game.date_time_start DESC \n'
-        f"{('LIMIT ' + str(recent)) if limit_games_returned == True else ''}"
+        f"{('LIMIT ' + str(recent)) if recent != None else ''}"
     )
+
+    print(query)
 
     results = db.session.execute(query).all()
     
@@ -373,7 +378,7 @@ def endpoint_games(limit_games_returned=True):
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
 '''
-@app.route('/event/', methods = ['GET'])
+@app.route('/events/', methods = ['GET'])
 def endpoint_event():
     # === Construct query === 
     #Sanitize games params 
@@ -529,7 +534,7 @@ def endpoint_event():
     #If not empty, use the SQL provided in tuple[1] to write a where statement and append it
     #Grab NULL values for column if tuple[3] is provided and also present in the list
     def build_where_statement(where_list):
-        where_statement = 'WHERE '
+        where_statement = 'WHERE ('
         and_needed = False
         for item in where_list:
             formatted_tuple, empty = format_list_for_SQL(item[0])
@@ -543,7 +548,7 @@ def endpoint_event():
                 null_statement = f' OR {item[1]} IS NULL'
             where_statement += f'({item[1]} IN {formatted_tuple}{null_statement})\n'
             and_needed = True
-        
+        where_statement += ')'
         #If we have at least a single where statement, return it
         if and_needed:
             return where_statement
@@ -600,9 +605,11 @@ def endpoint_plate_data():
         'SELECT \n'
         'event.game_id AS game_id, \n'
         'event.id AS event_id, \n'
-        'batter.char_id, \n'
-        'pitcher.char_id, \n'
-        'pitcher.user_id, \n'
+        'event.result_of_ab AS final_result, \n'
+        'batter.char_id AS batter_char_id, \n'
+        'pitcher.char_id AS pitcher_char_id, \n'
+        'pitcher_user.username AS pitcher_username, \n'
+        'batter_user.username AS batter_username, \n'
         'batter.batting_hand, \n'
         'pitcher.fielding_hand, \n'
         'pitch.pitch_ball_x_pos, \n'
@@ -617,6 +624,8 @@ def endpoint_plate_data():
         'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
         'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
         'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+        'JOIN rio_user AS pitcher_user ON pitcher.user_id = pitcher_user.id \n'
+        'JOIN rio_user AS batter_user ON batter.user_id = batter_user.id \n'
        f'WHERE event.id IN {event_id_string}'
     )
 
@@ -631,20 +640,190 @@ def endpoint_plate_data():
         'Data': data
     }
 
+@app.route('/landing_data/', methods = ['GET'])
+def endpoint_landing_data():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'event.game_id AS game_id, \n'
+        'event.id AS event_id, \n'
+        'event.result_of_ab AS final_result, \n'
+        'batter.char_id AS batter_char_id, \n'
+        'pitcher.char_id AS fielder_char_id, \n'
+        'pitcher_user.username AS pitcher_username, \n'
+        'batter_user.username AS batter_username, \n'
+        'batter.batting_hand, \n'
+        'pitcher.fielding_hand, \n'
+        'contact.ball_x_velocity AS x_velo, \n'
+        'contact.ball_y_velocity AS y_velo, \n'
+        'contact.ball_z_velocity AS z_velo, \n'
+        'contact.ball_x_pos AS x_pos, \n'
+        'contact.ball_y_pos AS y_pos, \n'
+        'contact.ball_z_pos AS z_pos, \n'
+        'contact.input_direction_stick AS stick_input, \n'
+        'pitch.type_of_swing, \n'
+        'contact.type_of_contact, \n'
+        #Add decoded action
+        'fielding.position AS fielder_position, \n'
+        'fielding.fielder_x_pos AS x_pos, \n'
+        'fielding.fielder_y_pos AS y_pos, \n'
+        'fielding.fielder_z_pos AS z_pos, \n'
+        'fielding.jump AS fielder_jump, \n'
+        'fielding.manual_select AS manual_select_state \n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n'
+        'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
+        'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
+        'JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
+        'JOIN rio_user AS pitcher_user ON pitcher.user_id = pitcher_user.id \n'
+        'JOIN rio_user AS batter_user ON batter.user_id = batter_user.id \n'
+       f'WHERE event.id IN {event_id_string}'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
+
+
+@app.route('/star_chances/', methods = ['GET'])
+def endpoint_star_chances():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'event.inning AS inning, \n'
+        'event.half_inning AS half_inning, \n'
+        'COUNT(CASE WHEN (event.runner_on_1 = NULL AND event.runner_on_2 = NULL \n'
+        '                 AND event.runner_on_3 = NULL AND event.event_num != 0) THEN 1 ELSE NULL END) AS elligible_event, \n'
+        'COUNT(CASE WHEN (event.star_chance = 1 AND event.result_of_ab > 0) THEN 1 ELSE NULL END) AS star_chances, \n'
+        'COUNT(CASE WHEN (event.star_chance = 1 AND event.result_of_ab >= 1 AND event.result_of_ab <= 6 AND event.result_of_ab != 0) THEN 1 ELSE NULL END) AS pitcher_win, \n'
+        'COUNT(CASE WHEN (event.star_chance = 1 AND event.result_of_ab >= 7) THEN 1 ELSE NULL END) AS batter_win, \n'
+        'COUNT ( DISTINCT event.game_id ) AS games \n'
+        'FROM event \n'
+       f'WHERE event.id IN {event_id_string}'
+        'GROUP BY event.inning, event.half_inning'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
+
+@app.route('/pitch_analysis/', methods = ['GET'])
+def endpoint_pitch_analysis():
+    #Sanitize games params 
+    try:
+        list_of_event_ids = list() # Holds IDs for all the events we want data from
+        if (len(request.args.getlist('events')) != 0):
+            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
+            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
+            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
+                return abort(408, description='Provided Events not found')
+
+        else:
+            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+    except:
+        return abort(408, description='Invalid GameID')
+
+    event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
+
+    if event_empty:
+        return {}
+
+    query = (
+        'SELECT \n'
+        'event.balls AS count_balls, \n'
+        'event.strikes AS count_strikes, \n'
+        'event.outs AS count_outs, \n'
+        'COUNT (CASE WHEN (pitch.pitch_result >= 3 AND pitch.pitch_result <= 6) THEN 1 ELSE NULL END) AS result_strike_or_hit, \n' #Hittable
+        'COUNT (CASE WHEN (pitch.pitch_result = 0) THEN 1 ELSE NULL END) AS result_hbp, \n'
+        'COUNT (CASE WHEN (pitch.pitch_result = 1 OR pitch.pitch_result = 2) THEN 1 ELSE NULL END) AS result_ball \n'
+        'FROM event \n'
+        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
+       f'WHERE event.id IN {event_id_string} \n'
+        'GROUP BY count_balls, count_strikes, count_outs'
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    data = []
+    for entry in result:
+        data.append(entry._asdict())
+    return {
+        'Data': data
+    }
+
+
 ## === Detailed stats ===
 '''
 @ Endpoint: detailed_stats
 @ Description: Returns batting, pitching, fielding, and star stats on configurable levels
 @ Params:
     - Game params:                  Params for /games/ (tags/users/date/etc)
-    - games:          [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
-    - username:       [],           users to get stats for. All users if blank
-    - character:      [0-54],       character ids to get stats for. All charas if blank
-    - by_user:        [bool],       When true stats will be grouped by user. When false, all users will be separate
-    - by_char:        [bool],       When true stats will be grouped by character. When false, all characters will be separate
-    - by_swing:       [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
+    - games:             [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
+    - username:          [],           users to get stats for. All users if blank
+    - character:         [0-54],       character ids to get stats for. All charas if blank
+    - by_user:           [bool],       When true stats will be grouped by user. When false, all users will be separate
+    - by_char:           [bool],       When true stats will be grouped by character. When false, all characters will be separate
+    - by_swing:          [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
                                     all swings will be combined. Only considered for swings
-    - exlude_nonfair: [bool],       Exlude foul and unknown hits from the return
+    - exlude_nonfair:    [bool],       Exlude foul and unknown hits from the return
+    - exclude_batting:   [bool],       Do not return stats from the batting section
+    - exclude_pitching:  [bool],       Do not return stats from the pitching section
+    - exclude_misc:      [bool],       Do not return stats from the misc section
+    - exclude_fielding:  [bool],       Do not return stats from the fielding section
 @ Output:
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
@@ -672,7 +851,7 @@ def endpoint_detailed_stats():
 
     # Sanitize character params
     try:
-        list_of_char_ids = request.args.getlist('character')
+        list_of_char_ids = request.args.getlist('char_id')
         for index, char_id in enumerate(list_of_char_ids):
             sanitized_id = int(list_of_char_ids[index])
             if sanitized_id in range (0,55):
@@ -689,6 +868,12 @@ def endpoint_detailed_stats():
     group_by_char = (request.args.get('by_char') == '1')
     exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
 
+    #Stat exclussion flags
+    exclude_batting_stats = (request.args.get('exclude_batting') == '1')
+    exclude_pitching_stats = (request.args.get('exclude_pitching') == '1')
+    exclude_misc_stats = (request.args.get('exclude_misc') == '1')
+    exclude_fielding_stats = (request.args.get('exclude_fielding') == '1')
+
     usernames = request.args.getlist('username')
     usernames_lowercase = tuple([username.lower() for username in usernames])
     #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
@@ -700,7 +885,7 @@ def endpoint_detailed_stats():
 
     #If we didn't find every user provided in the DB, abort
     if (len(tuple_user_ids) != len(usernames)):
-        return abort(408, description='Provided Usernames no found')
+        return abort(408, description='Provided Usernames not found')
 
     #If a char was provided that is not 0-54 abort
     invalid_chars=[i for i in tuple_char_ids if int(i) not in range(0,55)]
@@ -710,12 +895,14 @@ def endpoint_detailed_stats():
     
     # Individual functions create queries to get their respective stats
     return_dict = {}
-    batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
-    pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-    misc_stats = query_detailed_misc_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-    fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-
-    pprint.pprint(return_dict)
+    if (not exclude_batting_stats):
+        batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
+    if (not exclude_pitching_stats):
+        pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
+    if (not exclude_misc_stats):
+        misc_stats = query_detailed_misc_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
+    if (not exclude_fielding_stats):
+        fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
 
     return {
         'Stats': return_dict
@@ -743,12 +930,9 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         f"{select_user}"
         f"{select_char}"
         f"{select_swing}"
-        'COUNT(CASE WHEN pitch_summary.pitch_result = 1 THEN 1 ELSE NULL END) AS walks_bb, \n'
-        'COUNT(CASE WHEN pitch_summary.pitch_result = 0 THEN 1 ELSE NULL END) AS walks_hit, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 0 THEN 1 ELSE NULL END) AS outs, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 1 THEN 1 ELSE NULL END) AS foul_hits, \n'
-        'COUNT(CASE WHEN contact_summary.primary_result = 2 THEN 1 ELSE NULL END) AS fair_hits, \n'
-        'COUNT(CASE WHEN contact_summary.primary_result = 3 THEN 1 ELSE NULL END) AS unknown_hits, \n'
+        'COUNT(CASE WHEN (contact_summary.primary_result = 2 OR contact_summary.primary_result = 3) THEN 1 ELSE NULL END) AS fair_hits, \n'
         'COUNT(CASE WHEN (contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) THEN 1 ELSE NULL END) AS sour_hits, '
         'COUNT(CASE WHEN (contact_summary.type_of_contact = 1 OR contact_summary.type_of_contact = 3) THEN 1 ELSE NULL END) AS nice_hits, '
         'COUNT(CASE WHEN contact_summary.type_of_contact = 2 THEN 1 ELSE NULL END) AS perfect_hits, '
@@ -758,6 +942,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
+        #'SUM (character_game_summary.strikeouts) AS strikeouts, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
         'SUM(event.result_rbi) AS rbi '
         'FROM character_game_summary \n'
@@ -776,11 +961,12 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
     non_contact_batting_query = ( 
         'SELECT \n'
-        f"{select_user}"
-        f"{select_char}"
+       f"{select_user}"
+       f"{select_char}"
         'SUM(character_game_summary.walks_bb) AS walks_bb, \n'
         'SUM(character_game_summary.walks_hit) AS walks_hbp, \n'
-        'SUM(character_game_summary.strikeouts) AS strikeouts \n'
+        'SUM(character_game_summary.strikeouts) AS strikeouts, \n'
+        'SUM(character_game_summary.hits) AS hits \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
@@ -866,41 +1052,15 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
 
-    #Where statement for win-loss
-    game_id_string, game_empty = format_tuple_for_SQL(game_ids)
-    user_id_string, user_empty = format_tuple_for_SQL(user_ids)
-    win_loss_where_statement = ''
-    if not (game_empty and user_empty):
-        other_conditions = False
-        win_loss_where_statement = 'WHERE '
-        if (not game_empty):
-            other_conditions = True
-            win_loss_where_statement += f"game.game_id IN {game_id_string} \n"
-        if (not user_empty):
-            if (other_conditions):
-                win_loss_where_statement += 'AND '
-            other_conditions = True
-            win_loss_where_statement += f"rio_user.id IN {user_id_string} \n"
-    win_loss_query = (
-        'SELECT '
-        f"{'rio_user.username,' if group_by_user else ''}\n"
-        'SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_wins, \n'
-        'SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END) AS away_loses, \n'
-        'SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_wins, \n'
-        'SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END) AS home_loses \n'
-        'FROM game \n'
-        'JOIN rio_user AS rio_user ON (game.away_player_id = rio_user.id OR \n'
-        '                              game.home_player_id = rio_user.id) \n'
-       f"{win_loss_where_statement}"
-       f"{'GROUP BY rio_user.username' if group_by_user else ''}"
-    )
-
-    results_win_loss = db.session.execute(win_loss_query).all()
-
     query = (
         'SELECT '
-        f"{select_user}"
-        f"{select_char}"
+       f"{select_user}"
+       f"{select_char}"
+       f"COUNT(*){'/9' if group_by_char != True else ''} AS game_appearances, \n "
+       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_wins, \n"
+       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_loses, \n"
+       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_wins, \n"
+       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_loses, \n"      
         'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
         'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
         'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
@@ -908,8 +1068,8 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
         'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
         'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
-        'FROM game \n'
-        'JOIN character_game_summary ON character_game_summary.game_id = game.game_id \n'
+        'FROM character_game_summary \n'
+        'JOIN game ON character_game_summary.game_id = game.game_id \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
        f"{where_statement}"
@@ -917,8 +1077,6 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     )
 
     results = db.session.execute(query).all()
-    for result_row in results_win_loss:
-        update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
     for result_row in results:
         update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
 
