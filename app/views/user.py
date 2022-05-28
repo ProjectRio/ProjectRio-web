@@ -11,6 +11,7 @@ import os
 # === User registration endpoints ===
 @app.route('/register/', methods=['POST'])
 def register():    
+    print(request.get_json())
     in_username = request.json['Username']
     username_lowercase = in_username.lower()
     in_password = request.json['Password']
@@ -32,13 +33,14 @@ def register():
         subject = 'Verify your Project Rio Account'
 
         html_content = (
-            f'Dear {in_username},\n'
-            '\n'
-            'Please click the following link to verify your email address and get your Rio Key.\n'
-            f'{new_user.active_url}'
-            '\n'
-            'Happy Hitting!\n'
-            'Project Rio Web Team'
+            f'''
+            <h1>Welcome to Rio Web, {in_username}!</h1>
+            <p>Please click the following link to verify your email address and get your Rio Key.</p>
+            <a href={'https://projectrio-api-1.api.projectrio.app/verify_email/' + new_user.active_url}>Verfiy Me!</a>
+            <br/>
+            <p>Happy Hitting!</p>
+            <p>Rio Team</p>
+            '''
         )
 
         try:
@@ -50,10 +52,9 @@ def register():
         'username': new_user.username
     })
 
-@app.route('/verify_email/', methods=['POST'])
-def verify_email():
+@app.route('/verify_email/<active_url>', methods=['POST','GET'])
+def verify_email(active_url):
     try:
-        active_url = request.json['active_url']
         user = RioUser.query.filter_by(active_url=active_url).first()
         user.verified = True
         user.active_url = None
