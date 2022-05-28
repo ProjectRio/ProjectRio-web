@@ -2,6 +2,7 @@ from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
+from flask_cors import CORS
 import logging
 from logging.handlers import RotatingFileHandler
 
@@ -14,6 +15,7 @@ def init_app():
     # Construct core application
     app = Flask(__name__)
     app.config.from_pyfile('config.py')
+    CORS(app)
 
     # Initialize Plugins
     db.init_app(app)
@@ -36,7 +38,7 @@ def init_app():
         from .views.stats import box_score
         from .views.stats import user_summary
         from .views import api_key
-        from .views import log
+        # from .views import log
         
         #create sql tables for data models
         db.create_all()
