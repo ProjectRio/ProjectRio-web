@@ -377,6 +377,7 @@ def endpoint_games(limit_games_returned=True):
     - star_chance      [0-1],   bool for star chance
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
+    - final_result     [0-16],  value for the final result of the event
 '''
 @app.route('/events/', methods = ['GET'])
 def endpoint_event():
@@ -664,7 +665,7 @@ def endpoint_landing_data():
     query = (
         'SELECT \n'
         'event.game_id AS game_id, \n'
-        'event.id AS event_id, \n'
+        'event.event_num AS event_num, \n'
         'event.result_of_ab AS final_result, \n'
         'batter.char_id AS batter_char_id, \n'
         'pitcher.char_id AS pitcher_char_id, \n'
@@ -815,7 +816,7 @@ def endpoint_pitch_analysis():
     - Game params:                  Params for /games/ (tags/users/date/etc)
     - games:             [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
     - username:          [],           users to get stats for. All users if blank
-    - character:         [0-54],       character ids to get stats for. All charas if blank
+    - char_id:           [0-54],       character ids to get stats for. All charas if blank
     - by_user:           [bool],       When true stats will be grouped by user. When false, all users will be separate
     - by_char:           [bool],       When true stats will be grouped by character. When false, all characters will be separate
     - by_swing:          [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
