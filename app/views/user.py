@@ -6,12 +6,10 @@ from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser
 from ..email import send_email
-import os
 
 # === User registration endpoints ===
 @app.route('/register/', methods=['POST'])
-def register():    
-    print(request.get_json())
+def register():
     in_username = request.json['Username']
     username_lowercase = in_username.lower()
     in_password = request.json['Password']
@@ -58,6 +56,38 @@ def verify_email(active_url):
         user = RioUser.query.filter_by(active_url=active_url).first()
         user.verified = True
         user.active_url = None
+        
+        subject = 'Your Rio Key'
+
+        html_content = (
+            f'''
+            <h1>Welcome to Rio Web, {user.username}!</h1>
+            <p>Your account has been verified!</p> 
+            <br/>
+            <h3>Here is your Rio Key: {user.rio_key}</h3>
+            <h3>Directions</h3>
+            <ol>
+                <li>From the main Rio screen click Local Players and create a new player</li>
+                <li>Enter your username and Rio Key</li>
+                <li>Have fun!</li>
+            </ol>
+            <p>If you already have a Local Player saved with the same name...</p>
+            <ol>
+                <li>Navigate to Documents\ProjectRio\Config\LocalPlayers.ini</li>
+                <li>Open LocalPlayers.ini</li>
+                <li>Delete your old username</li>
+            </ol>
+
+            <br/>
+            <p>Happy Hitting!</p>
+            <p>Rio Team</p>
+            '''
+        )
+
+        try:
+            send_email(user.email, subject, html_content)
+        except:
+            return abort(502, 'Failed to send email')
 
         db.session.add(user)
         db.session.commit()
