@@ -378,6 +378,7 @@ def endpoint_games(limit_games_returned=True):
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
     - final_result     [0-16],  value for the final result of the event
+    - limit            int or False, value to limit the events
 '''
 @app.route('/events/', methods = ['GET'])
 def endpoint_event(called_internally=False):
@@ -502,7 +503,7 @@ def endpoint_event(called_internally=False):
         return abort(400, description = error)
     
     #Final result
-    list_of_results, error = sanitize_int_list(request.args.getlist('result'), "Final result not in range", 17)
+    list_of_results, error = sanitize_int_list(request.args.getlist('final_result'), "Final result not in range", 17)
     if list_of_results == None:
         return abort(400, description = error)
 
@@ -565,6 +566,24 @@ def endpoint_event(called_internally=False):
 
     columns_statement = 'event.game_id AS game_id, \n event.event_num AS event_num, \n' if not called_internally else ''
 
+    limit_statement = ''
+    default_limit = 1000
+    if (request.args.get('limit') != None):
+        try:
+            limit = int(request.args.get('limit'))
+            limit_statement = f'LIMIT {limit}'
+        except:
+            try:
+                limit = bool(request.args.get('limit'))
+                if limit:
+                    limit_statement = f'LIMIT {default_limit}'
+                else:
+                    limit_statement = ''
+            except:
+                return abort(400, description = error)
+    else:
+        limit_statement = '' if called_internally else f'LIMIT {default_limit}'
+
     query = (
         'SELECT \n'
         f'{columns_statement}'
@@ -577,6 +596,7 @@ def endpoint_event(called_internally=False):
         'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
         'LEFT JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
        f'{where_statement}'
+       f'{limit_statement}'
     )
 
     print(query)
