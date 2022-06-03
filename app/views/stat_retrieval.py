@@ -568,19 +568,18 @@ def endpoint_event(called_internally=False):
 
     limit_statement = ''
     default_limit = 1000
+    max_limit     = 150000
     if (request.args.get('limit') != None):
         try:
-            limit = int(request.args.get('limit'))
+            limit = int(request.args.get('limit')) if limit <= max_limit else max_limit
             limit_statement = f'LIMIT {limit}'
         except:
-            try:
-                limit = bool(request.args.get('limit'))
-                if limit:
-                    limit_statement = f'LIMIT {default_limit}'
-                else:
-                    limit_statement = ''
-            except:
-                return abort(400, description = error)
+            if request.args.get('limit') in ["false", "False", "F", "f"]:
+                limit_statement = f'LIMIT {max_limit}'
+            elif request.args.get('limit') in ["true", "True", "T", "t"]:
+                limit_statement = f'LIMIT {default_limit}'
+            else:
+                return abort(400, description = "Invalid event_limit")
     else:
         limit_statement = '' if called_internally else f'LIMIT {default_limit}'
 
