@@ -500,6 +500,11 @@ def endpoint_event():
     list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
     if list_of_outs == None:
         return abort(400, description = error)
+    
+    #Final result
+    list_of_results, error = sanitize_int_list(request.args.getlist('result'), "Final result not in range", 17)
+    if list_of_results == None:
+        return abort(400, description = error)
 
     #this might be riduculous but I want everything in a list for the next function
     multi_out_flag   = [1] if (request.args.get('multi_out') == '1') else []
@@ -527,7 +532,8 @@ def endpoint_event():
         (star_chance_flag, 'event.star_chance', None),
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
-        (list_of_pitcher_user_ids, 'pitcher.user_id', None)
+        (list_of_pitcher_user_ids, 'pitcher.user_id', None),
+        (list_of_results, 'event.result_of_ab', None)
     ]
 
     #Go through all of the lists from the args
@@ -944,15 +950,15 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
-        #'SUM (character_game_summary.strikeouts) AS strikeouts, \n'
+        'SUM (event.result_of_ab = 1) AS strikeouts, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
-        'SUM(event.result_rbi) AS rbi '
+        'SUM(character_game_summary.result_rbi) AS rbi '
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN event ON character_game_summary.id = event.batter_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
-       f"   {'AND contact_summary.primary_result != 1 AND contact_summary.primary_result != 3' if exclude_nonfair else ''} \n"
+        'LEFT JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
+       f"   {'AND contact_summary.primary_result != 1' if exclude_nonfair else ''} \n"
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
        f"{where_statement}"
        f"{group_by_statement}"
