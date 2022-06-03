@@ -85,23 +85,23 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
 @ Params:
     - tag - list of tags to filter by
     - exclude_tag - List of tags to exclude from search
-    - start_time - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
-    - end_time - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
+    - start_time - Unix time. Provides the lower (older) end of the range of games to retreive.
+    - end_time - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query).
     - username - list of users who appear in games to retreive
     - vs_username - list of users who MUST also appear in the game along with users
     - exclude_username - list of users to NOT include in query results
     - captain - captain name to appear in games to retrieve
     - vs_captain - captain name who MUST appear in game along with captain
     - exclude_captian -  captain name to EXLCUDE from results
-    - recent - Int of number of games
+    - limit_games - Int of number of games || False to return all
 
 @ Output:
     - List of games and highlevel info based on flags
 
-@ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
+@ URL example: http://127.0.0.1:5000/games/?limit=5&username=demOuser4&username=demouser1&username=demouser5
 '''
 @app.route('/games/', methods = ['GET'])
-def endpoint_games(limit_games_returned=True):
+def endpoint_games(called_internally=False):
     # === validate passed parameters ===
     try:
         # Check if tags are valid and get a list of corresponding ids
@@ -166,17 +166,17 @@ def endpoint_games(limit_games_returned=True):
         list_of_exclude_captain_ids =list(itertools.chain(*list_of_exclude_captain_id_tuples))
         tuple_exclude_captain_ids = tuple(list_of_exclude_captain_ids)
 
-        recent = int()
-        if limit_games_returned == False:
-            if request.args.get('recent') is None:
-                recent = None
+        limit = int()
+        try:
+            if request.args.get('limit_games') is None:
+                limit = None if called_internally else 50
+            elif request.args.get('limit_games') in ['False', 'false', 'f']:
+                limit = None
             else:
-                recent = int(request.args.get('recent'))
-        else:
-            if request.args.get('recent') is None:
-                recent = 50
-            else:
-                recent = int(request.args.get('recent'))
+                limit = int(request.args.get('limit_games'))
+        except:
+            abort(400, 'Invalid Limit provided')
+
     except:
        return abort(400, 'Invalid Username, Captain, or Tag')
 
@@ -293,7 +293,7 @@ def endpoint_games(limit_games_returned=True):
         'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
         f'{where_statement} '
         'ORDER BY game.date_time_start DESC \n'
-        f"{('LIMIT ' + str(recent)) if recent != None else ''}"
+        f"{('LIMIT ' + str(limit)) if limit != None else ''}"
     )
 
     print(query)
@@ -393,7 +393,7 @@ def endpoint_event(called_internally=False):
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
+            list_of_games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
             for game_dict in list_of_games['games']:
                 list_of_game_ids.append(game_dict['Id'])
     except:
@@ -887,7 +887,7 @@ def endpoint_detailed_stats():
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
+            list_of_games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
             for game_dict in list_of_games['games']:
                 list_of_game_ids.append(game_dict['Id'])
     except:
