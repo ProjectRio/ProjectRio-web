@@ -380,7 +380,7 @@ def endpoint_games(limit_games_returned=True):
     - final_result     [0-16],  value for the final result of the event
 '''
 @app.route('/events/', methods = ['GET'])
-def endpoint_event():
+def endpoint_event(called_internally=False):
     # === Construct query === 
     #Sanitize games params 
     try:
@@ -563,8 +563,11 @@ def endpoint_event():
 
     where_statement = build_where_statement(where_list)
 
+    columns_statement = 'event.game_id AS game_id, \n event.event_num AS event_num, \n' if not called_internally else ''
+
     query = (
         'SELECT \n'
+        f'{columns_statement}'
         'event.id AS event_id \n'
         'FROM event \n'
         'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
@@ -579,12 +582,20 @@ def endpoint_event():
     print(query)
 
     result = db.session.execute(query).all()
-    event_nums = []
-    for entry in result:
-        event_nums.append(entry.event_id )
-    return {
-        'Events': event_nums
-    }
+
+    if called_internally:
+        events = []
+        for entry in result:
+            events.append(entry.event_id )
+        events = { 'Events': events }
+    else:
+        events = {}
+        for entry in result:
+            if entry.game_id not in events:
+                events[entry.game_id] = {}
+            events[entry.game_id][entry.event_num] = entry.event_id
+        
+    return events
 
 
 @app.route('/plate_data/', methods = ['GET'])
@@ -599,7 +610,7 @@ def endpoint_plate_data():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
@@ -659,7 +670,7 @@ def endpoint_landing_data():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
@@ -673,6 +684,7 @@ def endpoint_landing_data():
         'event.game_id AS game_id, \n'
         'event.event_num AS event_num, \n'
         'event.result_of_ab AS final_result, \n'
+        'event.chem_links_ob AS chem_links_ob, \n'
         'batter.char_id AS batter_char_id, \n'
         'pitcher.char_id AS pitcher_char_id, \n'
         'fielder.char_id AS fielder_char_id, \n'
@@ -686,7 +698,12 @@ def endpoint_landing_data():
         'contact.ball_x_pos AS ball_x_pos, \n'
         'contact.ball_y_pos AS ball_y_pos, \n'
         'contact.ball_z_pos AS ball_z_pos, \n'
+        'contact.ball_angle AS ball_angle, \n'
+        'contact.ball_max_height AS ball_max_height, \n'
         'contact.input_direction_stick AS stick_input, \n'
+        'contact.charge_power_up AS charge_power_up, \n'
+        'contact.charge_power_down AS charge_power_down, \n'
+        'contact.frame_of_swing_upon_contact AS frame_of_swing, \n'
         'pitch.type_of_swing, \n'
         'contact.type_of_contact, \n'
         #Add decoded action
@@ -698,7 +715,7 @@ def endpoint_landing_data():
         'fielding.manual_select AS manual_select_state \n'
         'FROM event \n'
         'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
-        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left join for misses
         'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n'
         'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
         'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
@@ -732,7 +749,7 @@ def endpoint_star_chances():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
@@ -779,7 +796,7 @@ def endpoint_pitch_analysis():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
