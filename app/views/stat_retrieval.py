@@ -758,6 +758,15 @@ def endpoint_landing_data():
     }
 
 
+# == Functions to return coordinates for graphing ==
+'''
+@Endpoint: Star_chances
+@Description: Return number of star chances per game or per inning
+@Params:
+    - Game params:           Params for /games/ (tags/users/date/etc)
+    - Event params:
+    - by_inning:      [bool] Show breakdown by inning instead of by game
+'''
 @app.route('/star_chances/', methods = ['GET'])
 def endpoint_star_chances():
     #Sanitize games params 
@@ -779,10 +788,18 @@ def endpoint_star_chances():
     if event_empty:
         return {}
 
+    select_statement = ''
+    group_by_statement = ''
+    if request.args.get('by_inning') in ["true", "True", "T", "t"]:
+        select_statement = (
+            'event.inning AS inning, \n'
+            'event.half_inning AS half_inning, \n'
+        )
+        group_by_statement = 'GROUP BY event.inning, event.half_inning'
+
     query = (
         'SELECT \n'
-        'event.inning AS inning, \n'
-        'event.half_inning AS half_inning, \n'
+       f'{select_statement}' 
         'COUNT(CASE WHEN (event.runner_on_1 IS NULL AND event.runner_on_2 IS NULL \n'
         '                 AND event.runner_on_3 IS NULL AND event.event_num != 0) THEN 1 ELSE NULL END) AS elligible_event, \n'
         'COUNT(CASE WHEN (event.star_chance = 1 AND event.result_of_ab > 0) THEN 1 ELSE NULL END) AS star_chances, \n'
@@ -791,7 +808,7 @@ def endpoint_star_chances():
         'COUNT ( DISTINCT event.game_id ) AS games \n'
         'FROM event \n'
        f'WHERE event.id IN {event_id_string}'
-        'GROUP BY event.inning, event.half_inning'
+       f'{group_by_statement}'
     )
 
     print(query)
