@@ -393,7 +393,9 @@ def endpoint_event(called_internally=False):
                 return abort(408, description='Provided GameIDs not found')
 
         else:
+            print('here')
             list_of_games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
+            print('games complete')
             for game_dict in list_of_games['games']:
                 list_of_game_ids.append(game_dict['Id'])
     except:
@@ -571,7 +573,7 @@ def endpoint_event(called_internally=False):
     max_limit     = 150000
     if (request.args.get('limit') != None):
         try:
-            limit = int(request.args.get('limit')) if limit <= max_limit else max_limit
+            limit = int(request.args.get('limit')) if int(request.args.get('limit')) <= max_limit else max_limit
             limit_statement = f'LIMIT {limit}'
         except:
             if request.args.get('limit') in ["false", "False", "F", "f"]:
