@@ -281,8 +281,8 @@ def populate_db2():
                     previous_runners[key] = runner
                     previous_runners_json[key] = event_data[key]
             else:
-                previous_runners['Runner Batter'] = None
-                previous_runners_json['Runner Batter'] = None
+                previous_runners[key] = None
+                previous_runners_json[key] = None
 
             
         # ==== Pitch Summary ====
