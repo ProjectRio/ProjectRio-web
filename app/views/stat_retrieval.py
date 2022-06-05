@@ -995,7 +995,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         f"{select_user}"
         f"{select_char}"
         f"{select_swing}"
-        'COUNT(CASE WHEN contact_summary.primary_result = 0 THEN 1 ELSE NULL END) AS outs, \n'
+        'COUNT(CASE WHEN (contact_summary.primary_result = 0) THEN 1 ELSE NULL END) AS outs, \n'
         'COUNT(CASE WHEN contact_summary.primary_result = 1 THEN 1 ELSE NULL END) AS foul_hits, \n'
         'COUNT(CASE WHEN (contact_summary.primary_result = 2 OR contact_summary.primary_result = 3) THEN 1 ELSE NULL END) AS fair_hits, \n'
         'COUNT(CASE WHEN (contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) THEN 1 ELSE NULL END) AS sour_hits, '
@@ -1007,7 +1007,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
-        'COUNT(event.result_of_ab = 1) AS strikeouts, \n'
+        'COUNT(CASE WHEN event.result_of_ab = 1 THEN 1 ELSE NULL END) AS strikeouts, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
         'SUM(event.result_rbi) AS rbi '
         'FROM character_game_summary \n'
@@ -1021,6 +1021,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
        f"{group_by_statement}"
     )
 
+    print(contact_batting_query)
+
     #Redo groups, removing swing type
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
@@ -1028,10 +1030,17 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'SELECT \n'
        f"{select_user}"
        f"{select_char}"
-        'SUM(character_game_summary.walks_bb) AS walks_bb, \n'
-        'SUM(character_game_summary.walks_hit) AS walks_hbp, \n'
-        'SUM(character_game_summary.strikeouts) AS strikeouts, \n'
-        'SUM(character_game_summary.hits) AS hits \n'
+        'SUM(character_game_summary.walks_bb) AS summary_walks_bb, \n'
+        'SUM(character_game_summary.walks_hit) AS summary_walks_hbp, \n'
+        'SUM(character_game_summary.strikeouts) AS summary_strikeouts, \n'
+        'SUM(character_game_summary.singles) AS summary_singles, \n'
+        'SUM(character_game_summary.doubles) AS summary_doubles, \n'
+        'SUM(character_game_summary.triples) AS summary_triples, \n'
+        'SUM(character_game_summary.homeruns) AS summary_homeruns, \n'
+        'SUM(character_game_summary.sac_flys) AS summary_sac_flys, \n'
+        'SUM(character_game_summary.rbi) AS summary_rbi, \n'
+        'SUM(character_game_summary.at_bats) AS summary_at_bats, \n'
+        'SUM(character_game_summary.hits) AS summary_hits \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
@@ -1072,6 +1081,8 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, \n'
         'SUM(character_game_summary.star_pitches_thrown) AS star_pitches_thrown, \n'
         'SUM(character_game_summary.outs_pitched) AS outs_pitched, \n'
+        'SUM(character_game_summary.batters_walked) AS walks_bb, \n'
+        'SUM(character_game_summary.batters_hit) AS walks_hbp, \n'
         'SUM(character_game_summary.pitches_thrown) AS total_pitches \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
@@ -1084,7 +1095,6 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'SELECT '
         f"{select_user}"
         f"{select_char}"
-        'COUNT(CASE WHEN pitch_summary.pitch_result < 2 THEN 1 ELSE NULL END) AS walks, \n'
         'COUNT(CASE WHEN pitch_summary.pitch_result = 2 THEN 1 ELSE NULL END) AS balls, \n'
         'COUNT(CASE WHEN (pitch_summary.pitch_result = 3 OR pitch_summary.pitch_result = 4 OR pitch_summary.pitch_result = 5) THEN 1 ELSE NULL END) AS strikes \n'
         'FROM character_game_summary \n'
@@ -1269,12 +1279,13 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_b
         #User=1, Char=0, Swing=1
         elif group_by_swing and type_of_result == 'Batting':
             if type_of_result not in USER_DICT:
-                    USER_DICT[type_of_result] = {}
+                USER_DICT[type_of_result] = {}
             
             if cTYPE_OF_SWING[result_row.type_of_swing] not in USER_DICT[type_of_result]:
                 USER_DICT[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]] = {}
             elif USER_DICT[cTYPE_OF_SWING[result_row.type_of_swing]]:
                 print('ERROR: FOUND PREVIOUS SWING TYPE')
+                pprint(result_row._asdict())
                 
             USER_DICT[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
 
@@ -1327,7 +1338,7 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_b
 
         if cTYPE_OF_SWING[result_row.type_of_swing] not in in_stat_dict[type_of_result]:
             in_stat_dict[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-        if cTYPE_OF_SWING[result_row.type_of_swing] in in_stat_dict[type_of_result]:
+        elif cTYPE_OF_SWING[result_row.type_of_swing] in in_stat_dict[type_of_result]:
             print('ERROR: FOUND PREVIOUS SWING TYPE')
             
         in_stat_dict[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
