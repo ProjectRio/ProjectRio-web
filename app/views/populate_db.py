@@ -297,7 +297,8 @@ def populate_db2():
                 pitch_batter_x_pos = event_data['Pitch']['Batter Position - X'],
                 pitch_batter_z_pos = event_data['Pitch']['Batter Position - Z'],
                 pitch_result = event_data['Pitch']['Pitch Result'],
-                type_of_swing = event_data['Pitch']['Type of Swing']
+                type_of_swing = event_data['Pitch']['Type of Swing'],
+                d_ball = event_data['Pitch']['DB'],
             )
 
             db.session.add(pitch_summary)
