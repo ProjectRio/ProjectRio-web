@@ -1,9 +1,19 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from ..models import db, Game, Event, RioUser, CharacterGameSummary
-import json
 from .stat_retrieval import endpoint_games, endpoint_event
+from ..helper_functions import format_tuple_for_SQL, sanatize_ints
+import json
+import itertools
 
+
+# == Function to recreate a stat file ==
+'''
+@Endpoint: Recreate Stat File
+@Description: Used to build a close match for a submitted game. Primary uses: debugging
+@Params:
+    - game_id: the id of the game to be recreated
+'''
 @app.route("/recreate_stat_file/", methods=["GET"])
 def recreate_stat_file():
   if request.args.get("game_id") is not None:
@@ -15,7 +25,7 @@ def recreate_stat_file():
     except:
       abort(400, 'Invalid game_id')
   else:
-    abort(400, 'Provide valid game_ids or event_ids')
+    abort(400, 'Provide a valid game_id')
 
   character_game_summary_query = (
     "SELECT \n"
@@ -195,8 +205,85 @@ def recreate_stat_file():
       }
     }
 
+  event_query = build_events_query(True, game.game_id)
+  events = db.session.execute(event_query).all()
+  event_list = list()
+  for event in events:
+    event_data = event_data = parse_event_data(event)
+    event_list.append(event_data)
+
+  json_stat_file = {
+    "GameId": game.game_id,
+    "Date - Start": game.date_time_start,
+    "Date - End": game.date_time_end,
+    "Ranked": game.ranked,
+    "Netplay": game.netplay,
+    "StadiumID": game.stadium_id,
+    "Away Player": away_player.username,
+    "Home Player": home_player.username,
+    "Away Score": game.away_score,
+    "Home Score": game.home_score,
+    "Innings Selected": game.innings_selected,
+    "Innings Played": game.innings_played,
+    "Quitter Team": game.quitter,
+    "Average Ping": game.average_ping,
+    "Lag Spikes": game.lag_spikes,
+    "Version": game.version,
+    "Character Game Stats": character_game_stats,
+    "Events": event_list
+  }
+
+  return json_stat_file
+
+
+
+'''
+@Endpoint: Recreate Events
+@Description: Used to recreate events from submitted stat files. Primary usage: debugging
+@Params:
+    - event_ids: event ids to recreate
+'''
+@app.route("/recreate_events/", methods=["GET"])
+def recreate_events():
+  if request.args.get("event_ids") is not None:
+    try:
+      event_ids = sanatize_ints(request.args.get("event_ids"))
+      list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(event_ids)).all()
+      list_of_event_ids = list(itertools.chain(*list_of_event_id_tuples))
+      tuple_event_ids = tuple(list_of_event_ids)
+      SQL_formatted_event_ids, tuple_is_empty = format_tuple_for_SQL(tuple_event_ids)
+    except:
+      abort(400, 'Invalid event id')
+  else:
+    abort(400, 'Provide at least one event id')
+
+  event_query = build_events_query(False, SQL_formatted_event_ids)
+  events = db.session.execute(event_query).all()
+  event_dict = {}
+  for event in events:
+    event_data = parse_event_data(event)
+    if event.game_id in event_dict:
+      event_dict[event.game_id][event.event_num] = event_data
+    else:
+      event_dict[event.game_id] = {
+        event.event_num: event_data
+      }
+  return event_dict
+
+
+def build_events_query(filter_by_game_id, where_statement_in_values):
+  where_statement = str()
+  limit_statement = str()
+  if filter_by_game_id:
+    where_statement = f"WHERE event.game_id = {where_statement_in_values} "
+  else:
+    where_statement = f"WHERE event.id IN {where_statement_in_values} "
+    limit_statement = "LIMIT 1000"
+
   event_query = (
     "SELECT "
+    "event.game_id, \n"
+    "event.id, \n"
     "event.event_num, \n"
     "event.inning, \n"
     "event.half_inning, \n"
@@ -301,155 +388,133 @@ def recreate_stat_file():
     "LEFT JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n"
     "LEFT JOIN fielding_summary ON contact_summary.fielding_summary_id = fielding_summary.id \n"
     "LEFT JOIN character_game_summary AS fielder_cgs ON fielding_summary.fielder_character_game_summary_id = fielder_cgs.id \n"
-    f"WHERE event.game_id = {game_id} "
-    "ORDER BY event.event_num"
-
+    f"{where_statement} "
+    "ORDER BY event.event_num "
+    f"{limit_statement}"
   )
 
-  events = db.session.execute(event_query).all()
+  return event_query
 
-  event_list = list()
-  for event in events:
-    event_data = {
-      "Event Num": event.event_num,
-      "Inning": event.inning,
-      "Half Inning": event.half_inning,
-      "Away Score": event.away_score,
-      "Home Score": event.home_score,
-      "Balls": event.balls,
-      "Strikes": event.strikes,
-      "Outs": event.outs,
-      "Star Chance": event.star_chance,
-      "Away Stars": event.away_stars,
-      "Home Stars": event.home_stars,
-      "Pitcher Stamina": event.pitcher_stamina,
-      "Chemistry Links on Base": event.chem_links_ob,
-      "Pitcher CGS Id": event.pitcher_cgs_id,
-      "Batter CGS Id": event.batter_cgs_id,
-      "Catcher CGS Id": event.catcher_cgs_id,
-      "Pitcher": event.pitcher,
-      "Batter": event.batter,
-      "Catcher": event.catcher,
-      "RBI": event.result_rbi,
-      "Result of AB": event.result_of_ab
-    }
 
-    # check if event has a batter
-    if event.runner_batter_initial_base:
-      event_data["Runner Batter"] = {
-        "Runner Char Id": event.batter,
-        "Runner Initial Base": event.runner_batter_initial_base,
-        "Runner Result Base": event.runner_batter_result_base,
-        "Out Type": event.runner_batter_out_type,
-        "Out Location": event.runner_batter_out_location,
-        "Steal": event.runner_batter_steal
-      }
-    # check if event has a runner on 1b
-    if event.runner_1b_initial_base:
-      event_data["Runner 1B"] = {
-        "Runner Char Id": event.runner_1b_char_id,
-        "Runner Initial Base": event.runner_1b_initial_base,
-        "Runner Result Base": event.runner_1b_result_base,
-        "Out Type": event.runner_1b_out_type,
-        "Out Location": event.runner_1b_out_location,
-        "Steal": event.runner_1b_steal
-      }
-    # check if event has a runner on 2b
-    if event.runner_2b_initial_base:
-      event_data["Runner 2B"] = {
-        "Runner Char Id": event.runner_2b_char_id,
-        "Runner Initial Base": event.runner_2b_initial_base,
-        "Runner Result Base": event.runner_2b_result_base,
-        "Out Type": event.runner_2b_out_type,
-        "Out Location": event.runner_2b_out_location,
-        "Steal": event.runner_2b_steal
-      }
-    # check if event has a runner on 3b
-    if event.runner_3b_initial_base:
-      event_data["Runner 3B"] = {
-        "Runner Char Id": event.runner_3b_char_id,
-        "Runner Initial Base": event.runner_3b_initial_base,
-        "Runner Result Base": event.runner_3b_result_base,
-        "Out Type": event.runner_3b_out_type,
-        "Out Location": event.runner_3b_out_location,
-        "Steal": event.runner_3b_steal
-      }
-    
-    if event.type_of_contact:
-      event_data["Pitch"] = {
-        "Pitcher Team Id": event.half_inning,
-        "Pitcher Char Id": event.pitcher,
-        "Pitch Type": event.pitch_type,
-        "Charge Type": event.charge_pitch_type,
-        "Star Pitch": event.star_pitch,
-        "Pitch Speed": event.pitch_speed,
-        "Pitch Result": event.pitch_result,
-        "Type of Swing": event.type_of_swing,
-      }
-
-      if event.type_of_contact:
-        event_data["Pitch"]["Contact"] = {
-          "Type of Contact": event.type_of_contact,
-          "Charge Power Up": event.charge_power_up,
-          "Charge Power Down": event.charge_power_down,
-          "Star Swing Five-Star": event.star_swing_five_star,
-          "Input Direction - Push/Pull": event.input_direction,
-          "Input Direction - Stick": event.input_direction_stick,
-          "Frame of Swing Upon Contact": event.frame_of_swing_upon_contact,
-          "Ball Angle": event.ball_angle,
-          "Ball Vertical Power": event.ball_vert_power,
-          "Ball Horizontal Power": event.ball_horiz_power,
-          "Ball Velocity - X": event.ball_x_velocity,
-          "Ball Velocity - Y": event.ball_y_velocity,
-          "Ball Velocity - Z": event.ball_z_velocity,
-          "Ball Landing Position - X": event.ball_x_pos,
-          "Ball Landing Position - Y": event.ball_y_pos,
-          "Ball Landing Position - Z": event.ball_z_pos,
-          "Ball Max Height": event.ball_max_height,
-          "Ball Position - X": event.pitch_ball_x_pos,
-          "Ball Position - Z": event.pitch_ball_z_pos,
-          "Batter Position Upon Contact - X": event.pitch_batter_x_pos,
-          "Batter Position Upon Contact - Z": event.pitch_batter_z_pos,
-          "Multi-out": event.multi_out,
-          "Contact Result - Primary": event.primary_result,
-          "Contact Result - Secondary": event.secondary_result,
-        }
-
-        if event.position:
-          event_data["Pitch"]["Contact"]["First Fielder"] = {
-            "Fielder Position": event.position,
-            "Fielder Character": event.fielder,
-            "Fielder Action": event.action,
-            "Fielder Jump": event.jump,
-            "Fielder Swap": event.swap,
-            "Fielder Manual Selected": event.manual_select,
-            "Fielder Position - X": event.fielder_x_pos,
-            "Fielder Position - Y": event.fielder_y_pos,
-            "Fielder Position - Z": event.fielder_z_pos,
-            "Fielder Bobble": event.bobble
-          }
-
-    event_list.append(event_data)
-
-  json_stat_file = {
-    "GameId": game.game_id,
-    "Date - Start": game.date_time_start,
-    "Date - End": game.date_time_end,
-    "Ranked": game.ranked,
-    "Netplay": game.netplay,
-    "StadiumID": game.stadium_id,
-    "Away Player": away_player.username,
-    "Home Player": home_player.username,
-    "Away Score": game.away_score,
-    "Home Score": game.home_score,
-    "Innings Selected": game.innings_selected,
-    "Innings Played": game.innings_played,
-    "Quitter Team": game.quitter,
-    "Average Ping": game.average_ping,
-    "Lag Spikes": game.lag_spikes,
-    "Version": game.version,
-    "Character Game Stats": character_game_stats,
-    "Events": event_list
+def parse_event_data(event):
+  event_data = {
+    "Event Num": event.event_num,
+    "Event ID": event.id,
+    "Inning": event.inning,
+    "Half Inning": event.half_inning,
+    "Away Score": event.away_score,
+    "Home Score": event.home_score,
+    "Balls": event.balls,
+    "Strikes": event.strikes,
+    "Outs": event.outs,
+    "Star Chance": event.star_chance,
+    "Away Stars": event.away_stars,
+    "Home Stars": event.home_stars,
+    "Pitcher Stamina": event.pitcher_stamina,
+    "Chemistry Links on Base": event.chem_links_ob,
+    "Pitcher CGS Id": event.pitcher_cgs_id,
+    "Batter CGS Id": event.batter_cgs_id,
+    "Catcher CGS Id": event.catcher_cgs_id,
+    "Pitcher": event.pitcher,
+    "Batter": event.batter,
+    "Catcher": event.catcher,
+    "RBI": event.result_rbi,
+    "Result of AB": event.result_of_ab
   }
 
-  return json_stat_file
+  # check if event has a batter
+  if event.runner_batter_initial_base:
+    event_data["Runner Batter"] = {
+      "Runner Char Id": event.batter,
+      "Runner Initial Base": event.runner_batter_initial_base,
+      "Runner Result Base": event.runner_batter_result_base,
+      "Out Type": event.runner_batter_out_type,
+      "Out Location": event.runner_batter_out_location,
+      "Steal": event.runner_batter_steal
+    }
+  # check if event has a runner on 1b
+  if event.runner_1b_initial_base:
+    event_data["Runner 1B"] = {
+      "Runner Char Id": event.runner_1b_char_id,
+      "Runner Initial Base": event.runner_1b_initial_base,
+      "Runner Result Base": event.runner_1b_result_base,
+      "Out Type": event.runner_1b_out_type,
+      "Out Location": event.runner_1b_out_location,
+      "Steal": event.runner_1b_steal
+    }
+  # check if event has a runner on 2b
+  if event.runner_2b_initial_base:
+    event_data["Runner 2B"] = {
+      "Runner Char Id": event.runner_2b_char_id,
+      "Runner Initial Base": event.runner_2b_initial_base,
+      "Runner Result Base": event.runner_2b_result_base,
+      "Out Type": event.runner_2b_out_type,
+      "Out Location": event.runner_2b_out_location,
+      "Steal": event.runner_2b_steal
+    }
+  # check if event has a runner on 3b
+  if event.runner_3b_initial_base:
+    event_data["Runner 3B"] = {
+      "Runner Char Id": event.runner_3b_char_id,
+      "Runner Initial Base": event.runner_3b_initial_base,
+      "Runner Result Base": event.runner_3b_result_base,
+      "Out Type": event.runner_3b_out_type,
+      "Out Location": event.runner_3b_out_location,
+      "Steal": event.runner_3b_steal
+    }
+  
+  if event.type_of_contact:
+    event_data["Pitch"] = {
+      "Pitcher Team Id": event.half_inning,
+      "Pitcher Char Id": event.pitcher,
+      "Pitch Type": event.pitch_type,
+      "Charge Type": event.charge_pitch_type,
+      "Star Pitch": event.star_pitch,
+      "Pitch Speed": event.pitch_speed,
+      "Pitch Result": event.pitch_result,
+      "Type of Swing": event.type_of_swing,
+    }
+
+    if event.type_of_contact:
+      event_data["Pitch"]["Contact"] = {
+        "Type of Contact": event.type_of_contact,
+        "Charge Power Up": event.charge_power_up,
+        "Charge Power Down": event.charge_power_down,
+        "Star Swing Five-Star": event.star_swing_five_star,
+        "Input Direction - Push/Pull": event.input_direction,
+        "Input Direction - Stick": event.input_direction_stick,
+        "Frame of Swing Upon Contact": event.frame_of_swing_upon_contact,
+        "Ball Angle": event.ball_angle,
+        "Ball Vertical Power": event.ball_vert_power,
+        "Ball Horizontal Power": event.ball_horiz_power,
+        "Ball Velocity - X": event.ball_x_velocity,
+        "Ball Velocity - Y": event.ball_y_velocity,
+        "Ball Velocity - Z": event.ball_z_velocity,
+        "Ball Landing Position - X": event.ball_x_pos,
+        "Ball Landing Position - Y": event.ball_y_pos,
+        "Ball Landing Position - Z": event.ball_z_pos,
+        "Ball Max Height": event.ball_max_height,
+        "Ball Position - X": event.pitch_ball_x_pos,
+        "Ball Position - Z": event.pitch_ball_z_pos,
+        "Batter Position Upon Contact - X": event.pitch_batter_x_pos,
+        "Batter Position Upon Contact - Z": event.pitch_batter_z_pos,
+        "Multi-out": event.multi_out,
+        "Contact Result - Primary": event.primary_result,
+        "Contact Result - Secondary": event.secondary_result,
+      }
+
+      if event.position:
+        event_data["Pitch"]["Contact"]["First Fielder"] = {
+          "Fielder Position": event.position,
+          "Fielder Character": event.fielder,
+          "Fielder Action": event.action,
+          "Fielder Jump": event.jump,
+          "Fielder Swap": event.swap,
+          "Fielder Manual Selected": event.manual_select,
+          "Fielder Position - X": event.fielder_x_pos,
+          "Fielder Position - Y": event.fielder_y_pos,
+          "Fielder Position - Z": event.fielder_z_pos,
+          "Fielder Bobble": event.bobble
+        }
+
+  return event_data
