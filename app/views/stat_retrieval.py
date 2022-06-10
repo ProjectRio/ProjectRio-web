@@ -3,21 +3,11 @@ from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag, Event
 from ..consts import *
-from ..helper_functions import calculate_era
+from ..helper_functions import calculate_era, format_tuple_for_SQL, format_list_for_SQL
 import pprint
 import time
 import datetime
 import itertools
-
-# == Helper functions for SQL query formatting
-# Returns tuple in SQL ready string and a bool to indicate if query is empty
-def format_tuple_for_SQL(in_tuple):
-    sql_tuple = "(" + ",".join(repr(v) for v in in_tuple) + ")"
-    
-    return (sql_tuple, (len(in_tuple) == 0))
-
-def format_list_for_SQL(in_list):
-    return format_tuple_for_SQL(tuple(in_list))
 
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
@@ -302,52 +292,55 @@ def endpoint_games(called_internally=False):
     
     games = []
     game_ids = []
-    for game in results:
-        game_ids.append(game.game_id)
+    if called_internally:
+        for game in results:
+            game_ids.append(game.game_id)
+            return { "game_ids": game_ids }
+    else:
+        for game in results:
+            game_ids.append(game.game_id)
 
-        games.append({
-            'Id': game.game_id,
-            'date_time_start': game.date_time_start,
-            'date_time_end': game.date_time_end,
-            'Away User': game.away_player,
-            'Away Captain': game.away_captain,
-            'Away Score': game.away_score,
-            'Home User': game.home_player,
-            'Home Captain': game.home_captain,
-            'Home Score': game.home_score,
-            'Innings Played': game.innings_played,
-            'Innings Selected': game.innings_selected,
-            'Tags': []
-        })
+            games.append({
+                'Id': game.game_id,
+                'date_time_start': game.date_time_start,
+                'date_time_end': game.date_time_end,
+                'Away User': game.away_player,
+                'Away Captain': game.away_captain,
+                'Away Score': game.away_score,
+                'Home User': game.home_player,
+                'Home Captain': game.home_captain,
+                'Home Score': game.home_score,
+                'Innings Played': game.innings_played,
+                'Innings Selected': game.innings_selected,
+                'Tags': []
+            })
 
+        # If there are games with matching tags, get all additional tags they have
+        if game_ids:
+            where_game_id = str()
+            if len(game_ids) == 1:
+                where_game_id = f'WHERE game_tag.game_id = {game_ids[0]} '
+            else:
+                where_game_id = f'WHERE game_tag.game_id IN {tuple(game_ids)} '
 
+            tags_query = (
+                'SELECT '
+                'game_tag.game_id as game_id, '
+                'game_tag.tag_id as tag_id, '
+                'tag.name as name '
+                'FROM game_tag '
+                'LEFT JOIN tag ON game_tag.tag_id = tag.id '
+                f'{where_game_id}'
+                'GROUP BY game_id, tag_id, name'
+            )
 
-    # If there are games with matching tags, get all additional tags they have
-    if game_ids:
-        where_game_id = str()
-        if len(game_ids) == 1:
-            where_game_id = f'WHERE game_tag.game_id = {game_ids[0]} '
-        else:
-            where_game_id = f'WHERE game_tag.game_id IN {tuple(game_ids)} '
+            tag_results = db.session.execute(tags_query).all()
+            for tag in tag_results:
+                for game in games:
+                    if game['Id'] == tag.game_id:
+                        game['Tags'].append(tag.name)
 
-        tags_query = (
-            'SELECT '
-            'game_tag.game_id as game_id, '
-            'game_tag.tag_id as tag_id, '
-            'tag.name as name '
-            'FROM game_tag '
-            'LEFT JOIN tag ON game_tag.tag_id = tag.id '
-            f'{where_game_id}'
-            'GROUP BY game_id, tag_id, name'
-        )
-
-        tag_results = db.session.execute(tags_query).all()
-        for tag in tag_results:
-            for game in games:
-                if game['Id'] == tag.game_id:
-                    game['Tags'].append(tag.name)
-
-    return {'games': games}
+        return {'games': games}
 
 
 
@@ -393,11 +386,9 @@ def endpoint_event(called_internally=False):
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            print('here')
-            list_of_games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-            print('games complete')
-            for game_dict in list_of_games['games']:
-                list_of_game_ids.append(game_dict['Id'])
+            games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
+            for game_id in games['game_ids']:
+                list_of_game_ids.append(game_id)
     except:
         return abort(408, description='Invalid GameID')
 
@@ -908,9 +899,9 @@ def endpoint_detailed_stats():
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            list_of_games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-            for game_dict in list_of_games['games']:
-                list_of_game_ids.append(game_dict['Id'])
+            games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
+            for game_id in games['game_ids']:
+                list_of_game_ids.append(game_id)
     except:
         return abort(408, description='Invalid GameID')
 

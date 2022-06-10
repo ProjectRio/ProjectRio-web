@@ -191,6 +191,18 @@ def populate_db2():
     else:
         tags.append('Local')
 
+    # add rio web version tag, create tag if it doesn't exist
+    rio_web_version_tag = Tag.query.filter_by(name=cRIO_WEB_VERSION).first()
+    if rio_web_version_tag is None:
+        new_rio_web_version_tag = Tag(
+            name = cRIO_WEB_VERSION,
+            name_lowercase = cRIO_WEB_VERSION.lower(),
+            desc = "Rio Web Version Tag"
+        )
+        db.session.add(new_rio_web_version_tag)
+        db.session.commit()
+    tags.append(cRIO_WEB_VERSION)
+
     for name in tags:
         tag = Tag.query.filter_by(name=name).first()
         if tag:
