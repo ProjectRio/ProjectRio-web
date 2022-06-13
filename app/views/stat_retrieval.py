@@ -728,7 +728,7 @@ def endpoint_landing_data():
         'fielding.manual_select AS manual_select_state \n'
         'FROM event \n'
         'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
-        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left join for misses
+        'JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'
         'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n'
         'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
         'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
