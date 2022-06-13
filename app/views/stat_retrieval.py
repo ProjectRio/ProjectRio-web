@@ -85,23 +85,23 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
 @ Params:
     - tag - list of tags to filter by
     - exclude_tag - List of tags to exclude from search
-    - start_time - Unix time. Provides the lower (older) end of the range of games to retreive. Overrides recent
-    - end_time - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query). Overrides recent
+    - start_time - Unix time. Provides the lower (older) end of the range of games to retreive.
+    - end_time - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query).
     - username - list of users who appear in games to retreive
     - vs_username - list of users who MUST also appear in the game along with users
     - exclude_username - list of users to NOT include in query results
     - captain - captain name to appear in games to retrieve
     - vs_captain - captain name who MUST appear in game along with captain
     - exclude_captian -  captain name to EXLCUDE from results
-    - recent - Int of number of games
+    - limit_games - Int of number of games || False to return all
 
 @ Output:
     - List of games and highlevel info based on flags
 
-@ URL example: http://127.0.0.1:5000/games/?recent=5&username=demOuser4&username=demouser1&username=demouser5
+@ URL example: http://127.0.0.1:5000/games/?limit=5&username=demOuser4&username=demouser1&username=demouser5
 '''
 @app.route('/games/', methods = ['GET'])
-def endpoint_games(limit_games_returned=True):
+def endpoint_games(called_internally=False):
     # === validate passed parameters ===
     try:
         # Check if tags are valid and get a list of corresponding ids
@@ -166,17 +166,17 @@ def endpoint_games(limit_games_returned=True):
         list_of_exclude_captain_ids =list(itertools.chain(*list_of_exclude_captain_id_tuples))
         tuple_exclude_captain_ids = tuple(list_of_exclude_captain_ids)
 
-        recent = int()
-        if limit_games_returned == False:
-            if request.args.get('recent') is None:
-                recent = None
+        limit = int()
+        try:
+            if request.args.get('limit_games') is None:
+                limit = None if called_internally else 50
+            elif request.args.get('limit_games') in ['False', 'false', 'f']:
+                limit = None
             else:
-                recent = int(request.args.get('recent'))
-        else:
-            if request.args.get('recent') is None:
-                recent = 50
-            else:
-                recent = int(request.args.get('recent'))
+                limit = int(request.args.get('limit_games'))
+        except:
+            abort(400, 'Invalid Limit provided')
+
     except:
        return abort(400, 'Invalid Username, Captain, or Tag')
 
@@ -293,7 +293,7 @@ def endpoint_games(limit_games_returned=True):
         'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
         f'{where_statement} '
         'ORDER BY game.date_time_start DESC \n'
-        f"{('LIMIT ' + str(recent)) if recent != None else ''}"
+        f"{('LIMIT ' + str(limit)) if limit != None else ''}"
     )
 
     print(query)
@@ -377,9 +377,11 @@ def endpoint_games(limit_games_returned=True):
     - star_chance      [0-1],   bool for star chance
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
+    - final_result     [0-16],  value for the final result of the event
+    - limit            int or False, value to limit the events
 '''
 @app.route('/events/', methods = ['GET'])
-def endpoint_event():
+def endpoint_event(called_internally=False):
     # === Construct query === 
     #Sanitize games params 
     try:
@@ -391,7 +393,9 @@ def endpoint_event():
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
+            print('here')
+            list_of_games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
+            print('games complete')
             for game_dict in list_of_games['games']:
                 list_of_game_ids.append(game_dict['Id'])
     except:
@@ -499,6 +503,11 @@ def endpoint_event():
     list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
     if list_of_outs == None:
         return abort(400, description = error)
+    
+    #Final result
+    list_of_results, error = sanitize_int_list(request.args.getlist('final_result'), "Final result not in range", 17)
+    if list_of_results == None:
+        return abort(400, description = error)
 
     #this might be riduculous but I want everything in a list for the next function
     multi_out_flag   = [1] if (request.args.get('multi_out') == '1') else []
@@ -526,7 +535,8 @@ def endpoint_event():
         (star_chance_flag, 'event.star_chance', None),
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
-        (list_of_pitcher_user_ids, 'pitcher.user_id', None)
+        (list_of_pitcher_user_ids, 'pitcher.user_id', None),
+        (list_of_results, 'event.result_of_ab', None)
     ]
 
     #Go through all of the lists from the args
@@ -556,8 +566,28 @@ def endpoint_event():
 
     where_statement = build_where_statement(where_list)
 
+    columns_statement = 'event.game_id AS game_id, \n event.event_num AS event_num, \n' if not called_internally else ''
+
+    limit_statement = ''
+    default_limit = 1000
+    max_limit     = 150000
+    if (request.args.get('limit') != None):
+        try:
+            limit = int(request.args.get('limit')) if int(request.args.get('limit')) <= max_limit else max_limit
+            limit_statement = f'LIMIT {limit}'
+        except:
+            if request.args.get('limit') in ["false", "False", "F", "f"]:
+                limit_statement = f'LIMIT {max_limit}'
+            elif request.args.get('limit') in ["true", "True", "T", "t"]:
+                limit_statement = f'LIMIT {default_limit}'
+            else:
+                return abort(400, description = "Invalid event_limit")
+    else:
+        limit_statement = '' if called_internally else f'LIMIT {default_limit}'
+
     query = (
         'SELECT \n'
+        f'{columns_statement}'
         'event.id AS event_id \n'
         'FROM event \n'
         'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
@@ -567,17 +597,26 @@ def endpoint_event():
         'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
         'LEFT JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
        f'{where_statement}'
+       f'{limit_statement}'
     )
 
     print(query)
 
     result = db.session.execute(query).all()
-    event_nums = []
-    for entry in result:
-        event_nums.append(entry.event_id )
-    return {
-        'Events': event_nums
-    }
+
+    if called_internally:
+        events = []
+        for entry in result:
+            events.append(entry.event_id )
+        events = { 'Events': events }
+    else:
+        events = {}
+        for entry in result:
+            if entry.game_id not in events:
+                events[entry.game_id] = {}
+            events[entry.game_id][entry.event_num] = entry.event_id
+        
+    return events
 
 
 @app.route('/plate_data/', methods = ['GET'])
@@ -592,7 +631,7 @@ def endpoint_plate_data():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
@@ -652,7 +691,7 @@ def endpoint_landing_data():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
@@ -664,10 +703,12 @@ def endpoint_landing_data():
     query = (
         'SELECT \n'
         'event.game_id AS game_id, \n'
-        'event.id AS event_id, \n'
+        'event.event_num AS event_num, \n'
         'event.result_of_ab AS final_result, \n'
+        'event.chem_links_ob AS chem_links_ob, \n'
         'batter.char_id AS batter_char_id, \n'
-        'pitcher.char_id AS fielder_char_id, \n'
+        'pitcher.char_id AS pitcher_char_id, \n'
+        'fielder.char_id AS fielder_char_id, \n'
         'pitcher_user.username AS pitcher_username, \n'
         'batter_user.username AS batter_username, \n'
         'batter.batting_hand, \n'
@@ -675,26 +716,31 @@ def endpoint_landing_data():
         'contact.ball_x_velocity AS x_velo, \n'
         'contact.ball_y_velocity AS y_velo, \n'
         'contact.ball_z_velocity AS z_velo, \n'
-        'contact.ball_x_pos AS x_pos, \n'
-        'contact.ball_y_pos AS y_pos, \n'
-        'contact.ball_z_pos AS z_pos, \n'
+        'contact.ball_x_pos AS ball_x_pos, \n'
+        'contact.ball_y_pos AS ball_y_pos, \n'
+        'contact.ball_z_pos AS ball_z_pos, \n'
+        'contact.ball_angle AS ball_angle, \n'
+        'contact.ball_max_height AS ball_max_height, \n'
         'contact.input_direction_stick AS stick_input, \n'
+        'contact.charge_power_up AS charge_power_up, \n'
+        'contact.charge_power_down AS charge_power_down, \n'
+        'contact.frame_of_swing_upon_contact AS frame_of_swing, \n'
         'pitch.type_of_swing, \n'
         'contact.type_of_contact, \n'
         #Add decoded action
         'fielding.position AS fielder_position, \n'
-        'fielding.fielder_x_pos AS x_pos, \n'
-        'fielding.fielder_y_pos AS y_pos, \n'
-        'fielding.fielder_z_pos AS z_pos, \n'
+        'fielding.fielder_x_pos AS fielder_x_pos, \n'
+        'fielding.fielder_y_pos AS fielder_y_pos, \n'
+        'fielding.fielder_z_pos AS fielder_z_pos, \n'
         'fielding.jump AS fielder_jump, \n'
         'fielding.manual_select AS manual_select_state \n'
         'FROM event \n'
         'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
-        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
+        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left join for misses
         'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n'
         'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
         'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
-        'JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
+        'LEFT JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
         'JOIN rio_user AS pitcher_user ON pitcher.user_id = pitcher_user.id \n'
         'JOIN rio_user AS batter_user ON batter.user_id = batter_user.id \n'
        f'WHERE event.id IN {event_id_string}'
@@ -712,6 +758,15 @@ def endpoint_landing_data():
     }
 
 
+# == Functions to return coordinates for graphing ==
+'''
+@Endpoint: Star_chances
+@Description: Return number of star chances per game or per inning
+@Params:
+    - Game params:           Params for /games/ (tags/users/date/etc)
+    - Event params:
+    - by_inning:      [bool] Show breakdown by inning instead of by game
+'''
 @app.route('/star_chances/', methods = ['GET'])
 def endpoint_star_chances():
     #Sanitize games params 
@@ -724,7 +779,7 @@ def endpoint_star_chances():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
@@ -733,10 +788,18 @@ def endpoint_star_chances():
     if event_empty:
         return {}
 
+    select_statement = ''
+    group_by_statement = ''
+    if request.args.get('by_inning') in ["true", "True", "T", "t"]:
+        select_statement = (
+            'event.inning AS inning, \n'
+            'event.half_inning AS half_inning, \n'
+        )
+        group_by_statement = 'GROUP BY event.inning, event.half_inning'
+
     query = (
         'SELECT \n'
-        'event.inning AS inning, \n'
-        'event.half_inning AS half_inning, \n'
+       f'{select_statement}' 
         'COUNT(CASE WHEN (event.runner_on_1 IS NULL AND event.runner_on_2 IS NULL \n'
         '                 AND event.runner_on_3 IS NULL AND event.event_num != 0) THEN 1 ELSE NULL END) AS elligible_event, \n'
         'COUNT(CASE WHEN (event.star_chance = 1 AND event.result_of_ab > 0) THEN 1 ELSE NULL END) AS star_chances, \n'
@@ -745,7 +808,7 @@ def endpoint_star_chances():
         'COUNT ( DISTINCT event.game_id ) AS games \n'
         'FROM event \n'
        f'WHERE event.id IN {event_id_string}'
-        'GROUP BY event.inning, event.half_inning'
+       f'{group_by_statement}'
     )
 
     print(query)
@@ -771,7 +834,7 @@ def endpoint_pitch_analysis():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event()['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
     except:
         return abort(408, description='Invalid GameID')
 
@@ -814,7 +877,7 @@ def endpoint_pitch_analysis():
     - Game params:                  Params for /games/ (tags/users/date/etc)
     - games:             [0-x],        game ids to use. If not provided arguments for /games/ endpoint will be expected and used
     - username:          [],           users to get stats for. All users if blank
-    - character:         [0-54],       character ids to get stats for. All charas if blank
+    - char_id:           [0-54],       character ids to get stats for. All charas if blank
     - by_user:           [bool],       When true stats will be grouped by user. When false, all users will be separate
     - by_char:           [bool],       When true stats will be grouped by character. When false, all characters will be separate
     - by_swing:          [bool],       When true batting stats will be organized by swing type (slap, charge, star). When false, 
@@ -843,7 +906,7 @@ def endpoint_detailed_stats():
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            list_of_games = endpoint_games(False)   # List of dicts of games we want data from and info about those games
+            list_of_games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
             for game_dict in list_of_games['games']:
                 list_of_game_ids.append(game_dict['Id'])
     except:
@@ -942,15 +1005,15 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
         'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
-        #'SUM (character_game_summary.strikeouts) AS strikeouts, \n'
+        'SUM (event.result_of_ab = 1) AS strikeouts, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
-        'SUM(event.result_rbi) AS rbi '
+        'SUM(character_game_summary.result_rbi) AS rbi '
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN event ON character_game_summary.id = event.batter_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
-       f"   {'AND contact_summary.primary_result != 1 AND contact_summary.primary_result != 3' if exclude_nonfair else ''} \n"
+        'LEFT JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
+       f"   {'AND contact_summary.primary_result != 1' if exclude_nonfair else ''} \n"
         'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
        f"{where_statement}"
        f"{group_by_statement}"
