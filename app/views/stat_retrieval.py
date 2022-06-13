@@ -295,7 +295,7 @@ def endpoint_games(called_internally=False):
     if called_internally:
         for game in results:
             game_ids.append(game.game_id)
-            return { "game_ids": game_ids }
+        return { "game_ids": game_ids }
     else:
         for game in results:
             game_ids.append(game.game_id)
@@ -371,7 +371,7 @@ def endpoint_games(called_internally=False):
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
     - final_result     [0-16],  value for the final result of the event
-    - limit            int or False, value to limit the events
+    - limit_events            int or False, value to limit the events
 '''
 @app.route('/events/', methods = ['GET'])
 def endpoint_event(called_internally=False):
@@ -387,6 +387,7 @@ def endpoint_event(called_internally=False):
 
         else:
             games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
+            print(games)
             for game_id in games['game_ids']:
                 list_of_game_ids.append(game_id)
     except:
@@ -562,19 +563,19 @@ def endpoint_event(called_internally=False):
     limit_statement = ''
     default_limit = 1000
     max_limit     = 150000
-    if (request.args.get('limit') != None):
+    if (request.args.get('limit_events') != None):
         try:
-            limit = int(request.args.get('limit')) if int(request.args.get('limit')) <= max_limit else max_limit
-            limit_statement = f'LIMIT {limit}'
+            limit = int(request.args.get('limit_events')) if int(request.args.get('limit_events')) <= max_limit else max_limit
+            limit_statement = f' LIMIT {limit}'
         except:
-            if request.args.get('limit') in ["false", "False", "F", "f"]:
-                limit_statement = f'LIMIT {max_limit}'
-            elif request.args.get('limit') in ["true", "True", "T", "t"]:
-                limit_statement = f'LIMIT {default_limit}'
+            if request.args.get('limit_events') in ["false", "False", "F", "f"]:
+                limit_statement = f' LIMIT {max_limit}'
+            elif request.args.get('limit_events') in ["true", "True", "T", "t"]:
+                limit_statement = f' LIMIT {default_limit}'
             else:
                 return abort(400, description = "Invalid event_limit")
     else:
-        limit_statement = '' if called_internally else f'LIMIT {default_limit}'
+        limit_statement = '' if called_internally else f' LIMIT {default_limit}'
 
     query = (
         'SELECT \n'
