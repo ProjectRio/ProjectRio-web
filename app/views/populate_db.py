@@ -1,7 +1,6 @@
-from flask import request, jsonify, abort
+from flask import request, abort
 from flask import current_app as app
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, ChemistryTable, Tag, GameTag
-import json
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, Tag, GameTag
 from ..consts import *
 
 @app.route('/populate_db/', methods=['POST'])
@@ -198,6 +197,9 @@ def populate_db2():
             name_lowercase = f'client_{game.version.lower()}',
             desc = "Rio Client Version Tag"
         )
+        db.session.add(new_rio_client_version_tag)
+        db.session.commit()
+    tags.append(f'client_{game.version}')
 
     # add rio web version tag, create tag if it doesn't exist
     rio_web_version_tag = Tag.query.filter_by(name=cRIO_WEB_VERSION).first()
@@ -209,7 +211,7 @@ def populate_db2():
         )
         db.session.add(new_rio_web_version_tag)
         db.session.commit()
-    tags.append(cRIO_WEB_VERSION)
+    tags.append(f'web_{cRIO_WEB_VERSION}')
 
     for name in tags:
         tag = Tag.query.filter_by(name=name).first()
