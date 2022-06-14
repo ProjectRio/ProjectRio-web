@@ -191,6 +191,26 @@ def populate_db2():
     else:
         tags.append('Local')
 
+    rio_client_version_tag = Tag.query.filter_by(name=game.version).first()
+    if rio_client_version_tag is None:
+        new_rio_client_version_tag = Tag(
+            name = f'client_{game.version}',
+            name_lowercase = f'client_{game.version.lower()}',
+            desc = "Rio Client Version Tag"
+        )
+
+    # add rio web version tag, create tag if it doesn't exist
+    rio_web_version_tag = Tag.query.filter_by(name=cRIO_WEB_VERSION).first()
+    if rio_web_version_tag is None:
+        new_rio_web_version_tag = Tag(
+            name = f'web_{cRIO_WEB_VERSION}',
+            name_lowercase = f'web_{cRIO_WEB_VERSION.lower()}',
+            desc = "Rio Web Version Tag"
+        )
+        db.session.add(new_rio_web_version_tag)
+        db.session.commit()
+    tags.append(cRIO_WEB_VERSION)
+
     for name in tags:
         tag = Tag.query.filter_by(name=name).first()
         if tag:
@@ -281,8 +301,8 @@ def populate_db2():
                     previous_runners[key] = runner
                     previous_runners_json[key] = event_data[key]
             else:
-                previous_runners['Runner Batter'] = None
-                previous_runners_json['Runner Batter'] = None
+                previous_runners[key] = None
+                previous_runners_json[key] = None
 
             
         # ==== Pitch Summary ====
@@ -297,7 +317,8 @@ def populate_db2():
                 pitch_batter_x_pos = event_data['Pitch']['Batter Position - X'],
                 pitch_batter_z_pos = event_data['Pitch']['Batter Position - Z'],
                 pitch_result = event_data['Pitch']['Pitch Result'],
-                type_of_swing = event_data['Pitch']['Type of Swing']
+                type_of_swing = event_data['Pitch']['Type of Swing'],
+                d_ball = event_data['Pitch']['DB'],
             )
 
             db.session.add(pitch_summary)
