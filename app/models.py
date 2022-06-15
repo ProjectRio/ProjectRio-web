@@ -325,6 +325,7 @@ class PitchSummary(db.Model):
     pitch_ball_z_pos = db.Column(db.Float)
     pitch_batter_x_pos = db.Column(db.Float)
     pitch_batter_z_pos = db.Column(db.Float)
+    d_ball = db.Column(db.Boolean)
     pitch_result = db.Column(db.Integer)
     type_of_swing = db.Column(db.Integer)
 
