@@ -136,7 +136,7 @@ Please read the [FAQ](#faq) before using the Api.
 ```
 
 ### <u>Parameters</u>
-- **recent** : specify the number of games to return.
+- **limit_games** : specify the number of games to return.
 - **username** : provide a username to narrow your search by, e.g. username=GenericHomeUser. Can be passed multiple times to get games from all usernames provided.
 - **vs_username** : provide the username of an opponent who **MUST** appear in game against the provided _username_. Can be passed multiple times.
 - **exclude_username** : provide a username of opponents who **MUST NOT** appear in results. Can be passed multiple times.
@@ -145,47 +145,47 @@ Please read the [FAQ](#faq) before using the Api.
 - **exclude_captain** : provide a name of a captain who **MUST NOT** appear in results. Can be passed multiple times.
 - **tag** : provide the name of a tag to narrow your search, e.g. tag=Ranked will only return games with the ranked tag. Can be passed multiple times to further refine your search.
 - **exclude_tag** : provide the name of a tag to narrow your search, e.g. exclude_tag=Ranked will NOT return games with the ranked tag.  Can be passed multiple times to further refine your search.
-- **start_time** : specify a unix time to start getting games from. Overrides recent.
-- **end_time** :  specify a unix time to stop getting games at. Overrides recent.
+- **start_time** : specify a unix time to start getting games from. Overrides limit_games.
+- **end_time** :  specify a unix time to stop getting games at. Overrides limit_games.
 
 _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, Netplay_
 
 ### <u>Examples</u>
 
  **1. Get GenericHomeUser's most recent games**:
--  To get GenericHomeUser's most recent game we'll need to use the _username_ and _recent_ parameters.
+-  To get GenericHomeUser's most recent game we'll need to use the _username_ and _limit_games_ parameters.
 	 - username=GenericHomeUser
-	 - recent=1
+	 - limit_games=1
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?recent=1&username=GenericHomeUser
+  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=1&username=GenericHomeUser
 
 **2. Get the 10 most recent games including GenericHomeUser and/or GenericAwayUser** 
 -  To get GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _recent_ to limit the return.
 	 - username=GenericHomeUser
 	 - username=GenericAwayUser
-	 - recent=10
+	 - limit_games=10
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?recent=10&username=GenericHomeUser&username=GenericAwayUser
+  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=10&username=GenericHomeUser&username=GenericAwayUser
 
 **3. Get GenericHomeUser and GenericAwayUser's 5 most recent Ranked games against each other** 
--  To get GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _recent_ to limit the return and _tag_ to specify we want Ranked games.
+-  To get GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _limit_games_ to limit the return and _tag_ to specify we want Ranked games.
 	 - username=GenericHomeUser
 	 - vs_username=GenericAwayUser
-	 - recent=5
+	 - limit_games=5
 	 - tag=Ranked
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?recent=5&username=GenericHomeUser&vs_username=GenericAwayUser&tag=Ranked
+  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=5&username=GenericHomeUser&vs_username=GenericAwayUser&tag=Ranked
 
 
 **4. Get 15 Ranked Normal Netplay games between 05/18 at 10:30pm EST and 05/19 at 1:00am EST between GenericHomeUser and GenericAwayUser** 
 -  To specify what times you want games between, you must use unix time. You can use https://www.unixtimestamp.com/ or a different website to convert from MM/DD/YYYY HH:MM to a unix timestamp. 
-- To specify we want GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _recent_ to limit the return.
+- To specify we want GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _limit_games_ to limit the return.
 	 - username=GenericHomeUser
 	 - vs_username=GenericAwayUser
-	 - recent=15
+	 - limit_games=15
 	 - start_time=1652927400
 	 - end_time=1652936400
 	 - tag=Ranked
@@ -193,7 +193,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 	 - tag=Netplay
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?recent=15&username=GenericHomeUser&vs_username=GenericAwayUser&start_time=1652927400&end_time=1652936400&tag=Ranked&tag=Normal&tag=Netplay
+  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=15&username=GenericHomeUser&vs_username=GenericAwayUser&start_time=1652927400&end_time=1652936400&tag=Ranked&tag=Normal&tag=Netplay
 
 ## Events
 
@@ -204,6 +204,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 ### <u>Parameters</u>
 - **Game params**:     Params for /games/ (tags/users/date/etc)
 - **games**:           [0-x],   games if not using the game endpoint params
+- **limit_events**:    [0-x],	specifies the number of events to return
 - **pitcher_char**:    [0-54],  pitcher char ids
 - **batter_char**:     [0-54],  batter char ids
 - **fielder_char**:    [0-54],  fielder char ids
@@ -227,17 +228,17 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 ### <u>Examples</u>
 
  **1. Get GenericHomeUser's events from their 5 most recent games**:
--  To get GenericHomeUser's most recent game we'll need to use the _username_ and _recent_ parameters. These are game parameters, but used with the event endpoint
+-  To get GenericHomeUser's most recent game we'll need to use the _username_ and _limit_games_ parameters. These are game parameters, but used with the event endpoint
 	 - username=GenericHomeUser
-	 - recent=5
+	 - limit_games=5
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/events/?recent=1&username=GenericHomeUser
+  - https://projectrio-api-1.api.projectrio.app/events/?limit_games=1&username=GenericHomeUser
 
 **2. Get the GenericHomeUser's events from 5 most recent games where they used the charge swing with a righty batter** 
 -  Give the parameters for games and then layer on the event parameters _type_of_swing_, _batter_hand_, users_as_batter_. Users as batters says only get the events where the given usernames are batting.
 	 - username=GenericHomeUser
-	 - recent=10
+	 - limit_games=10
 	 - type_of_swing=2
 	 - batter_hand=1
 	 - users_as_batter=1
