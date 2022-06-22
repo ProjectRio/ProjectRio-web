@@ -133,6 +133,7 @@ class RioUser(db.Model, UserMixin):
     email    = db.Column(db.String(120), unique = True)
     password = db.Column(db.String(500))
     rio_key  = db.Column(db.String(50), unique = True)
+    user_group = db.Column(db.ForeignKey('UserGroup.id'), nullable=False)
     private = db.Column(db.Boolean)
     verified = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique = True)
@@ -386,7 +387,6 @@ class Runner(db.Model):
     events_on_2 = db.relationship('Event', foreign_keys = 'Event.runner_on_2', backref = 'runner_2')
     events_on_3 = db.relationship('Event', foreign_keys = 'Event.runner_on_3', backref = 'runner_3')
 
-
 class GameTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
@@ -401,6 +401,14 @@ class Tag(db.Model):
     community_id = db.Column(db.Integer)
 
     game_tag = db.relationship('GameTag', backref='tag')
+
+class UserGroup(db.model):
+    id = db.Column(db.Integer, primary_key=True)
+    daily_limit = db.Column(db.Integer)
+    weekly_limit = db.Column(db.Integer)
+    name = db.Column(db.String(32))
+
+    users = db.relationship('RioUser', foreign_keys = 'RioUser.id', backref = 'users')
 
 class ApiKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
