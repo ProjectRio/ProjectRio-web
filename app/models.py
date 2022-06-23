@@ -402,7 +402,7 @@ class Tag(db.Model):
 
     game_tag = db.relationship('GameTag', backref='tag')
 
-class UserGroup(db.model):
+class UserGroup(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     daily_limit = db.Column(db.Integer)
     weekly_limit = db.Column(db.Integer)
