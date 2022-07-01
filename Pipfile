@@ -24,6 +24,8 @@ flask-jwt-extended = "*"
 psycopg2 = "*"
 sendgrid = "*"
 flask-cors = "*"
+requests = "*"
+pytest = "*"
 
 [dev-packages]
 
