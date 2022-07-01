@@ -405,8 +405,12 @@ class Tag(db.Model):
     name_lowercase = db.Column(db.String(32))
     tag_type = db.Column(db.String(16))
     desc = db.Column(db.String(120))
+    active = db.Column(db.Boolean)
 
     game_tag = db.relationship('GameTag', backref='tag')
+
+    def __init__(self):
+        self.active = True
 
 class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -414,12 +418,15 @@ class Community(db.Model):
     name_lowercase = db.Column(db.String(32))
     private = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique=True)
+    date_created = db.Column(db.Integer)
+    desc = db.Column(db.String(300))
 
     tags = db.relationship('Tag', backref='community_from_tags')
     community_users = db.relationship('CommunityUser', backref='community_from_community_users')
 
     def __init__(self):
         self.active_url = secrets.token_urlsafe(32)
+        self.date_created = int(time.time())
 
 class CommunityUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
