@@ -404,13 +404,20 @@ class Tag(db.Model):
     name = db.Column(db.String(32))
     name_lowercase = db.Column(db.String(32))
     tag_type = db.Column(db.String(16))
-    desc = db.Column(db.String(120))
+    desc = db.Column(db.String(300))
     active = db.Column(db.Boolean)
+    date_created = db.Column(db.Integer)
 
     game_tag = db.relationship('GameTag', backref='tag')
 
-    def __init__(self):
+    def __init__(self, in_comm_id, in_tag_name, in_tag_type, in_desc):
+        self.community_id = in_comm_id
+        self.name = in_tag_name
+        self.name_lowercase = in_tag_name.lower()
+        self.tag_type = in_tag_type
+        self.desc = in_desc
         self.active = True
+        self.date_created = int( time.time() )
 
 class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -418,17 +425,18 @@ class Community(db.Model):
     name_lowercase = db.Column(db.String(32))
     private = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique=True)
-    date_created = db.Column(db.Integer)
     description = db.Column(db.String(300))
+    date_created = db.Column(db.Integer)
 
     tags = db.relationship('Tag', backref='community_from_tags')
     community_users = db.relationship('CommunityUser', backref='community_from_community_users')
 
-    def __init__(self, in_name, in_private, in_gloabl_link):
+    def __init__(self, in_name, in_private, in_gloabl_link, in_description):
         self.name = in_name
         self.name_lowercase = in_name.lower()
         self.private = in_private
         self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link and not in_private) else None
+        self.description = in_description
         self.date_created = int( time.time() )
 
 class CommunityUser(db.Model):
@@ -440,10 +448,13 @@ class CommunityUser(db.Model):
     accepted = db.Column(db.Boolean)
     date_joined = db.Integer
 
-    def __init__(self):
-        self.is_admin = False
-        self.active_url = secrets.token_urlsafe(32)
-        self.accepted = False
+    def __init__(self, in_user_id, in_comm_id, in_is_admin, in_gen_url, in_accepted):
+        self.user_id = in_user_id
+        self.community_id = in_comm_id
+        self.is_admin = in_is_admin
+        self.active_url = secrets.token_urlsafe(32) if in_gen_url else None
+        self.accepted = in_accepted
+        self.date_joined = int( time.time() )
 
 class UserGroup(db.Model):
     id = db.Column(db.Integer, primary_key=True)
