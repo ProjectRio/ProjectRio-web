@@ -36,7 +36,7 @@ def community_create():
         db.session.commit()
 
         # === Create CommunityUser (admin)
-        new_comm_user = CommunityUser(user.id, new_comm.id, True, False)
+        new_comm_user = CommunityUser(user.id, new_comm.id, True, False, True)
         db.session.add(new_comm_user)
         db.session.commit()
 
@@ -134,3 +134,77 @@ def community_join():
             Provided URL: {in_active_url}./n
             CommunityUser URL: {comm_user.active_url}.
             ''')
+
+
+@app.route('/community/invite', methods=['POST'])
+@jwt_required()
+def community_invite():
+    # Ways to join a community
+    # If public: provide the community id
+    # If private:
+    #    If Global URL: provide active url
+    #    If User has been invite, provide users active URL
+
+    in_comm_name = request.json['Name']
+    comm_name_lower = in_comm_name.lower()
+    comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
+
+    current_user_username = get_jwt_identity()
+    user = RioUser.query.filter_by(username=current_user_username).first()
+
+    if user == None:
+        return abort(409, description='Username associated with JWT not found.')
+    if comm == None:
+        return abort(409, description='Could not find community with name={in_comm_name}')
+    
+    #Check if CommunityUser already exists
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+
+    if comm_user != None or comm_user.is_admin == False:
+        return abort(409, description='User is not part of this community or is not an admin.')
+
+    list_of_users_to_invite = request.json['Invite List']
+
+    #Check that all users exist before sending invites
+    for user in list_of_users_to_invite:
+        invited_user = RioUser.query.filter_by(username_lower=user.lower()).first()
+        if invited_user == None:
+            return abort(409, description='User does not exist. Username={user}')
+
+    #Entire list has been validated, add users to table and send emails
+    list_of_invite_codes = list() #List to store dicts of comm user info
+    for user in list_of_users_to_invite:
+        invited_user = RioUser.query.filter_by(username_lower=user.lower()).first()
+
+        #Now see if user has already been invited, if so skip inviting a second time
+        comm_user = CommunityUser.query.filter_by(user_id=invited_user.id, community_id=comm.id).first()
+
+        if comm_user != None:
+            continue
+        new_comm_user = CommunityUser(in_user_id=invited_user.id, in_comm_id=comm.id, in_is_admin=False, in_gen_url=True, in_accepted=False)
+        db.session.add(new_comm_user)
+        db.session.commit()
+
+        # === Send Email ===
+        subject = 'ProjectRio - You have been invited to a community!'
+
+        #TODO figure out the URL to join
+        html_content = (
+            f'''
+            <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
+            <p>Follow the link below to join (TODO add link below)!</p>
+            <br/>
+            <p>Happy Hitting!</p>
+            <p>Rio Team</p>
+            '''
+        )
+
+        list_of_invite_codes.append({'Username': invited_user.username, 'Invite Code': new_comm_user.active_url})
+
+        try:
+            send_email(invited_user.email, subject, html_content)
+        except:
+            return abort(502, 'Failed to send email')
+
+    #Return list of usernames and invite URLs
+    return jsonify({'Invites': list_of_invite_codes})
