@@ -102,12 +102,16 @@ def community_join():
         })
     else:
         #Active URL must have been provided
-        in_active_url = request.json['Active URL']
+        in_active_url = request.args.get('url')
+
+        if in_active_url == None:
+            return abort(409, description='URL not provided to join private community {comm.name}')
 
         #Check if CommunityUser already exists
         comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
         if comm_user != None: #User has been invited
             if in_active_url == comm_user.active_url:
+                #Update user to be an active memeber
                 comm_user.accepted
                 comm_user.date_joined = int( time.time() )
                 comm_user.active_url = None
@@ -160,8 +164,10 @@ def community_invite():
     #Check if CommunityUser already exists
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if comm_user != None or comm_user.is_admin == False:
-        return abort(409, description='User is not part of this community or is not an admin.')
+    if comm_user != None:
+        return abort(409, description='User is not part of this community')
+    if (comm.private and comm_user.is_admin == False):
+        return abort(409, description='User is not an admin of this private community.')
 
     list_of_users_to_invite = request.json['Invite List']
 
@@ -208,3 +214,45 @@ def community_invite():
 
     #Return list of usernames and invite URLs
     return jsonify({'Invites': list_of_invite_codes})
+
+
+#TODO return usernames rather than user ids
+@app.route('/community/members', methods=['GET'])
+@jwt_required(optional=True)
+def community_members():
+    in_comm_name = request.json['Name']
+    comm_name_lower = in_comm_name.lower()
+    comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
+
+    user=None
+    try:
+        current_user_username = get_jwt_identity()
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    except:
+        user=None
+    if comm == None:
+        return abort(409, description='Could not find community with name={in_comm_name}')
+    
+    if user == None and comm.private:
+        return abort(409, description='Must be logged in to see private community members.')
+
+
+    #If user is logged in, must be a part of private community to see memebers
+    if user != None and comm.private:
+        comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+        if comm_user == None:
+            return abort(409, description='Must be a member of private community to see all members.')
+
+    #If we get to this point the user is allowed to get the memeber list
+    member_list = CommunityUser.query.filter_by(community_id=comm.id)
+
+    accepted_list = list()
+    pending_list = list()
+    for member in member_list:
+        if member.accepted:
+            accepted_list.append(member)
+        else:
+            pending_list.append(member)
+
+    return jsonify({'Members': {'Accepted': accepted_list, 'Pending': pending_list}})
+
