@@ -425,7 +425,7 @@ class Community(db.Model):
     name_lowercase = db.Column(db.String(32))
     private = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique=True)
-    description = db.Column(db.String(300))
+    desc = db.Column(db.String(300))
     date_created = db.Column(db.Integer)
 
     tags = db.relationship('Tag', backref='community_from_tags')
@@ -436,7 +436,7 @@ class Community(db.Model):
         self.name_lowercase = in_name.lower()
         self.private = in_private
         self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link and not in_private) else None
-        self.description = in_description
+        self.desc = in_description
         self.date_created = int( time.time() )
 
 class CommunityUser(db.Model):

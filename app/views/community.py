@@ -249,10 +249,46 @@ def community_members():
     accepted_list = list()
     pending_list = list()
     for member in member_list:
+        #TODO figure out username rather than return the user id
         if member.accepted:
-            accepted_list.append(member)
+            accepted_list.append(member.user_id)
         else:
-            pending_list.append(member)
+            pending_list.append(member.user_id)
 
     return jsonify({'Members': {'Accepted': accepted_list, 'Pending': pending_list}})
 
+#TODO return usernames rather than user ids
+@app.route('/community/tags', methods=['GET'])
+@jwt_required(optional=True)
+def community_tags():
+    in_comm_name = request.json['Name']
+    comm_name_lower = in_comm_name.lower()
+    comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
+
+    user=None
+    try:
+        current_user_username = get_jwt_identity()
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    except:
+        user=None
+    if comm == None:
+        return abort(409, description='Could not find community with name={in_comm_name}')
+    
+    if user == None and comm.private:
+        return abort(409, description='Must be logged in to see private community members.')
+
+
+    #If user is logged in, must be a part of private community to see memebers
+    if user != None and comm.private:
+        comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+        if comm_user == None:
+            return abort(409, description='Must be a member of private community to see all members.')
+
+    #If we get to this point the user is allowed to get the memeber list
+    tag_list = Tag.query.filter_by(community_id=comm.id)
+
+    tag_info_list = list()
+    for tag in tag_list:
+        tag_info_list.append({"Name": tag.name, "Type": tag.tag_type, "Description": tag.desc})
+
+    return jsonify({'Tags': tag_info_list})
