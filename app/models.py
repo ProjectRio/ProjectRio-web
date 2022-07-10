@@ -456,6 +456,14 @@ class CommunityUser(db.Model):
         self.accepted = in_accepted
         self.date_joined = int( time.time() )
 
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "admin": self.is_admin,
+            "accepted": self.accepted,
+            "date_joined": self.date_joined,
+        }
+
 class UserGroup(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     daily_limit = db.Column(db.Integer)

@@ -11,7 +11,7 @@ import time
 @app.route('/community/create', methods=['POST'])
 @jwt_required()
 def community_create():
-    in_comm_name = request.json['Name']
+    in_comm_name = request.json['Community Name']
     private = (request.json['Private'] == 1)
     create_global_link = (request.json['Global Link'] == 1)
     in_comm_desc = request.json['Description']
@@ -64,7 +64,7 @@ def community_create():
             return abort(502, 'Failed to send email')
         
     return jsonify({
-        'name': new_comm.name,
+        'community name': new_comm.name,
         'private': new_comm.private,
         'active_url': new_comm.active_url
     })
@@ -78,7 +78,7 @@ def community_join():
     #    If Global URL: provide active url
     #    If User has been invite, provide users active URL
 
-    in_comm_name = request.json['Name']
+    in_comm_name = request.json['Community Name']
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -97,7 +97,7 @@ def community_join():
         db.session.add(new_comm_user)
         db.session.commit()
         return jsonify({
-            'name': comm.name,
+            'community name': comm.name,
             'accepted': new_comm_user.accepted
         })
     else:
@@ -118,7 +118,7 @@ def community_join():
                 db.session.add(comm_user)
                 db.session.commit()
                 return jsonify({
-                    'name': comm.name,
+                    'community name': comm.name,
                     'accepted': new_comm_user.accepted
                 })
 
@@ -127,7 +127,7 @@ def community_join():
             db.session.add(new_comm_user)
             db.session.commit()
             return jsonify({
-                'name': comm.name,
+                'community name': comm.name,
                 'accepted': new_comm_user.accepted
             })
 
@@ -149,7 +149,7 @@ def community_invite():
     #    If Global URL: provide active url
     #    If User has been invite, provide users active URL
 
-    in_comm_name = request.json['Name']
+    in_comm_name = request.json['Community Name']
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -220,7 +220,7 @@ def community_invite():
 @app.route('/community/members', methods=['GET'])
 @jwt_required(optional=True)
 def community_members():
-    in_comm_name = request.json['Name']
+    in_comm_name = request.json['Community Name']
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -246,22 +246,18 @@ def community_members():
     #If we get to this point the user is allowed to get the memeber list
     member_list = CommunityUser.query.filter_by(community_id=comm.id)
 
-    accepted_list = list()
-    pending_list = list()
+    member_list_dicts = list()
     for member in member_list:
         #TODO figure out username rather than return the user id
-        if member.accepted:
-            accepted_list.append(member.user_id)
-        else:
-            pending_list.append(member.user_id)
+        member_list_dicts.append(member.to_dict())
 
-    return jsonify({'Members': {'Accepted': accepted_list, 'Pending': pending_list}})
+    return jsonify({'Members': member_list_dicts})
 
 #TODO return usernames rather than user ids
 @app.route('/community/tags', methods=['GET'])
 @jwt_required(optional=True)
 def community_tags():
-    in_comm_name = request.json['Name']
+    in_comm_name = request.json['Community Name']
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -292,3 +288,72 @@ def community_tags():
         tag_info_list.append({"Name": tag.name, "Type": tag.tag_type, "Description": tag.desc})
 
     return jsonify({'Tags': tag_info_list})
+
+#JSON format
+'''
+{
+    Community Name: "NAME",
+    User List: [
+        {
+            "Username": "USERNAME",
+            "Admin": "y/n"
+            "Remove": "y/n"
+        }
+    ]
+    '''
+@app.route('/community/members/manage', methods=['POST'])
+@jwt_required(optional=True)
+def community_manage():
+    in_comm_name = request.json['Community Name']
+    comm_name_lower = in_comm_name.lower()
+    comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
+
+    user=None
+    try:
+        current_user_username = get_jwt_identity()
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    except:
+        user=None
+    if comm == None:
+        return abort(409, description='Could not find community with name={in_comm_name}')
+    if user == None:
+        return abort(409, description='No user logged in or associated with RioKey.')
+
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+    if (comm_user == None or comm_user.is_admin == False):
+        return abort(409, description='User is not part of this community or not an admin.')
+
+    list_of_users_to_update_status = request.json['User List']
+    #Check that all users exist before sending invites
+    for user in list_of_users_to_update_status:
+        invited_user = RioUser.query.filter_by(username_lower=user['Username'].lower()).first()
+        if invited_user == None:
+            return abort(409, description=f"User does not exist. Username={user['Username']}")
+        comm_user = CommunityUser.query.filter_by(user_id=invited_user.id, community_id=comm.id).first()
+        if comm_user == None:
+            return abort(409, description='User not a part of the community, cannot be made admin. Username={user}')
+
+    #Entire list has been validated, add users to table and send emails
+    updated_comm_users_list = list()
+    for user in list_of_users_to_update_status:
+        
+        #Get user to update
+        comm_user = CommunityUser.query.filter_by(user_id=invited_user.id, community_id=comm.id).first()
+        
+        #Remove if specified
+        if (user['Remove'].lower in ['yes', 'y', 'true', 't']):
+            db.session.delete(comm_user)
+            db.session.commit()
+            continue
+
+        #Update admin if specified
+        if (user['Admin'].lower in ['yes', 'y', 'true', 't']):
+            comm_user.admin = True
+        elif (user['Admin'].lower in ['no', 'n', 'f', 'false']):
+            comm_user.admin = False
+        db.session.add(comm_user)
+        db.session.commit(comm_user)
+
+        updated_comm_users_list.append(comm_user.to_dict())
+
+    return jsonify({"Members": updated_comm_users_list})
