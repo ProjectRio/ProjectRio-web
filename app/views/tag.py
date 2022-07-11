@@ -53,4 +53,5 @@ def tag_create():
     db.session.commit()
 
     #TODO this might not work, but its late and I gotta end this
+    #"this" meaning the coding session
     return jsonify(new_tag._asdict())
