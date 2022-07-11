@@ -9,7 +9,7 @@ from ..consts import *
 import time
 
 @app.route('/community/create', methods=['POST'])
-@jwt_required()
+@jwt_required(optional=True)
 def community_create():
     in_comm_name = request.json['Community Name']
     private = (request.json['Private'] == 1)
@@ -17,13 +17,13 @@ def community_create():
     in_comm_desc = request.json['Description']
 
     # Get user making the new community
-    current_user_username = get_jwt_identity()
-    user = RioUser.query.filter_by(username=current_user_username).first()
-
-
-    #TODO possible work around if we don't want to use JWT tokens right away
-    #user = RioUser.query.filter_by(username_lowercase=username_lowercase).first()
-    #user_by_email = RioUser.query.filter_by(email=in_email).first()
+    #Get user via JWT or RioKey 
+    user=None
+    try:
+        current_user_username = get_jwt_identity()
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    except:
+        user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
 
     if user == None:
         return abort(409, description='Username associated with JWT not found. Community not created')
@@ -69,21 +69,31 @@ def community_create():
         'active_url': new_comm.active_url
     })
 
+@app.route('/community/join/<comm_name>/<active_url>', methods=['POST'])
+def community_join_url(comm_name, active_url):
+    return community_join(comm_name, active_url)
+
 @app.route('/community/join', methods=['POST'])
-@jwt_required()
-def community_join():
+@jwt_required(optional=True)
+def community_join(in_comm_name = None, in_active_url = None):
     # Ways to join a community
     # If public: provide the community id
     # If private:
     #    If Global URL: provide active url
     #    If User has been invite, provide users active URL
 
-    in_comm_name = request.json['Community Name']
+    if in_comm_name == None:
+        in_comm_name = request.json['Community Name']
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
-    current_user_username = get_jwt_identity()
-    user = RioUser.query.filter_by(username=current_user_username).first()
+    #Get user via JWT or RioKey 
+    user=None
+    try:
+        current_user_username = get_jwt_identity()
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    except:
+        user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
@@ -102,7 +112,8 @@ def community_join():
         })
     else:
         #Active URL must have been provided
-        in_active_url = request.args.get('url')
+        if in_active_url == None:
+            in_active_url = request.json['URL']
 
         if in_active_url == None:
             return abort(409, description='URL not provided to join private community {comm.name}')
@@ -141,7 +152,7 @@ def community_join():
 
 
 @app.route('/community/invite', methods=['POST'])
-@jwt_required()
+@jwt_required(optional=True)
 def community_invite():
     # Ways to join a community
     # If public: provide the community id
@@ -153,8 +164,13 @@ def community_invite():
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
-    current_user_username = get_jwt_identity()
-    user = RioUser.query.filter_by(username=current_user_username).first()
+    #Get user via JWT or RioKey 
+    user=None
+    try:
+        current_user_username = get_jwt_identity()
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    except:
+        user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
@@ -224,12 +240,14 @@ def community_members():
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
+    #Get user via JWT or RioKey 
     user=None
     try:
         current_user_username = get_jwt_identity()
         user = RioUser.query.filter_by(username=current_user_username).first()
     except:
-        user=None
+        user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
     
@@ -261,12 +279,14 @@ def community_tags():
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
+    #Get user via JWT or RioKey 
     user=None
     try:
         current_user_username = get_jwt_identity()
         user = RioUser.query.filter_by(username=current_user_username).first()
     except:
-        user=None
+        user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+        
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
     
@@ -308,12 +328,14 @@ def community_manage():
     comm_name_lower = in_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
+    #Get user via JWT or RioKey 
     user=None
     try:
         current_user_username = get_jwt_identity()
         user = RioUser.query.filter_by(username=current_user_username).first()
     except:
-        user=None
+        user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
     if user == None:
