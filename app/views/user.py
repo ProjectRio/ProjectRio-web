@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, set_access_cookies, jwt_requ
 import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
-from ..models import db, RioUser
+from ..models import db, RioUser, GameTag
 from ..email import send_email
 
 # === User registration endpoints ===
@@ -263,3 +263,87 @@ def set_privacy():
         return jsonify({
             'private': current_user.private
         })
+
+
+'''
+@ Description: Returns tags available to a user
+@ Params:
+    - username: username to get available tags for. 
+@ Output:
+    - List of available tags
+@ Example URL: http://127.0.0.1:5000/user/tags/?username=GenericHomeUser&username=GenericAwayUser
+'''
+@app.route('/user/tags/', methods = ['GET'])
+def get_users_tags():
+    in_username_lowercase = request.args.get("username")
+    user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user:
+        return abort(422, 'Invalid Username')
+
+    game_tags_query = (
+        'SELECT \n'
+        'tag.name \n'
+        'FROM tag \n'
+        'LEFT JOIN game_tag ON tag.id = game_tag.tag_id \n'
+        'LEFT JOIN game ON game_tag.game_id = game.game_id \n'
+        'WHERE \n'
+        f'game.away_player_id = {user.id} OR game.home_player_id = {user.id} \n'
+        'GROUP BY \n'
+        'tag.name \n'
+    )
+
+    community_tags_query = (
+        'SELECT \n '
+        'tag.name \n '
+        'FROM tag \n'
+        'LEFT JOIN community ON tag.community_id = community.id \n'
+        'LEFT JOIN community_user ON community.id = community_user.community_id \n'
+        f'WHERE community_user.user_id = {user.id} \n'
+        'GROUP BY \n'
+        'tag.name \n'
+    )
+
+    game_tags = db.session.execute(game_tags_query).all()
+    community_tags = db.session.execute(community_tags_query).all()
+
+    tags = list()
+
+    for tag in game_tags:
+        tags.append(tag.name)
+
+    for tag in community_tags:
+        if tag.name not in tags:
+            tags.append(tag.name)
+
+    return {
+        "available_tags": tags
+    }, 200
+
+@app.route('/user/communities/', methods = ['GET'])
+def get_users_communities():
+    in_username_lowercase = request.json['username'].lower()
+    user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user:
+        return abort(422, 'Invalid Username')
+
+    communities_query = (
+        'SELECT \n '
+        'community.name \n '
+        'FROM community \n'
+        'LEFT JOIN community_user ON community.id = community_user.community_id \n'
+        f'WHERE community_user.user_id = {user.id} \n'
+        'GROUP BY \n'
+        'tag.name \n'
+    )
+    
+    result = db.session.execute(communities_query)
+
+    communities = list()
+    for community in result:
+        communities.append(community.name)
+
+    return {
+        "communities": communities
+    }, 200
