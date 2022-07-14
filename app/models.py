@@ -401,8 +401,8 @@ class GameTag(db.Model):
 class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
-    name = db.Column(db.String(32))
-    name_lowercase = db.Column(db.String(32))
+    name = db.Column(db.String(32), unique=True)
+    name_lowercase = db.Column(db.String(32), unique=True)
     tag_type = db.Column(db.String(16))
     desc = db.Column(db.String(300))
     active = db.Column(db.Boolean)
@@ -421,8 +421,8 @@ class Tag(db.Model):
 
 class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(32))
-    name_lowercase = db.Column(db.String(32))
+    name = db.Column(db.String(32), unique=True)
+    name_lowercase = db.Column(db.String(32), unique=True)
     private = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique=True)
     desc = db.Column(db.String(300))
