@@ -203,7 +203,7 @@ def populate_db2():
     tags.append(f'client_{game.version}')
 
     # add rio web version tag, create tag if it doesn't exist
-    rio_web_version_tag = Tag.query.filter_by(name=cRIO_WEB_VERSION).first()
+    rio_web_version_tag = Tag.query.filter_by(name=f'web_{cRIO_WEB_VERSION}').first()
     if rio_web_version_tag is None:
         new_rio_web_version_tag = Tag(
             in_tag_name = f'web_{cRIO_WEB_VERSION}',
