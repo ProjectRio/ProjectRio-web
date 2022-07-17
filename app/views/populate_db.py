@@ -190,7 +190,7 @@ def populate_db2():
     else:
         tags.append('Local')
 
-    rio_client_version_tag = Tag.query.filter_by(name=f'client_${game.version}').first()
+    rio_client_version_tag = Tag.query.filter_by(name=f'client_{game.version}').first()
     if rio_client_version_tag is None:
         new_rio_client_version_tag = Tag(
             in_tag_name = f'client_{game.version}',
