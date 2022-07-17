@@ -1,0 +1,167 @@
+<html>
+  <head>
+     <link rel="stylesheet" href="{{url_for('static', filename='signup.css')}}">
+  </head>
+  <body>
+    <div>
+      <h1 class="Section-header">Welcome to Rio Web!</h1>
+      <section class="Login-form">
+        <h1>Create a Rio User</h1>
+        <ul>
+          <p>Username rules</p>
+          <li id="username-tip">Username must be alphanumeric</li>
+          <p>Password rules</p>
+          <li id="lowercase-tip">At least 1 lowercase character</li>
+          <li id="uppercase-tip">At least 1 uppercase character</li>
+          <li id="integer-tip">At least 1 number</li>
+          <li id="special-tip">At least 1 special character</li>
+          <li id="length-tip">At least 8 characters in length</li>
+          <li id="matching-tip">Password match</li>
+        </ul>
+        <input id="username" placeholder="Username"/>
+        <input id="password" placeholder="Password" type="password"/>
+        <input id="password2" placeholder="Re-enter Password" type="password"/>
+        <input id="email" placeholder="Email"/>
+        <button id="submit">Create User</button>
+      </section>
+    </div>
+  </body>
+  <script>
+    // Regex Expressions
+    const uppercaseRegex = new RegExp('^(?=.*?[A-Z])'); // >= 1 uppercase English charcter: (?=.*?[A-Z])
+    const lowercaseRegex = new RegExp('^(?=.*?[a-z])'); // >= 1 lowecase English character: (?=.*?[a-z])
+    const numberRegex = new RegExp('^(?=.*?[0-9])');  // >= 1 digit: (?=.*?[0-9])
+    const specialCharRegex = new RegExp('(?=.*?[#?!@$%^&*-])');  // >= 1 special character (?=.*?[#?!@$%^&*-])
+    const alphanumericRegex = new RegExp('^[A-Za-z0-9]+$'); // Only alphanumeric character
+
+    // Input Fields
+    const usernameInput = document.getElementById("username");
+    const passwordInput = document.getElementById("password");
+    const password2Input = document.getElementById("password2");
+    const emailInput = document.getElementById("email");
+
+    // Tooltips
+    const lowercaseTip = document.getElementById("lowercase-tip");
+    const uppercaseTip = document.getElementById("uppercase-tip");
+    const integerTip = document.getElementById("integer-tip");
+    const specialTip = document.getElementById("special-tip");
+    const lengthTip = document.getElementById("length-tip");
+    const matchingTip = document.getElementById("matching-tip");
+    const usernameTip = document.getElementById("username-tip");
+
+    // Submission button
+    const submitButton = document.getElementById("submit")
+
+    usernameInput.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      if (alphanumericRegex.test(input)) {
+        usernameTip.style.color = "green";
+      } else {
+        usernameTip.style.color = "red";
+      }
+    })
+
+    passwordInput.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      if (lowercaseRegex.test(input)) {
+        lowercaseTip.style.color = "green";
+      } else {
+        lowercaseTip.style.color = "red";
+      }
+
+      if (uppercaseRegex.test(input)) {
+        uppercaseTip.style.color = "green";
+      } else {
+        uppercaseTip.style.color = "red";
+      }
+
+      if (numberRegex.test(input)) {
+        integerTip.style.color = "green";
+      } else {
+        integerTip.style.color = "red";
+      }
+
+      if (specialCharRegex.test(input)) {
+        specialTip.style.color = "green";
+      } else {
+        specialTip.style.color = "red";
+      }
+
+      if (input.length >= 8) {
+        lengthTip.style.color = "green";
+      } else {
+        lengthTip.style.color = "red";
+      }
+    });
+
+    password2Input.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      if (input === passwordInput.value) {
+        matchingTip.style.color = "green";
+      } else {
+        matchingTip.style.color = "red";
+      }
+    })
+
+    submitButton.addEventListener('click', () => {
+      // usernameInput
+      // passwordInput
+      // password2Input
+      // emailInput
+      if (!alphanumericRegex.test(usernameInput.value)) {
+        alert("Username must be alphanumeric")
+        return;
+      }
+
+      if (
+        !lowercaseRegex.test(passwordInput.value)
+        || !uppercaseRegex.test(passwordInput.value)
+        || !numberRegex.test(passwordInput.value)
+        || !specialCharRegex.test(passwordInput.value)
+        || !passwordInput.value.length >= 8
+        ) {
+        alert("Password must meet requirements.")
+        return;
+      }
+
+      if (passwordInput.value !== password2Input.value) {
+        alert("Passwords do not match.")
+        return;
+      }
+
+      if (!emailInput.value.includes("@")) {
+        alert("Email must be an email address.")
+        return;
+      }
+
+      sendRequest();
+    });
+
+    async function sendRequest() {
+      try {
+      const config = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          'Username': usernameInput.value,
+          'Email': emailInput.value,
+          'Password': passwordInput.value,
+        })
+      }
+      const response = await fetch('https://projectrio-api-1.api.projectrio.app/register/', config);
+      if (response.status === 200) {
+        alert("Your username has been created! Check your email to verify your account.")
+      } else if (response.status === 409) {
+        alert('Username or Email has already been taken')
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+  </script>
+</html>
