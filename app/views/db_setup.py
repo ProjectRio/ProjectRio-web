@@ -14,7 +14,7 @@ def reset_db():
             create_character_tables()
             create_default_tags()
         except:
-            abort()  
+            abort(400)  
     else:
         return 'Invalid password'
     return 'Success...'

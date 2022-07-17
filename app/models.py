@@ -1,5 +1,6 @@
 from . import db, bc
 from flask_login import UserMixin
+import time
 import secrets
 
 class Character(db.Model):
@@ -127,7 +128,9 @@ class ChemistryTable(db.Model):
     character = db.relationship('Character', backref = 'character')
 
 class RioUser(db.Model, UserMixin):
-    id       = db.Column(db.Integer,     primary_key=True)
+    id       = db.Column(db.Integer, primary_key=True)
+    user_group_id = db.Column(db.ForeignKey('user_group.id'), nullable=True)
+    api_key_id = db.Column(db.ForeignKey('api_key.id'), nullable=True)
     username = db.Column(db.String(64),  unique = True)
     username_lowercase = db.Column(db.String(64), unique = True)
     email    = db.Column(db.String(120), unique = True)
@@ -136,7 +139,9 @@ class RioUser(db.Model, UserMixin):
     private = db.Column(db.Boolean)
     verified = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique = True)
+    date_created = db.Column(db.Integer)
 
+    community_user = db.relationship('CommunityUser', backref='community_user.user_id')
     character_game_summaries = db.relationship('CharacterGameSummary', backref = 'rio_user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
@@ -150,6 +155,7 @@ class RioUser(db.Model, UserMixin):
         self.private = True
         self.verified = False
         self.active_url = secrets.token_urlsafe(32)
+        self.date_created = int(time.time())
 
 class Game(db.Model):
     game_id = db.Column(db.BigInteger, primary_key = True)
@@ -386,33 +392,106 @@ class Runner(db.Model):
     events_on_2 = db.relationship('Event', foreign_keys = 'Event.runner_on_2', backref = 'runner_2')
     events_on_3 = db.relationship('Event', foreign_keys = 'Event.runner_on_3', backref = 'runner_3')
 
-
 class GameTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     tag_id = db.Column(db.ForeignKey('tag.id'), nullable=False)
+    change_requested = db.Column(db.SmallInteger)
 
 class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(32))
-    name_lowercase = db.Column(db.String(32))
+    community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
+    name = db.Column(db.String(32), unique=True)
+    name_lowercase = db.Column(db.String(32), unique=True)
     tag_type = db.Column(db.String(16))
-    desc = db.Column(db.String(120))
-    community_id = db.Column(db.Integer)
+    desc = db.Column(db.String(300))
+    active = db.Column(db.Boolean)
+    date_created = db.Column(db.Integer)
 
     game_tag = db.relationship('GameTag', backref='tag')
+
+    def __init__(self, in_comm_id, in_tag_name, in_tag_type, in_desc):
+        self.community_id = in_comm_id
+        self.name = in_tag_name
+        self.name_lowercase = in_tag_name.lower()
+        self.tag_type = in_tag_type
+        self.desc = in_desc
+        self.active = True
+        self.date_created = int( time.time() )
+
+class Community(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(32), unique=True)
+    name_lowercase = db.Column(db.String(32), unique=True)
+    private = db.Column(db.Boolean)
+    active_url = db.Column(db.String(50), unique=True)
+    desc = db.Column(db.String(300))
+    date_created = db.Column(db.Integer)
+
+    tags = db.relationship('Tag', backref='community_from_tags')
+    community_users = db.relationship('CommunityUser', backref='community_from_community_users')
+
+    def __init__(self, in_name, in_private, in_gloabl_link, in_description):
+        self.name = in_name
+        self.name_lowercase = in_name.lower()
+        self.private = in_private
+        self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link and not in_private) else None
+        self.desc = in_description
+        self.date_created = int( time.time() )
+
+class CommunityUser(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)
+    community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=False)
+    is_admin = db.Column(db.Boolean)
+    active_url = db.Column(db.String(50), unique=True)
+    accepted = db.Column(db.Boolean)
+    date_joined = db.Integer
+
+    def __init__(self, in_user_id, in_comm_id, in_is_admin, in_gen_url, in_accepted):
+        self.user_id = in_user_id
+        self.community_id = in_comm_id
+        self.is_admin = in_is_admin
+        self.active_url = secrets.token_urlsafe(32) if in_gen_url else None
+        self.accepted = in_accepted
+        self.date_joined = int( time.time() )
+
+    def to_dict(self):
+        return {
+            "user_id": self.user_id,
+            "admin": self.is_admin,
+            "accepted": self.accepted,
+            "date_joined": self.date_joined,
+        }
+
+class UserGroup(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    daily_limit = db.Column(db.Integer)
+    weekly_limit = db.Column(db.Integer)
+    name = db.Column(db.String(32))
+    name_lowercase = db.Column(db.String(32))
+
+    users = db.relationship('RioUser', backref = 'users')
 
 class ApiKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(32), unique=True, nullable=False)
     api_key = db.Column(db.String(50), unique=True)
     date_created = db.Column(db.Integer)
-    pings_today = db.Column(db.Integer)
-    verified = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique=True)
+    pings_daily = db.Column(db.Integer)
+    pings_weekly = db.Column(db.Integer)
+    last_ping_date = db.Column(db.Integer)
+    total_pings = db.Column(db.Integer)
+    verified = db.Column(db.Boolean)
 
-    def __init__(self, in_email, date_created):
+    user = db.relationship('RioUser', backref='api_key')
+
+    def __init__(self, in_email):
         self.email    = in_email
-        self.date_created = date_created
-        self.verified = False
+        self.date_created = int(time.time())
         self.active_url = secrets.token_urlsafe(32)
+        self.total_pings = 0
+        self.pings_daily = 0
+        self.pings_weekly = 0
+        self.verified = False
