@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, Character, ChemistryTable, Tag, GameTag
+from ..models import db, CharacterGameSummary, CharacterPositionSummary, PitchSummary, Character, Game, ChemistryTable, Tag, GameTag, Event, Runner, ContactSummary, FieldingSummary
 import json
 import os
 
@@ -9,14 +9,22 @@ import os
 def reset_db():
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
         try:
-            db.drop_all()
+            Runner.__table__.drop()
+            PitchSummary.__table__.drop()
+            ContactSummary.__table__.drop()
+            FieldingSummary.__table__.drop()
+            CharacterPositionSummary.__table__.drop()
+            CharacterGameSummary.__table__.drop()
+            Event.__table__.drop()
+            Game.__table__.drop()
+            GameTag.__table__.drop()
             db.create_all()
             create_character_tables()
             create_default_tags()
         except:
-            abort(400)  
+            abort(400, "Error dropping or creating tables.")  
     else:
-        return 'Invalid password'
+        abort(400, 'Invalid password')
     return 'Success...'
 
 def create_character_tables():
