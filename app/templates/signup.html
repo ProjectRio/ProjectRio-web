@@ -107,10 +107,6 @@
     })
 
     submitButton.addEventListener('click', () => {
-      // usernameInput
-      // passwordInput
-      // password2Input
-      // emailInput
       if (!alphanumericRegex.test(usernameInput.value)) {
         alert("Username must be alphanumeric")
         return;
@@ -155,7 +151,7 @@
       }
       const response = await fetch('https://projectrio-api-1.api.projectrio.app/register/', config);
       if (response.status === 200) {
-        alert("Your username has been created! Check your email to verify your account.")
+        alert("Your username has been created! Check your email to verify your account and for further instructions.")
       } else if (response.status === 409) {
         alert('Username or Email has already been taken')
       }

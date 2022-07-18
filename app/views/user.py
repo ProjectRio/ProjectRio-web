@@ -72,15 +72,15 @@ def verify_email(active_url):
             <h3>Here is your Rio Key: {user.rio_key}</h3>
             <h3>Directions</h3>
             <ol>
-                <li>From the main Rio screen click Local Players and create a new player</li>
+                <li>From the main Rio screen click "Local Play" then "Add Player"</li>
                 <li>Enter your username and Rio Key</li>
                 <li>Have fun!</li>
             </ol>
             <p>If you already have a Local Player saved with the same name...</p>
             <ol>
-                <li>Navigate to Documents\ProjectRio\Config\LocalPlayers.ini</li>
-                <li>Open LocalPlayers.ini</li>
-                <li>Delete your old username</li>
+                <li>Click the Local Play tab in the client</li>
+                <li>Remove your original local player name</li>
+                <li>Click "Add Player" and enter your new username and rio key</li>
             </ol>
 
             <br/>
