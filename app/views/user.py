@@ -1,4 +1,4 @@
-from flask import request, jsonify, abort
+from flask import render_template, request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 import secrets
@@ -6,6 +6,11 @@ from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, GameTag
 from ..email import send_email
+
+# === User Registration Front End ===
+@app.route('/signup/')
+def display_signup_page():
+    return render_template('signup.html')
 
 # === User registration endpoints ===
 @app.route('/register/', methods=['POST'])
@@ -67,15 +72,15 @@ def verify_email(active_url):
             <h3>Here is your Rio Key: {user.rio_key}</h3>
             <h3>Directions</h3>
             <ol>
-                <li>From the main Rio screen click Local Players and create a new player</li>
+                <li>From the main Rio screen click "Local Play" then "Add Player"</li>
                 <li>Enter your username and Rio Key</li>
                 <li>Have fun!</li>
             </ol>
             <p>If you already have a Local Player saved with the same name...</p>
             <ol>
-                <li>Navigate to Documents\ProjectRio\Config\LocalPlayers.ini</li>
-                <li>Open LocalPlayers.ini</li>
-                <li>Delete your old username</li>
+                <li>Click the Local Play tab in the client</li>
+                <li>Remove your original local player name</li>
+                <li>Click "Add Player" and enter your new username and rio key</li>
             </ol>
 
             <br/>
@@ -275,6 +280,9 @@ def set_privacy():
 '''
 @app.route('/user/tags/', methods = ['GET'])
 def get_users_tags():
+    if (app.env == "production"):
+        return abort(404, description='Endpoint not ready for production')
+    
     in_username_lowercase = request.args.get("username")
     user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 
@@ -320,8 +328,21 @@ def get_users_tags():
         "available_tags": tags
     }, 200
 
+
+'''
+@ Description: Returns list of communities a user is a member of
+@ Params:
+    - username: username to get communities for. 
+@ Output:
+    - List of communities
+@ Example URL: http://127.0.0.1:5000/user/communities/?username=GenericHomeUser&username=GenericAwayUser
+'''
+
 @app.route('/user/communities/', methods = ['GET'])
 def get_users_communities():
+    if (app.env == "production"):
+        return abort(404, description='Endpoint not ready for production')
+
     in_username_lowercase = request.json['username'].lower()
     user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 

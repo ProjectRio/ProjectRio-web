@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, Character, ChemistryTable, Tag, GameTag
+from ..models import db, CharacterGameSummary, CharacterPositionSummary, PitchSummary, Character, Game, ChemistryTable, Tag, GameTag, Event, Runner, ContactSummary, FieldingSummary, RioUser
 import json
 import os
 
@@ -9,14 +9,22 @@ import os
 def reset_db():
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
         try:
-            db.drop_all()
+            Runner.__table__.drop()
+            PitchSummary.__table__.drop()
+            ContactSummary.__table__.drop()
+            FieldingSummary.__table__.drop()
+            CharacterPositionSummary.__table__.drop()
+            CharacterGameSummary.__table__.drop()
+            Event.__table__.drop()
+            Game.__table__.drop()
+            GameTag.__table__.drop()
             db.create_all()
             create_character_tables()
             create_default_tags()
         except:
-            abort(400)  
+            abort(400, "Error dropping or creating tables.")  
     else:
-        return 'Invalid password'
+        abort(400, 'Invalid password')
     return 'Success...'
 
 def create_character_tables():
@@ -122,41 +130,48 @@ def create_character_tables():
 
     return 'Characters added...\n'
 
+@app.route('/create_default_tags/')
 def create_default_tags():
     ranked = Tag(
-        name = "Ranked",
-        name_lowercase = "ranked",
-        desc = "Tag for Ranked games"
+        in_tag_name = "Ranked",
+        in_desc = "Tag for Ranked games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     unranked = Tag(
-        name = "Unranked",
-        name_lowercase = "unranked",
-        desc = "Tag for Unranked games"
+        in_tag_name = "Unranked",
+        in_desc = "Tag for Unranked games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     superstar = Tag(
-        name = "Superstar",
-        name_lowercase = "superstar",
-        desc = "Tag for Stars On"
+        in_tag_name = "Superstar",
+        in_desc = "Tag for Stars On",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     normal = Tag(
-        name = "Normal",
-        name_lowercase = "normal",
-        desc = "Tag for Normal games"
+        in_tag_name = "Normal",
+        in_desc = "Tag for Normal games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     netplay = Tag(
-        name = "Netplay",
-        name_lowercase = "netplay",
-        desc = "Tag for Netplay games"
+        in_tag_name = "Netplay",
+        in_desc = "Tag for Netplay games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     local = Tag(
-        name = "Local",
-        name_lowercase = "local",
-        desc = "Tag for Local games"
+        in_tag_name = "Local",
+        in_desc = "Tag for Local games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     db.session.add(ranked)
@@ -168,3 +183,24 @@ def create_default_tags():
     db.session.commit()
 
     return 'Tags created... \n'
+
+
+@app.route('/restore_users/', methods=['GET'])
+def restore_users():
+    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+        try:
+            f = open('./json/rio_user.json')
+            rio_users = json.load(f)
+            for user in rio_users:
+                new_user = RioUser(user['username'], user['username_lowercase'], user['email'], "temp")
+                new_user.password = user['password']
+                new_user.verified = user['verified']
+                new_user.rio_key = user['rio_key']
+                new_user.active_url = user['active_url']
+                db.session.add(new_user)
+            db.session.commit()
+        except:
+            abort(400, "Error restoring users.")  
+    else:
+        abort(400, 'Invalid password')
+    return 'Success...'

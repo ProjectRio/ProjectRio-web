@@ -190,24 +190,26 @@ def populate_db2():
     else:
         tags.append('Local')
 
-    rio_client_version_tag = Tag.query.filter_by(name=game.version).first()
+    rio_client_version_tag = Tag.query.filter_by(name=f'client_{game.version}').first()
     if rio_client_version_tag is None:
         new_rio_client_version_tag = Tag(
-            name = f'client_{game.version}',
-            name_lowercase = f'client_{game.version.lower()}',
-            desc = "Rio Client Version Tag"
+            in_tag_name = f'client_{game.version}',
+            in_desc = "Rio Client Version Tag",
+            in_tag_type = "Global",
+            in_comm_id = None
         )
         db.session.add(new_rio_client_version_tag)
         db.session.commit()
     tags.append(f'client_{game.version}')
 
     # add rio web version tag, create tag if it doesn't exist
-    rio_web_version_tag = Tag.query.filter_by(name=cRIO_WEB_VERSION).first()
+    rio_web_version_tag = Tag.query.filter_by(name=f'web_{cRIO_WEB_VERSION}').first()
     if rio_web_version_tag is None:
         new_rio_web_version_tag = Tag(
-            name = f'web_{cRIO_WEB_VERSION}',
-            name_lowercase = f'web_{cRIO_WEB_VERSION.lower()}',
-            desc = "Rio Web Version Tag"
+            in_tag_name = f'web_{cRIO_WEB_VERSION}',
+            in_desc = "Rio Web Version Tag",
+            in_tag_type = "Global",
+            in_comm_id = None
         )
         db.session.add(new_rio_web_version_tag)
         db.session.commit()
