@@ -29,5 +29,3 @@ class Connection(object):
                 cursor.close()
                 connection.close()
                 return result
-
-db = Connection()
