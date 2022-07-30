@@ -1,6 +1,5 @@
-from flask import request, jsonify, abort
+from flask import request, abort
 from flask import current_app as app
-from flask_jwt_extended import jwt_required, get_jwt_identity
 from ...models import db, RioUser
 from ...helper_functions import calculate_era
 
