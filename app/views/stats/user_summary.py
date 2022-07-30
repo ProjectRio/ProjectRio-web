@@ -19,12 +19,9 @@ from ...helper_functions import calculate_era
         - top captains (split into ranked normal ranked superstar, unranked normal, unranked superstar, all)
     @ URL example: http://127.0.0.1:5000/profile/stats/?recent=5&username=demOuser4
 '''
-@app.route('/profile/stats/', methods = ['GET'])
+@app.route('/user_summary/', methods = ['GET'])
 @jwt_required(optional=True)
 def user_stats():
-    # # Use JSON Web Token to get username if user is logged in
-    # logged_in_user = get_jwt_identity()
-    
     # # Get User row
     username = request.args.get('username')
     in_username_lowercase = username.lower()
@@ -33,16 +30,6 @@ def user_stats():
     # If user doesn't exist, abort
     if not user_to_query:
         return abort(408, description='User does not exist')
-
-    # if user_to_query.private and user_to_query.username != logged_in_user:
-    #     return {
-    #         'private': True,
-    #         'username': user_to_query.username
-    #     }
-
-    # if not user_to_query.private or user_to_query.username == logged_in_user:
-    # Returns dict with most 10 recent games for the user and summary data
-    recent_games = endpoint_games(False)
 
     # returns tuples of game_ids for ranked_normals, ranked_superstar, unranked_normals, unranked_superstar games
     by_types_case_statement = get_users_sorted_games(user_to_query.id)
@@ -57,7 +44,6 @@ def user_stats():
     captain_totals = get_top_captains(user_to_query.id, by_types_case_statement)
 
     return {
-        "recent_games": recent_games,
         "username": user_to_query.username,
         "user_totals": user_totals,
         "top_batters": char_totals['batters'],
