@@ -1,3 +1,5 @@
+from flask import abort
+
 def calculate_era(runs_allowed, outs_pitched):
     if outs_pitched == 0 and runs_allowed > 0:
         return -abs(runs_allowed)
