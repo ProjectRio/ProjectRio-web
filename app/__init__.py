@@ -39,6 +39,7 @@ def init_app():
         from .views.stats import box_score
         from .views.stats import user_summary
         from .views import api_key
+        from .views import user_groups
         # from .views import log
         
         #create sql tables for data models
