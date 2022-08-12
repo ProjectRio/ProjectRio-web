@@ -19,7 +19,6 @@ from ...helper_functions import calculate_era
     @ URL example: http://127.0.0.1:5000/profile/stats/?recent=5&username=demOuser4
 '''
 @app.route('/user_summary/', methods = ['GET'])
-@jwt_required(optional=True)
 def user_stats():
     # # Get User row
     username = request.args.get('username')

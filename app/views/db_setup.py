@@ -1,26 +1,28 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, CharacterGameSummary, CharacterPositionSummary, PitchSummary, Character, Game, ChemistryTable, Tag, GameTag, Event, Runner, ContactSummary, FieldingSummary, RioUser
+from ..models import db, Character, ChemistryTable, Tag, RioUser, UserGroup, Game, Runner, PitchSummary, ContactSummary, FieldingSummary, CharacterPositionSummary, CharacterGameSummary, Event, GameTag
 import json
 import os
 
 # === Initalize Character Tables And Ranked/Superstar Tags ===
-@app.route('/reset_db/', methods=['POST'])
+@app.route('/reset_db/')
 def reset_db():
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
         try:
-            Runner.__table__.drop()
-            PitchSummary.__table__.drop()
-            ContactSummary.__table__.drop()
-            FieldingSummary.__table__.drop()
-            CharacterPositionSummary.__table__.drop()
-            CharacterGameSummary.__table__.drop()
-            Event.__table__.drop()
-            Game.__table__.drop()
-            GameTag.__table__.drop()
+            engine = db.get_engine()
+            Event.__table__.drop(engine)
+            Runner.__table__.drop(engine)
+            PitchSummary.__table__.drop(engine)
+            ContactSummary.__table__.drop(engine)
+            FieldingSummary.__table__.drop(engine)
+            CharacterGameSummary.__table__.drop(engine)
+            CharacterPositionSummary.__table__.drop(engine)
+            GameTag.__table__.drop(engine)        
+            Game.__table__.drop(engine)
             db.create_all()
             create_character_tables()
             create_default_tags()
+            create_default_groups()
         except:
             abort(400, "Error dropping or creating tables.")  
     else:
@@ -130,7 +132,6 @@ def create_character_tables():
 
     return 'Characters added...\n'
 
-@app.route('/create_default_tags/')
 def create_default_tags():
     ranked = Tag(
         in_tag_name = "Ranked",
@@ -184,6 +185,17 @@ def create_default_tags():
 
     return 'Tags created... \n'
 
+def create_default_groups():
+    admin = UserGroup(name='Admin')
+    developer = UserGroup(name='Developer')
+    patron = UserGroup(name='Patron')
+    general = UserGroup(name='General')
+
+    db.session.add(admin)
+    db.session.add(developer)
+    db.session.add(patron)
+    db.session.add(general)
+    db.session.commit()
 
 @app.route('/restore_users/', methods=['GET'])
 def restore_users():
