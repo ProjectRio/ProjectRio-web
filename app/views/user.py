@@ -27,6 +27,8 @@ def register():
         return abort(409, description='Username or Email has already been taken')
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
+    elif '@' not in in_email:
+        return abort(406, description='Not a valid email')
     else:
         # === Create User row ===
         new_user = RioUser(in_username, username_lowercase, in_email, in_password)

@@ -483,7 +483,7 @@ class Community(db.Model):
         self.name = in_name
         self.name_lowercase = in_name.lower()
         self.private = in_private
-        self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link and not in_private) else None
+        self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link) else None
         self.desc = in_description
         self.date_created = int( time.time() )
 
