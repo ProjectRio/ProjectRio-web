@@ -9,13 +9,13 @@ from ..consts import *
 import time
 
 @app.route('/community/create', methods=['POST'])
-@jwt_required(optional=True)
+#@jwt_required(optional=True)
 def community_create():
     in_comm_name = request.json['Community Name']
     private = (request.json['Private'] == 1)
-    create_global_link = (request.json['Global Link'] == 1)
+    create_global_link = (request.json['Global Link'] == 1) or not private
     in_comm_desc = request.json['Description']
-
+    print('HERE')
     # Get user making the new community
     #Get user via JWT or RioKey 
     user=None
@@ -25,6 +25,10 @@ def community_create():
     except:
         user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
 
+
+    comm = Community.query.filter_by(name=in_comm_name).first()
+    if comm != None:
+        return abort(409, description='Community name already in use')
     if user == None:
         return abort(409, description='Username associated with JWT not found. Community not created')
     elif in_comm_name.isalnum() == False:
