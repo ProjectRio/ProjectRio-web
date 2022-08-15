@@ -22,8 +22,10 @@ def community_create():
     try:
         current_user_username = get_jwt_identity()
         user = RioUser.query.filter_by(username=current_user_username).first()
+        print('First', user)
     except:
         user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+        print('Second', user)
 
 
     comm = Community.query.filter_by(name=in_comm_name).first()
@@ -97,13 +99,16 @@ def community_join(in_comm_name = None, in_active_url = None):
 
     #Get user via JWT or RioKey 
 
-    print("Leu", request.json['Rio Key'])
+    try:
+        print("Second function", request.json['Rio Key'])
+    except:
+        print("No rio key")
+
     user=None
     try:
         current_user_username = get_jwt_identity()
         user = RioUser.query.filter_by(username=current_user_username).first()
     except:
-        print("Leu", request.json['Rio Key'])
         user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
 
     if user == None:
