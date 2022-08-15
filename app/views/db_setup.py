@@ -5,9 +5,19 @@ import json
 import os
 
 # === Initalize Character Tables And Ranked/Superstar Tags ===
-@app.route('/reset_db/')
+@app.route('/reset_db/', methods=['POST'])
 def reset_db():
+    print(os.getenv('RESET_DB'), request.json['RESET_DB'])
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
+         # For dev server and testing
+        if (app.env == "production" and os.getenv('RESET_DB') == "NUKE"):
+            db.drop_all()
+            db.create_all()
+            create_character_tables()
+            create_default_tags()
+            create_default_groups()
+            print('Nukin the db')
+            return 'DB Reset'
         try:
             engine = db.get_engine()
             Event.__table__.drop(engine)
@@ -186,10 +196,10 @@ def create_default_tags():
     return 'Tags created... \n'
 
 def create_default_groups():
-    admin = UserGroup(name='Admin')
-    developer = UserGroup(name='Developer')
-    patron = UserGroup(name='Patron')
-    general = UserGroup(name='General')
+    admin = UserGroup(in_group_name='Admin')
+    developer = UserGroup(in_group_name='Developer')
+    patron = UserGroup(in_group_name='Patron')
+    general = UserGroup(in_group_name='General')
 
     db.session.add(admin)
     db.session.add(developer)

@@ -15,7 +15,7 @@ def community_create():
     private = (request.json['Private'] == 1)
     create_global_link = (request.json['Global Link'] == 1) or not private
     in_comm_desc = request.json['Description']
-    print('HERE')
+    
     # Get user making the new community
     #Get user via JWT or RioKey 
     user=None
@@ -46,7 +46,7 @@ def community_create():
 
         # === Create Community Tag ===
         new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", "Community tag for {new_comm.name}")
-        db.session.add(new_comm_user)
+        db.session.add(new_comm_tag)
         db.session.commit()
 
         # === Send Email ===
@@ -75,6 +75,10 @@ def community_create():
 
 @app.route('/community/join/<comm_name>/<active_url>', methods=['POST'])
 def community_join_url(comm_name, active_url):
+    try:
+        print("Key", request.json['Rio Key'])
+    except:
+        pass
     return community_join(comm_name, active_url)
 
 @app.route('/community/join', methods=['POST'])
@@ -92,11 +96,14 @@ def community_join(in_comm_name = None, in_active_url = None):
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey 
+
+    print("Leu", request.json['Rio Key'])
     user=None
     try:
         current_user_username = get_jwt_identity()
         user = RioUser.query.filter_by(username=current_user_username).first()
     except:
+        print("Leu", request.json['Rio Key'])
         user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
 
     if user == None:
@@ -137,7 +144,7 @@ def community_join(in_comm_name = None, in_active_url = None):
                     'accepted': new_comm_user.accepted
                 })
 
-        if in_active_url == comm.active_url: 
+        if in_active_url == comm.active_url: #Else if user has provided proper link
             new_comm_user = CommunityUser(in_user_id=user.id, in_comm_id=comm.id, in_is_admin=False, in_gen_url=False, in_accepted=True)
             db.session.add(new_comm_user)
             db.session.commit()
