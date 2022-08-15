@@ -18,14 +18,14 @@ cPUBLIC_COMM = {'Community Name': 'Public', 'Private': 0, 'Global Link': 0, 'Des
 # External tests
 def test_external_endpoint_community_create():
     #Wipe db
-    response = requests.post("http://127.0.0.1:5000/reset_db", json={"RESET_DB": "NUKE"})
+    response = requests.post("http://127.0.0.1:5000/reset_db/", json={"RESET_DB": "NUKE"})
 
     #Create users
-    response = requests.post("http://127.0.0.1:5000/register", json=cFOUNDER_USER)
+    response = requests.post("http://127.0.0.1:5000/register/", json=cFOUNDER_USER)
 
 
     #Create users
-    response = requests.post("http://127.0.0.1:5000/register", json=cMEMBER_USER)
+    response = requests.post("http://127.0.0.1:5000/register/", json=cMEMBER_USER)
 
     # Get founder info
     query = 'SELECT * FROM rio_user WHERE username = %s'

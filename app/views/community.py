@@ -98,18 +98,15 @@ def community_join(in_comm_name = None, in_active_url = None):
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey 
-
-    try:
-        print("Second function", request.json['Rio Key'])
-    except:
-        print("No rio key")
-
     user=None
-    try:
-        current_user_username = get_jwt_identity()
+    current_user_username = get_jwt_identity()
+    if current_user_username:
         user = RioUser.query.filter_by(username=current_user_username).first()
-    except:
-        user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+    else:
+        try:
+            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+        except:
+            return abort(409, "No Rio Key or JWT Provided")
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
