@@ -491,26 +491,29 @@ class CommunityUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=False)
-    is_admin = db.Column(db.Boolean)
-    active_url = db.Column(db.String(50), unique=True)
-    accepted = db.Column(db.Boolean)
-    date_joined = db.Integer
+    admin = db.Column(db.Boolean)
+    invited = db.Column(db.Boolean)
+    active = db.Column(db.Boolean)
+    banned = db.Column(db.Boolean)
+    date_joined = db.Column(db.Integer)
 
     ladders = db.relationship('Ladder', backref='community_users')
 
-    def __init__(self, in_user_id, in_comm_id, in_is_admin, in_gen_url, in_accepted):
+    def __init__(self, in_user_id, in_comm_id, in_admin, in_invited, in_active):
         self.user_id = in_user_id
         self.community_id = in_comm_id
-        self.is_admin = in_is_admin
-        self.active_url = secrets.token_urlsafe(32) if in_gen_url else None
-        self.accepted = in_accepted
+        self.admin = in_admin
+        self.invited = in_invited
+        self.active = in_active
         self.date_joined = int( time.time() )
 
     def to_dict(self):
         return {
             "user_id": self.user_id,
-            "admin": self.is_admin,
-            "accepted": self.accepted,
+            "admin": self.admin,
+            "active": self.active,
+            "invited": self.invited,
+            "banned": self.banned,
             "date_joined": self.date_joined,
         }
 
