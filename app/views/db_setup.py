@@ -7,7 +7,6 @@ import os
 # === Initalize Character Tables And Ranked/Superstar Tags ===
 @app.route('/reset_db/', methods=['POST'])
 def reset_db():
-    print(os.getenv('RESET_DB'), request.json['RESET_DB'])
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
          # For dev server and testing
         if (app.env == "production" and os.getenv('RESET_DB') == "NUKE"):
@@ -16,7 +15,6 @@ def reset_db():
             create_character_tables()
             create_default_tags()
             create_default_groups()
-            print('Nukin the db')
             return 'DB Reset'
         try:
             engine = db.get_engine()
