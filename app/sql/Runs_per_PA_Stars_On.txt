@@ -1,0 +1,36 @@
+--------################### finding runs per plate appearance for all players, ranked stars on
+select sum(runs)::dec/sum(total_pa)::dec runs_per_pa from(
+select 
+a.game_id,
+sum(distinct ga.away_score+ga.home_score) runs,
+sum(case when result_of_ab not in ('0') then
+1 else 0 end) total_pa
+from(
+            select distinct 
+                            e.id,
+                            e.game_id,
+                            e.away_score,
+                            e.home_score,
+                            e.inning,
+                            case when e.half_inning ='0' then 'top' when e.half_inning ='1' then 'bottom' end half_inning_name,
+                            e.event_num,
+                            e.result_of_ab::text,
+                            e.result_rbi,
+                            e.outs
+
+                    from event e
+                     left join game ga
+                      on e.game_id = ga.game_id
+                     left join (select gt.game_id, string_agg(ta.name_lowercase::text, ', ') as tag_names, string_agg(gt.tag_id::text, ', ') as tag_ids
+                       from game_tag gt left join tag ta on  gt.tag_id = ta.id
+                       group by 1) gt on ga.game_id = gt.game_id
+
+                    where lower(ranked::text) ='true'
+                    -- and (lower(tag_names) like '%normal%' and lower(tag_names) not like '%superstar%')
+                    and (lower(tag_names) like '%superstar%')
+                      order by e.event_num asc
+                    )a 
+                    left join game ga on ga.game_id = a.game_id
+                    where result_of_ab is not null
+                    group by 1
+                    )b
