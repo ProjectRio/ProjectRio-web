@@ -50,3 +50,53 @@ def tag_create():
     #TODO this might not work, but its late and I gotta end this
     #"this" meaning the coding session
     return jsonify(new_tag.name)
+
+@app.route('/tag/list', methods=['GET'])
+def tag_list():
+    # community_list = None
+    type_list = None
+
+    # Get the tags for the provided communities, else all
+    # try:
+    #     comunnity_list = request.json['Communities']
+    # except:
+    #     pass
+    
+    # Get tags with provided types, else all
+
+    type_like_statement = ''
+    print(request.is_json)
+    types_provided = request.is_json and 'Types' in request.json
+    if types_provided:
+        type_like_statement = 'AND ('
+        for idx, type in enumerate(request.json.get('Types')):
+            print("In values?", type not in cTAG_TYPES.values())
+            if type not in cTAG_TYPES.values():
+                return abort(409, description="Invalid tag type provided")
+            if idx > 0:
+                type_like_statement += "OR "
+            type_like_statement += f"tag.tag_type LIKE '%{type}%' "
+        type_like_statement += ") "
+
+    query = (
+        'SELECT \n'
+        'tag.id AS id, \n'
+        'tag.community_id AS comm_id, \n'
+        'comm.name AS comm_name, \n'
+        'tag.name AS tag_name, \n'
+        'tag.tag_type AS type, \n'
+       f"{'tag.desc AS desc, ' if type_list != None else ''} \n"
+        'tag.active AS active \n'
+        'FROM tag \n'
+        'LEFT JOIN community AS comm ON tag.id = comm.id \n' #Join communities
+       f"WHERE active = true {type_like_statement}"
+    )
+
+    print(query)
+
+    result = db.session.execute(query).all()
+
+    tags = []
+    for entry in result:
+        tags.append(entry._asdict() )
+    return { 'Tags': tags }
