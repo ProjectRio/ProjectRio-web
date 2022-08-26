@@ -396,14 +396,22 @@ class TagSetTag(db.Model):
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
 
 class TagSet(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(db.Integer, primary_key=True)    
+    community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
     name = db.Column(db.String(120))
     name_lowercase = db.Column(db.String(120))
     start_date = db.Column(db.Integer)
-    interval = db.Column(db.Integer)
+    end_date = db.Column(db.Integer)
 
     tag_set_tag = db.relationship('TagSetTag', backref='tag_set_from_tst')
     ladder = db.relationship('Ladder', backref='tag_set')
+
+    def __init__(self, in_comm_id, in_name, in_start, in_end):
+        self.community_id = in_comm_id
+        self.name = in_name
+        self.name_lowercase = in_name.lower()
+        self.start_date = in_start
+        self.end_date = in_end
 
 class Ladder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
