@@ -33,6 +33,12 @@ cTYPE_OF_SWING = {
     4: "Bunt"
 }
 
+cTAG_TYPES = {
+    0: "Component",
+    1: "Competition",
+    3: "Community"
+}
+
 cCHAR_ALIASES = {
     "Mario": 0,
     "Luigi": 1,
