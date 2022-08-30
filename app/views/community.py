@@ -26,7 +26,7 @@ def community_create():
         try:
             user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
         except:
-            return abort(409, "No Rio Key or JWT Provided")
+            return abort(409, description="No Rio Key or JWT Provided")
 
 
     comm = Community.query.filter_by(name=in_comm_name).first()
@@ -68,7 +68,7 @@ def community_create():
         try:
             send_email(user.email, subject, html_content)
         except:
-            return abort(502, 'Failed to send email')
+            return abort(502, description='Failed to send email')
         
     return jsonify({
         'community name': new_comm.name,
@@ -103,7 +103,7 @@ def community_join(in_comm_name = None, in_active_url = None):
         try:
             user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
         except:
-            return abort(409, "No Rio Key or JWT Provided")
+            return abort(409, description="No Rio Key or JWT Provided")
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
@@ -198,7 +198,7 @@ def community_invite():
         try:
             user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
         except:
-            return abort(409, "No Rio Key or JWT Provided")
+            return abort(409, description="No Rio Key or JWT Provided")
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
@@ -261,7 +261,7 @@ def community_invite():
         try:
             send_email(invited_user.email, subject, html_content)
         except:
-            return abort(502, 'Failed to send email')
+            return abort(502, description='Failed to send email')
 
     #Return list of usernames
     return {
@@ -286,7 +286,7 @@ def community_members():
         try:
             user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
         except:
-            return abort(409, "No Rio Key or JWT Provided")
+            return abort(409, description="No Rio Key or JWT Provided")
 
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
@@ -327,7 +327,7 @@ def community_tags():
         try:
             user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
         except:
-            return abort(409, "No Rio Key or JWT Provided")
+            return abort(409, description="No Rio Key or JWT Provided")
         
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
@@ -379,7 +379,7 @@ def community_manage():
         try:
             user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
         except:
-            return abort(409, "No Rio Key or JWT Provided")
+            return abort(409, description="No Rio Key or JWT Provided")
 
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
