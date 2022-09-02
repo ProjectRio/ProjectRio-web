@@ -11,13 +11,6 @@ def reset_db():
          # For dev server and testing
         if (app.env == "production" and os.getenv('RESET_DB') == "NUKE"):
             print('Wiping DB')
-
-            engine = db.get_engine()
-            GameTag.__table__.drop(engine)
-            Ladder.__table__.drop(engine)
-            EloGame.__table__.drop(engine)
-            db.session.execute("DROP TABLE tag_set_tag;")
-            TagSet.__table__.drop(engine)
             db.drop_all()
             db.create_all()
             create_character_tables()
