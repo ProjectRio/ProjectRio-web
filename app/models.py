@@ -388,6 +388,18 @@ class Tag(db.Model):
         self.desc = in_desc
         self.active = True
         self.date_created = int( time.time() )
+    
+    def to_dict(self):
+        return {
+            'ID': self.id,
+            'Comm ID': self.community_id,
+            'Name': self.name,
+            'Type': self.tag_type,
+            'Desc': self.desc,
+            'Active': self.active,
+            'Date Created': self.date_created
+        }
+
 
 # Join table for tags and tag set
 tagsettag = db.Table('tag_set_tag',
@@ -403,7 +415,7 @@ class TagSet(db.Model):
     start_date = db.Column(db.Integer)
     end_date = db.Column(db.Integer)
 
-    tags = db.relationship('Tag', secondary=tagsettag, backref='TagSet')
+    tags = db.relationship('Tag', secondary=tagsettag, backref='tagset', cascade='delete')
 
     ladder = db.relationship('Ladder', backref='tag_set')
 
@@ -416,11 +428,19 @@ class TagSet(db.Model):
     
     def to_dict(self):
         return {
+            'ID': self.id,
             'Comm ID': self.community_id,
             'Name': self.name,
             'Start Date': self.start_date,
             'End Date': self.end_date,
+            'Tags': self.expand_tag_list()
         }
+
+    def expand_tag_list(self):
+        tag_list = list()
+        for tag in self.tags:
+            tag_list.append(tag.to_dict())
+        return tag_list
 
 class Ladder(db.Model):
     id = db.Column(db.Integer, primary_key=True)

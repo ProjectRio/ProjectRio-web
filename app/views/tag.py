@@ -160,11 +160,7 @@ def tagset_create():
     tags.append(comm_tag)
 
     for tag in tags:
-        tag_set_tag = TagSetTag(
-            tag_id = tag.id,
-            tag_set_id = new_tag_set.id
-        )
-        db.session.add(tag_set_tag)
+        new_tag_set.tags.append(tag)
     
     db.session.commit()
     return jsonify(new_tag_set.to_dict())
@@ -206,43 +202,9 @@ def tagset_list():
         where_statement = "WHERE " + where_statement
     
     result = TagSet.query.all()
-    print(result)
 
-    #query = (
-    #    'SELECT \n'
-    #    'ts.id AS id, \n'
-    #    'ts.name AS name, \n'
-    #    'ts.community_id AS comm_id, \n'
-    #    'ts.start_date AS start_date, \n'
-    #    'ts.end_date AS end_date, \n'
-    #    't.tag_array \n'
-    #    'FROM tag_set      ts\n'
-    #    'JOIN  ('
-    #    '    SELECT tst.tag_set_id AS id, array_agg(t.name) AS tag_array'
-    #    '    FROM   tag_set_tag tst'
-    #    '    JOIN   tag      t  ON t.id = tst.tag_id'
-    #    '    GROUP  BY tst.tag_set_id'
-    #    '    ) t USING (id);'
-    #)
-    #
-    #print(query)
-
-    #result = db.session.execute(query).all()
-
-    #for entry in result:
-    #    print(entry._asdict())
-    #return
-
-    #query = (
-    #    'SELECT \n'
-    #    'tagset.id AS id, \n'
-    #    'tagset.name AS name, \n'
-    #    'tagset.community_id AS comm_id, \n'
-    #    'tagset.start_date AS start_date \n'
-    #    'tagset.end_date AS end_date \n'
-    #    'FROM tagset \n'
-    #    'JOIN community AS comm ON tag.id = comm.id \n' #Join communities
-    #    'JOIN community_user AS comm_user ON comm.id = comm_user.comm_id \n' #Join communities users
-    #    'JOIN rio_user ON comm_user.user_id = rio_user.id \n'
-    #   f"{where_statement}"
-    #)
+    tagset_list = list()
+    for tagset in result:
+        tagset_list.append(tagset.to_dict())
+    print(tagset_list)
+    return jsonify(tagset_list)
