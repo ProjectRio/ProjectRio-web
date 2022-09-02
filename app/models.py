@@ -379,7 +379,6 @@ class Tag(db.Model):
     date_created = db.Column(db.Integer)
 
     game_tag = db.relationship('GameTag', backref='tag')
-    tag_set_tag = db.relationship('TagSetTag', backref='tag_from_tag_set')
 
     def __init__(self, in_comm_id, in_tag_name, in_tag_type, in_desc):
         self.community_id = in_comm_id
@@ -390,10 +389,11 @@ class Tag(db.Model):
         self.active = True
         self.date_created = int( time.time() )
 
-class TagSetTag(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    tag_id = db.Column(db.Integer, db.ForeignKey('tag.id'), nullable=False)
-    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
+# Join table for tags and tag set
+tagsettag = db.Table('tag_set_tag',
+    db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True),
+    db.Column('tagset_id', db.Integer, db.ForeignKey('tag_set.id'), primary_key=True)
+)
 
 class TagSet(db.Model):
     id = db.Column(db.Integer, primary_key=True)    
@@ -403,7 +403,8 @@ class TagSet(db.Model):
     start_date = db.Column(db.Integer)
     end_date = db.Column(db.Integer)
 
-    tag_set_tag = db.relationship('TagSetTag', backref='tag_set_from_tst')
+    tags = db.relationship('Tag', secondary=tagsettag, backref='TagSet')
+
     ladder = db.relationship('Ladder', backref='tag_set')
 
     def __init__(self, in_comm_id, in_name, in_start, in_end):
@@ -412,6 +413,14 @@ class TagSet(db.Model):
         self.name_lowercase = in_name.lower()
         self.start_date = in_start
         self.end_date = in_end
+    
+    def to_dict(self):
+        return {
+            'Comm ID': self.community_id,
+            'Name': self.name,
+            'Start Date': self.start_date,
+            'End Date': self.end_date,
+        }
 
 class Ladder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -421,6 +430,20 @@ class Ladder(db.Model):
     adjusted_rating = db.Column(db.Integer)
     rd = db.Column(db.Integer)
     vol = db.Column(db.Integer)
+
+class EloGame(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    winner_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
+    loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
+    winner_elo = db.Column(db.Integer)
+    loser_elo = db.Column(db.Integer)
+    winner_accept = db.Column(db.Boolean)
+    loser_accept = db.Column(db.Boolean)
+    admin_accept = db.Column(db.Boolean)
+    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=True)
+    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
+    date_created = db.Column(db.Integer)
+
 
 class RioUser(db.Model, UserMixin):
     id       = db.Column(db.Integer, primary_key=True)

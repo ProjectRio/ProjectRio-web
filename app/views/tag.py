@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 from ..email import send_email
 import secrets
-from ..models import db, RioUser, CommunityUser, Community, Tag, TagSet, TagSetTag
+from ..models import db, RioUser, CommunityUser, Community, Tag, TagSet
 from ..consts import *
 import time
 
@@ -205,31 +205,33 @@ def tagset_list():
     if (len(statement_list) > 1):
         where_statement = "WHERE " + where_statement
     
+    result = TagSet.query.all()
+    print(result)
 
-    query = (
-        'SELECT \n'
-        'ts.id AS id, \n'
-        'ts.name AS name, \n'
-        'ts.community_id AS comm_id, \n'
-        'ts.start_date AS start_date, \n'
-        'ts.end_date AS end_date, \n'
-        't.tag_array \n'
-        'FROM tag_set      ts\n'
-        'JOIN  ('
-        '    SELECT tst.tag_set_id AS id, array_agg(t.name) AS tag_array'
-        '    FROM   tag_set_tag tst'
-        '    JOIN   tag      t  ON t.id = tst.tag_id'
-        '    GROUP  BY tst.tag_set_id'
-        '    ) t USING (id);'
-    )
-    
-    print(query)
+    #query = (
+    #    'SELECT \n'
+    #    'ts.id AS id, \n'
+    #    'ts.name AS name, \n'
+    #    'ts.community_id AS comm_id, \n'
+    #    'ts.start_date AS start_date, \n'
+    #    'ts.end_date AS end_date, \n'
+    #    't.tag_array \n'
+    #    'FROM tag_set      ts\n'
+    #    'JOIN  ('
+    #    '    SELECT tst.tag_set_id AS id, array_agg(t.name) AS tag_array'
+    #    '    FROM   tag_set_tag tst'
+    #    '    JOIN   tag      t  ON t.id = tst.tag_id'
+    #    '    GROUP  BY tst.tag_set_id'
+    #    '    ) t USING (id);'
+    #)
+    #
+    #print(query)
 
-    result = db.session.execute(query).all()
+    #result = db.session.execute(query).all()
 
-    for entry in result:
-        print(entry._asdict())
-    return
+    #for entry in result:
+    #    print(entry._asdict())
+    #return
 
     #query = (
     #    'SELECT \n'

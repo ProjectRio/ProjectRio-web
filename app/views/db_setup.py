@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, Character, ChemistryTable, Tag, RioUser, UserGroup, Game, Runner, PitchSummary, ContactSummary, FieldingSummary, CharacterPositionSummary, CharacterGameSummary, Event, GameTag
+from ..models import *
 import json
 import os
 
@@ -10,10 +10,18 @@ def reset_db():
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
          # For dev server and testing
         if (app.env == "production" and os.getenv('RESET_DB') == "NUKE"):
+            print('Wiping DB')
+
+            engine = db.get_engine()
+            GameTag.__table__.drop(engine)
+            Ladder.__table__.drop(engine)
+            EloGame.__table__.drop(engine)
+            db.session.execute("DROP TABLE tag_set_tag;")
+            TagSet.__table__.drop(engine)
             db.drop_all()
             db.create_all()
             create_character_tables()
-            create_default_tags()
+            #create_default_tags()
             create_default_groups()
             return 'DB Reset'
         try:
