@@ -48,7 +48,7 @@ def community_create():
         db.session.commit()
 
         # === Create Community Tag ===
-        new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", "Community tag for {new_comm.name}")
+        new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", f"Community tag for {new_comm.name}")
         db.session.add(new_comm_tag)
         db.session.commit()
 
@@ -222,7 +222,6 @@ def community_invite():
         if invited_user == None:
             return abort(409, description='User does not exist. Username={user}')
 
-    print("validated list")
     #Entire list has been validated, add users to table and send emails
     for user in list_of_users_to_invite:
         invited_user = RioUser.query.filter_by(username_lowercase=user.lower()).first()
