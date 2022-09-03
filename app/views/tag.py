@@ -40,7 +40,7 @@ def tag_create():
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
     if (comm_user == None or comm_user.admin == False):
-        return abort(409, description='User not apart of community or not an admin')
+        return abort(409, description='User not a part of community or not an admin')
 
     # === Tag Creation ===
     new_tag = Tag( in_comm_id=comm.id, in_tag_name=in_tag_name, in_tag_type="Component", in_desc=in_tag_desc)
@@ -52,42 +52,33 @@ def tag_create():
     return jsonify(new_tag.name)
 
 @app.route('/tag/list', methods=['GET'])
-def tag_list(all_tags=False):
-    # community_list = None
+def tag_list():
 
-    type_like_statement = ''
     types_provided = request.is_json and 'Types' in request.json
-    if types_provided and not all_tags:
-        type_like_statement = 'AND ('
-        for idx, type in enumerate(request.json.get('Types')):
-            if type not in cTAG_TYPES.values():
-                return abort(409, description="Invalid tag type provided")
-            if idx > 0:
-                type_like_statement += "OR "
-            type_like_statement += f"tag.tag_type LIKE '%{type}%' "
-        type_like_statement += ") "
+    types_list = request.json.get('Types') if types_provided else list()
 
-    query = (
-        'SELECT \n'
-        'tag.id AS id, \n'
-        'tag.community_id AS comm_id, \n'
-        'comm.name AS comm_name, \n'
-        'tag.name AS tag_name, \n'
-        'tag.tag_type AS type, \n'
-       f"{'tag.desc AS desc, ' if types_provided or all_tags else ''} \n"
-        'tag.active AS active \n'
-        'FROM tag \n'
-        'LEFT JOIN community AS comm ON tag.id = comm.id \n' #Join communities
-       f"WHERE active = true {type_like_statement}"
-    )
+    # Abort if any of the provided types are not valid
+    if (types_provided and not any(x in types_list for x in cTAG_TYPES.values())):
+        return abort(409, description=f"Illegal type name provided. Valid types {cTAG_TYPES.values()}")
 
-    #print(query)
+    communities_provided = request.is_json and 'Communities' in request.json
+    community_id_list = request.json.get('Communities') if communities_provided else list() 
 
-    result = db.session.execute(query).all()
+    result = list()
+    if types_provided and not communities_provided:
+        result = Tag.query.filter(Tag.tag_type.in_(types_list))
+    elif not types_provided and communities_provided:
+        result = Tag.query.join(Community, Tag.community_id == Community.id)\
+            .filter(Community.id.in_(community_id_list))
+    elif not types_provided and communities_provided:
+        result = Tag.query.join(Community, Tag.community_id == Community.id)\
+            .filter((Community.id.in_(community_id_list)) & (Tag.tag_type.in_(types_list)))
+    else:
+        result = Tag.query.all()
 
-    tags = []
-    for entry in result:
-        tags.append(entry._asdict() )
+    tags = list()
+    for tag in result:
+        tags.append(tag.to_dict())
     return { 'Tags': tags }
 
 #TODO support duration along with end data so eiither can be supplied
@@ -105,9 +96,11 @@ def tagset_create():
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     if comm == None:
-        return abort(409, description="No community found with name={in_tag_set_comm_name}")
+        return abort(409, description=f"No community found with name={in_tag_set_comm_name}")
     if in_tag_set_name.isalnum() == False:
         return abort(406, description='Provided tag set name is not alphanumeric. Community not created')
+    if in_tag_set_end_time < in_tag_set_start_time:
+        return abort(409, description='Invalid start/end times')
 
 
     # Get user making the new community
@@ -175,36 +168,46 @@ def tagset_list():
     statement_list = list()
     
     active_only = request.is_json and 'Active' in request.json and request.json['Active'].lower() in ['yes', 'y', 'true', 't']
-    if (active_only):
-        current_unix_time = int( time.time() )
-        where_active_statement = f"(tagset.start_date < {current_unix_time} AND tagset.end_date > {current_unix_time}) "
-        statement_list.append(where_active_statement)
+    current_unix_time = int( time.time() )
 
     communities_provided = request.is_json and 'Communities' in request.json
-    if (communities_provided):
-        comm_like_statement = " ("
-        for idx, name in enumerate(request.json.get('Communities')):
-            if idx > 0:
-                type_like_statement += "OR "
-            name_lower = name.lower()
-            comm_like_statement += f"comm.name_lowercase LIKE '%{name_lower}%' "
-        comm_like_statement += ") "
-        statement_list.append(comm_like_statement)
+    community_id_list = request.json.get('Communities') if communities_provided else list()
 
+    # Todo: Add fail if any bad id is provided
+    # if communities_provided and len(community_id_list)
+   
     rio_key_provided = request.is_json and 'Rio Key' in request.json
     if rio_key_provided:
-        rio_key = request.json.get('Rio Key')
-        where_rio_user_statement = f"(rio_user.rio_key == {rio_key})"
-        statement_list.append(where_rio_user_statement)
+        rio_key_list = request.json.get('Rio Key')
 
-    where_statement = ' AND '.join(statement_list)
-    if (len(statement_list) > 1):
-        where_statement = "WHERE " + where_statement
-    
+        common_communities = Community.query.join(CommunityUser, Community.id == CommunityUser.community_id)\
+            .join(RioUser, CommunityUser.user_id == RioUser.id)\
+            .filter(RioUser.rio_key.in_(rio_key_list)).all()
+
+        for comm in common_communities:
+            community_id_list.append(comm.id)
+
+        
+    # Todo: Add fail if any bad key is provided
+
     result = TagSet.query.all()
 
     tagset_list = list()
     for tagset in result:
+        # Evaluate if current time is within start/end time
+        if (active_only and (current_unix_time < tagset.start_date or current_unix_time > tagset.end_date)):
+            continue
+        if ((communities_provided or rio_key_provided) and tagset.community_id not in community_id_list):
+            continue
         tagset_list.append(tagset.to_dict())
     print(tagset_list)
     return jsonify(tagset_list)
+
+
+@app.route('/tag_set/<tag_set_id>', methods=['GET'])
+def tagset_get_tags(tag_set_id):
+    result = TagSet.query.filter_by(id = tag_set_id).first()
+    if result == None:
+        return abort(409, description=f"Could not find TagSet with id={tag_set_id}")
+
+    return jsonify(result.to_dict())

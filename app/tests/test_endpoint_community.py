@@ -239,7 +239,7 @@ def test_external_endpoint_community_create():
     response = requests.get("http://127.0.0.1:5000/tag/list", json={'Types': ['Junk']})
     assert response.status_code == 409
 
-    # Get only component tags, typo for 409
+    # Get only component tags
     response = requests.get("http://127.0.0.1:5000/tag/list", json={'Types': ['Component']})
     assert response.status_code == 200    
     data = response.json()
@@ -259,7 +259,32 @@ def test_external_endpoint_community_create():
     print(response)
     assert response.status_code == 200
 
+    # Without any options
     response = requests.get("http://127.0.0.1:5000/tag_set/list")
-    print(response)
     assert response.status_code == 200
+    assert len(response.json()) == 1
+
+    # With correct key
+    tagset_list_json = { 'Rio Key': [member_rio_key] }
+    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+    # Incorrect key, pass but no data
+    tagset_list_json = { 'Rio Key': [member_rio_key + 'X'] }
+    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+
+    # Incorrect community, pass but no data
+    tagset_list_json = { 'Communities': ['invalid'] }
+    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+    assert response.status_code == 200
+    assert len(response.json()) == 0
+
+    # Incorrect community, pass but no data
+    tagset_list_json = { 'Active': 'true' }
+    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+    assert response.status_code == 200
+    assert len(response.json()) == 0
 
