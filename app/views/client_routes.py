@@ -16,25 +16,3 @@ def validate_user_from_client():
         abort(404, 'Invalid UserID or RioKey')
 
     return {'msg': 'success'}
-
-
-@app.route('/get_available_tags/<username>/', methods=['GET'])
-def get_available_tags(username):
-    in_username_lower = username.lower()
-
-    query = (
-        'SELECT '
-        'tag.name AS name '
-        'FROM tag '
-        'WHERE tag.community_id IS NULL'
-    )
-
-    tags = db.session.execute(query).all()
-
-    available_tags = []
-    for tag in tags:
-        available_tags.append(tag.name)
-
-    return { 'available_tags': available_tags }
-
-
