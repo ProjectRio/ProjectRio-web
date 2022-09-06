@@ -8,8 +8,8 @@ import os
 @app.route('/reset_db/', methods=['POST'])
 def reset_db():
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
-         # For dev server and testing
-        if (app.env == "production" and os.getenv('RESET_DB') == "NUKE"):
+        # For dev server and testing
+        if (app.env == "development"):
             print('Wiping DB')
             db.drop_all()
             db.create_all()
@@ -17,23 +17,26 @@ def reset_db():
             #create_default_tags()
             create_default_groups()
             return 'DB Reset'
-        try:
-            engine = db.get_engine()
-            Event.__table__.drop(engine)
-            Runner.__table__.drop(engine)
-            PitchSummary.__table__.drop(engine)
-            ContactSummary.__table__.drop(engine)
-            FieldingSummary.__table__.drop(engine)
-            CharacterGameSummary.__table__.drop(engine)
-            CharacterPositionSummary.__table__.drop(engine)
-            GameTag.__table__.drop(engine)        
-            Game.__table__.drop(engine)
-            db.create_all()
-            create_character_tables()
-            create_default_tags()
-            create_default_groups()
-        except:
-            abort(400, "Error dropping or creating tables.")  
+
+        # reset script for production, does not delete user data
+        else:
+            try:
+                engine = db.get_engine()
+                Event.__table__.drop(engine)
+                Runner.__table__.drop(engine)
+                PitchSummary.__table__.drop(engine)
+                ContactSummary.__table__.drop(engine)
+                FieldingSummary.__table__.drop(engine)
+                CharacterGameSummary.__table__.drop(engine)
+                CharacterPositionSummary.__table__.drop(engine)
+                GameTag.__table__.drop(engine)        
+                Game.__table__.drop(engine)
+                db.create_all()
+                create_character_tables()
+                create_default_tags()
+                create_default_groups()
+            except:
+                abort(400, "Error dropping or creating tables.")  
     else:
         abort(400, 'Invalid password')
     return 'Success...'
