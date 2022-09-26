@@ -297,13 +297,10 @@ class PitchSummary(db.Model):
     charge_pitch_type = db.Column(db.Integer)
     star_pitch = db.Column(db.Integer)
     pitch_speed = db.Column(db.Integer)
-    pitch_ball_x_pos = db.Column(db.Float)
-    pitch_ball_z_pos = db.Column(db.Float)
-    pitch_batter_x_pos = db.Column(db.Float)
-    pitch_batter_z_pos = db.Column(db.Float)
     d_ball = db.Column(db.Boolean)
-    pitch_result = db.Column(db.Integer)
     type_of_swing = db.Column(db.Integer)
+    ball_position_strikezone = db.Column(db.Integer)
+    in_strikezone = db.Column(db.Boolean)
 
     event = db.relationship('Event', backref='pitch_summary')
 
@@ -317,16 +314,28 @@ class ContactSummary(db.Model):
     input_direction = db.Column(db.Integer)
     input_direction_stick = db.Column(db.Integer)
     frame_of_swing_upon_contact = db.Column(db.Integer)
-    ball_angle = db.Column(db.Integer)
-    ball_horiz_power = db.Column(db.Integer)
-    ball_vert_power = db.Column(db.Integer)
+    ball_power = db.Column(db.Integer)
+    ball_horiz_angle = db.Column(db.Integer)
+    ball_vert_angle = db.Column(db.Integer)
+    contact_absolute = db.Column(db.Float)
+    contact_quality = db.Column(db.Float)
+    rng1 = db.Column(db.Float)
+    rng2 = db.Column(db.Float)
+    rng3 = db.Column(db.Float)
     ball_x_velocity = db.Column(db.Float)
     ball_y_velocity = db.Column(db.Float)
     ball_z_velocity = db.Column(db.Float)
-    ball_x_pos = db.Column(db.Float)
-    ball_y_pos = db.Column(db.Float)
-    ball_z_pos = db.Column(db.Float)
+    ball_x_contact_pos = db.Column(db.Float)
+    ball_y_contact_pos = db.Column(db.Float)
+    ball_z_contact_pos = db.Column(db.Float)
+    bat_x_contact_pos = db.Column(db.Float)
+    bat_y_contact_pos = db.Column(db.Float)
+    bat_z_contact_pos = db.Column(db.Float)
+    ball_x_landing_pos = db.Column(db.Float)
+    ball_y_landing_pos = db.Column(db.Float)
+    ball_z_landing_pos = db.Column(db.Float)
     ball_max_height = db.Column(db.Float)
+    ball_hang_time = db.Column(db.Float)
     multi_out = db.Column(db.Integer)
     primary_result = db.Column(db.Integer)
     secondary_result = db.Column(db.Integer)
@@ -412,6 +421,7 @@ class TagSet(db.Model):
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
     name = db.Column(db.String(120))
     name_lowercase = db.Column(db.String(120))
+    type = db.Column(db.String(120)) #Season, league, tournament.
     start_date = db.Column(db.Integer)
     end_date = db.Column(db.Integer)
 
@@ -419,10 +429,11 @@ class TagSet(db.Model):
 
     ladder = db.relationship('Ladder', backref='tag_set')
 
-    def __init__(self, in_comm_id, in_name, in_start, in_end):
+    def __init__(self, in_comm_id, in_name, in_type, in_start, in_end):
         self.community_id = in_comm_id
         self.name = in_name
         self.name_lowercase = in_name.lower()
+        self.type = in_type
         self.start_date = in_start
         self.end_date = in_end
     
@@ -431,6 +442,7 @@ class TagSet(db.Model):
             'ID': self.id,
             'Comm ID': self.community_id,
             'Name': self.name,
+            'Type': self.type,
             'Start Date': self.start_date,
             'End Date': self.end_date,
             'Tags': self.expand_tag_list()
