@@ -282,7 +282,7 @@ def set_privacy():
 '''
 @app.route('/user/tags/', methods = ['GET'])
 def get_users_tags():
-    if (app.env == "production"):
+    if (app.config['rio_env'] == "production"):
         return abort(404, description='Endpoint not ready for production')
     
     in_username_lowercase = request.args.get("username")
@@ -342,7 +342,7 @@ def get_users_tags():
 
 @app.route('/user/communities/', methods = ['GET'])
 def get_users_communities():
-    if (app.env == "production"):
+    if (app.config['rio_env'] == "production"):
         return abort(404, description='Endpoint not ready for production')
 
     in_username_lowercase = request.json['username'].lower()

@@ -5,7 +5,7 @@ from sendgrid.helpers.mail import Mail, From
 
 def send_email(to_email, subject, html_content):
     # If the application is running in production, send emails using sendgrid.
-    if (app.env == "production"):
+    if (app.config['rio_env'] == "production"):
         message = Mail(
             from_email=From('email@projectrio.app', 'Rio Web'),
             to_emails=to_email,

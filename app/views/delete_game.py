@@ -5,7 +5,7 @@ from ..models import db, Game, CharacterGameSummary, CharacterPositionSummary, E
 @app.route('/delete_game/', methods = ['POST'])
 def delete_game():
     #Not ready for production (Untested)
-    if (app.env == "production"):
+    if (app.config['rio_env'] == "production"):
         return abort(404, description='Endpoint not ready for production')
 
     # Verify key is valid

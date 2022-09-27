@@ -1,4 +1,4 @@
-from ast import Param
+import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -20,6 +20,7 @@ def init_app():
     # Construct core application
     app = Flask(__name__)
     app.config.from_pyfile('config.py')
+    app.config['rio_env'] = os.getenv('RIO_ENV')
     CORS(app)
 
     # Initialize Plugins
