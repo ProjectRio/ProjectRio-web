@@ -39,6 +39,12 @@ cTAG_TYPES = {
     3: "Community"
 }
 
+cTAG_SET_TYPES = {
+    0: "Season",
+    1: "League",
+    3: "Tournament"
+}
+
 cCHAR_ALIASES = {
     "Mario": 0,
     "Luigi": 1,
