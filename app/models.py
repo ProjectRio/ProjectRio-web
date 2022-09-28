@@ -534,6 +534,7 @@ class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(32), unique=True)
     name_lowercase = db.Column(db.String(32), unique=True)
+    comm_type = db.Column(db.String(16))
     private = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique=True)
     desc = db.Column(db.String(300))
@@ -542,9 +543,10 @@ class Community(db.Model):
     tags = db.relationship('Tag', backref='community_from_tags')
     community_users = db.relationship('CommunityUser', backref='community_from_community_users')
 
-    def __init__(self, in_name, in_private, in_gloabl_link, in_description):
+    def __init__(self, in_name, in_type, in_private, in_gloabl_link, in_description):
         self.name = in_name
         self.name_lowercase = in_name.lower()
+        self.comm_type = in_type,
         self.private = in_private
         self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link) else None
         self.desc = in_description
