@@ -287,6 +287,7 @@ class Event(db.Model):
     outs = db.Column(db.Integer)
     balls = db.Column(db.Integer)
     strikes = db.Column(db.Integer)
+    result_num_of_outs = db.Column(db.Integer)
     result_rbi = db.Column(db.Integer)
     result_of_ab = db.Column(db.Integer)
 
@@ -336,7 +337,6 @@ class ContactSummary(db.Model):
     ball_z_landing_pos = db.Column(db.Float)
     ball_max_height = db.Column(db.Float)
     ball_hang_time = db.Column(db.Float)
-    multi_out = db.Column(db.Integer)
     primary_result = db.Column(db.Integer)
     secondary_result = db.Column(db.Integer)
 

@@ -260,6 +260,7 @@ def populate_db2():
             outs = event_data['Outs'],
             balls = event_data['Balls'],
             strikes = event_data['Strikes'],
+            result_num_of_outs = event_data['Num Outs During Play'],
             result_rbi = event_data['RBI'],
             result_of_ab = event_data['Result of AB'],
         )
@@ -316,11 +317,8 @@ def populate_db2():
                 charge_pitch_type = event_data['Pitch']['Charge Type'],
                 star_pitch = event_data['Pitch']['Star Pitch'],
                 pitch_speed = event_data['Pitch']['Pitch Speed'],
-                pitch_ball_x_pos = event_data['Pitch']['Ball Position - X'],
-                pitch_ball_z_pos = event_data['Pitch']['Ball Position - Z'],
-                pitch_batter_x_pos = event_data['Pitch']['Batter Position - X'],
-                pitch_batter_z_pos = event_data['Pitch']['Batter Position - Z'],
-                pitch_result = event_data['Pitch']['Pitch Result'],
+                ball_position_strikezone = event_data['Pitch']['Ball Position - Strikezone'],
+                in_strikezone = event_data['Pitch']['In Strikezone'],
                 type_of_swing = event_data['Pitch']['Type of Swing'],
                 d_ball = event_data['Pitch']['DB'],
             )
@@ -342,14 +340,28 @@ def populate_db2():
                     ball_angle = int(event_data['Pitch']['Contact']['Ball Angle'].replace(',', '')),
                     ball_horiz_power = int(event_data['Pitch']['Contact']['Ball Horizontal Power'].replace(',', '')),
                     ball_vert_power = int(event_data['Pitch']['Contact']['Ball Vertical Power'].replace(',', '')),
-                    ball_x_velocity = event_data['Pitch']['Contact']['Ball Velocity - X'],
-                    ball_y_velocity = event_data['Pitch']['Contact']['Ball Velocity - Y'],
-                    ball_z_velocity = event_data['Pitch']['Contact']['Ball Velocity - Z'],
-                    ball_x_pos = event_data['Pitch']['Contact']['Ball Landing Position - X'],
-                    ball_y_pos = event_data['Pitch']['Contact']['Ball Landing Position - Y'],
-                    ball_z_pos = event_data['Pitch']['Contact']['Ball Landing Position - Z'],
-                    ball_max_height = event_data['Pitch']['Contact']['Ball Max Height'],
-                    multi_out = event_data['Pitch']['Contact']['Multi-out'],
+                    ball_power = int(event_data['Pitch']['Contact']['Ball Power'].replace(',', '')),
+                    ball_horiz_angle = int(event_data['Pitch']['Contact']['Vert Angle'].replace(',', '')),
+                    ball_vert_angle = int(event_data['Pitch']['Contact']['Horiz Angle'].replace(',', '')),
+                    contact_absolute = event_data['Pitch']['Contact']['Contact Absolute']
+                    contact_quality = event_data['Pitch']['Contact']['Contact Quality']
+                    rng1 = event_data['Pitch']['Contact']['RNG1']
+                    rng2 = event_data['Pitch']['Contact']['RNG2']
+                    rng3 = event_data['Pitch']['Contact']['RNG3']
+                    ball_x_velocity = event_data['Pitch']['Contact']['Ball Velocity - X']
+                    ball_y_velocity = event_data['Pitch']['Contact']['Ball Velocity - Y']
+                    ball_z_velocity = event_data['Pitch']['Contact']['Ball Velocity - Z']
+                    ball_x_contact_pos = event_data['Pitch']['Contact']['Ball Contact Pos - X']
+                    ball_y_contact_pos = event_data['Pitch']['Contact']['Ball Contact Pos - Y']
+                    ball_z_contact_pos = event_data['Pitch']['Contact']['Ball Contact Pos - Z']
+                    bat_x_contact_pos = event_data['Pitch']['Contact']['Bat Contact Pos - X']
+                    bat_y_contact_pos = event_data['Pitch']['Contact']['Bat Contact Pos - Y']
+                    bat_z_contact_pos = event_data['Pitch']['Contact']['Bat Contact Pos - Z']
+                    ball_x_landing_pos = event_data['Pitch']['Contact']['Ball Landing Position - X']
+                    ball_y_landing_pos = event_data['Pitch']['Contact']['Ball Landing Position - Y']
+                    ball_z_landing_pos = event_data['Pitch']['Contact']['Ball Landing Position - Z']
+                    ball_max_height = event_data['Pitch']['Contact']['Ball Max Height']
+                    ball_hang_time = int(event_data['Pitch']['Contact']['Ball Hang Time'].replace(',', '')),                    
                     primary_result = event_data['Pitch']['Contact']['Contact Result - Primary'],
                     secondary_result = event_data['Pitch']['Contact']['Contact Result - Secondary']
                 )
