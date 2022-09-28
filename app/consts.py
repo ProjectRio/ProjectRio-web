@@ -42,7 +42,13 @@ cTAG_TYPES = {
 cTAG_SET_TYPES = {
     0: "Season",
     1: "League",
-    3: "Tournament"
+    3: "Tournament",
+    4: "Custom"
+}
+
+cCOMM_TYPES = {
+    0: "Official",
+    1: "Unofficial",
 }
 
 cCHAR_ALIASES = {
