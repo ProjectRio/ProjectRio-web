@@ -53,7 +53,6 @@ def tag_create():
 
 @app.route('/tag/list', methods=['GET'])
 def tag_list():
-
     types_provided = request.is_json and 'Types' in request.json
     types_list = request.json.get('Types') if types_provided else list()
 
@@ -87,6 +86,7 @@ def tag_list():
 def tagset_create():
     in_tag_set_name = request.json['TagSet Name']
     in_tag_set_desc = request.json['Description']
+    in_tag_set_type = request.json['Type']
     in_tag_set_comm_name = request.json['Community Name']
     in_tag_ids = request.json['Tags']
     in_tag_set_start_time = request.json['Start']
@@ -101,7 +101,8 @@ def tagset_create():
         return abort(406, description='Provided tag set name is not alphanumeric. Community not created')
     if in_tag_set_end_time < in_tag_set_start_time:
         return abort(409, description='Invalid start/end times')
-
+    if in_tag_set_type not in cTAG_SET_TYPES.values():
+        return abort(409, description='Invalid tag type')
 
     # Get user making the new community
     #Get user via JWT or RioKey
@@ -135,7 +136,7 @@ def tagset_create():
         tags.append(tag)
 
     # === Tag Set Creation ===
-    new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name, in_start=in_tag_set_start_time, in_end=in_tag_set_end_time)
+    new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name,in_type=in_tag_set_type, in_start=in_tag_set_start_time, in_end=in_tag_set_end_time)
     db.session.add(new_tag_set)
     db.session.commit()
 
