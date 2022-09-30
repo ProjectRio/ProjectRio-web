@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, GameTag
 from ..email import send_email
+from app.views.community import add_user_to_all_comms
 
 # === User Registration Front End ===
 @app.route('/signup/')
@@ -90,6 +91,9 @@ def verify_email(active_url):
             <p>Rio Team</p>
             '''
         )
+
+        # === Add users to Official community ===
+        add_user_to_all_comms(user.id, 'Official')
 
         try:
             send_email(user.email, subject, html_content)

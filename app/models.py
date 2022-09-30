@@ -459,14 +459,24 @@ class Ladder(db.Model):
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     community_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     started_searching = db.Column(db.Integer)
-    adjusted_rating = db.Column(db.Integer)
+    rating = db.Column(db.Integer)
     rd = db.Column(db.Integer)
     vol = db.Column(db.Integer)
 
-class EloGame(db.Model):
+    def __init__(self, in_tag_set_id, in_comm_user_id, in_rating, in_rd, in_vol):
+        self.tag_set_id = in_tag_set_id
+        self.community_user_id = in_comm_user_id
+        self.rating = in_rating
+        self.rd = in_rd
+        self.vol = in_vol
+        self.start_searching = False
+
+class GameHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     winner_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
+    winner_score = db.Column(db.Integer)
+    loser_score = db.Column(db.Integer)
     winner_elo = db.Column(db.Integer)
     loser_elo = db.Column(db.Integer)
     winner_accept = db.Column(db.Boolean)
@@ -475,6 +485,20 @@ class EloGame(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=True)
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     date_created = db.Column(db.Integer)
+
+    def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
+        self.game_id = in_game_id
+        self.tag_set_id = in_tag_set_id
+        self.winner_comm_user_id = in_winner_comm_id
+        self.loser_comm_user_id = in_loser_com_id
+        self.winner_score = in_winner_score
+        self.loser_score = in_loser_score
+        self.winner_elo = in_winner_elo
+        self.loser_elo = in_loser_elo
+        self.winner_accept = in_winner_accept
+        self.loser_accept = in_loser_accept
+        self.admin_accept = in_admin_accept
+        self.date_created = int( time.time() )
 
 
 class RioUser(db.Model, UserMixin):
@@ -534,6 +558,7 @@ class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(32), unique=True)
     name_lowercase = db.Column(db.String(32), unique=True)
+    comm_type = db.Column(db.String(16))
     private = db.Column(db.Boolean)
     active_url = db.Column(db.String(50), unique=True)
     desc = db.Column(db.String(300))
@@ -542,9 +567,10 @@ class Community(db.Model):
     tags = db.relationship('Tag', backref='community_from_tags')
     community_users = db.relationship('CommunityUser', backref='community_from_community_users')
 
-    def __init__(self, in_name, in_private, in_gloabl_link, in_description):
+    def __init__(self, in_name, in_type, in_private, in_gloabl_link, in_description):
         self.name = in_name
         self.name_lowercase = in_name.lower()
+        self.comm_type = in_type,
         self.private = in_private
         self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link) else None
         self.desc = in_description

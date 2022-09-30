@@ -1,7 +1,9 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, Tag, GameTag
+from ..models import db, RioUser, Character, Game, GameHistory, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, Tag, GameTag, TagSet, CommunityUser, Ladder
 from ..consts import *
+from ..glicko2 import Player
+from random import random
 
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
@@ -337,9 +339,6 @@ def populate_db2():
                     input_direction = event_data['Pitch']['Contact']['Input Direction - Push/Pull'],
                     input_direction_stick = event_data['Pitch']['Contact']['Input Direction - Stick'],
                     frame_of_swing_upon_contact = event_data['Pitch']['Contact']['Frame of Swing Upon Contact'],
-                    ball_angle = int(event_data['Pitch']['Contact']['Ball Angle'].replace(',', '')),
-                    ball_horiz_power = int(event_data['Pitch']['Contact']['Ball Horizontal Power'].replace(',', '')),
-                    ball_vert_power = int(event_data['Pitch']['Contact']['Ball Vertical Power'].replace(',', '')),
                     ball_power = int(event_data['Pitch']['Contact']['Ball Power'].replace(',', '')),
                     ball_horiz_angle = int(event_data['Pitch']['Contact']['Vert Angle'].replace(',', '')),
                     ball_vert_angle = int(event_data['Pitch']['Contact']['Horiz Angle'].replace(',', '')),
@@ -469,3 +468,88 @@ def populate_db2():
         db.session.commit()
 
     return 'Completed...'
+
+
+@app.route('/submit_game/', methods=['POST'])
+def submit_game_history(in_game_id=None, in_tag_set_id=None,
+                        in_winner_username=None, in_winner_score=None, 
+                        in_loser_username=None, in_loser_score=None):
+    game_id = in_game_id if (in_game_id != None) else random.getrandbits(32)
+    winner_username = in_winner_username if (in_winner_username != None) else request.json['Winner Username']
+    winner_score = in_winner_score if (in_winner_score != None) else request.json['Winner Score']
+    loser_username = in_loser_username if (in_loser_username != None) else request.json['Loser Username']
+    loser_score = in_loser_score if (in_loser_score != None) else request.json['Loser Score']
+    tag_set_id = None
+    if in_tag_set_id != None:
+        tag_set_id = in_tag_set_id
+    else:
+        # Lookup tagset id
+        tag_set = TagSet.query.filter_by(name_lowercase=request.json['Ladder']).first()
+        if tag_set == None:
+            return abort(409, description='No TagSet found with provided name')
+        tag_set_id = tag_set.id
+
+    #Get users and community users
+    winner_user = RioUser.query.filter_by(username_lowercase=winner_username.lower())
+    loser_user = RioUser.query.filter_by(username_lowercase=loser_username.lower())
+
+    if winner_user == None or loser_user == None:
+        return abort(409, description='No RioUser found for at least one of the provided usernames')
+
+    winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user)
+    loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user)
+
+
+    if winner_comm_user == None or loser_comm_user == None:
+        return abort(409, description='No CommunityUser found for at least one of the RioUsers')
+
+    #Get ELOs
+    winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id).first()
+    loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id).first()
+
+    #Create elos for new players
+    if winner_ladder == None:
+        new_glicko_player = Player()
+        winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+        db.session.add(winner_ladder)
+        db.session.commit()
+    if loser_ladder == None:
+        new_glicko_player = Player()
+        loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+        db.session.add(loser_ladder)
+        db.session.commit()
+
+    winner_elo = winner_ladder.rating
+    loser_elo = loser_ladder.rating
+
+    #Acceptance
+    winner_accept = False
+    loser_accept = False
+    admin_accept = False
+
+    #Get submitters key, if it matches set accept for them
+    submitters_key = None
+    if (in_game_id == None):
+        submitter_key_provided = request.is_json and 'Submitter Rio Key' in request.json
+        if submitter_key_provided:
+            submitter_rio_key = request.json['Submitter Rio Key']
+            comm_list = CommunityUser.query.join(RioUser, RioUser.rio_key==submitter_rio_key)
+
+            if len(comm_list) == 0:        
+                return abort(409, description=f"Submitter not part of provided community")
+            submitter = comm_list[0]
+            if (submitter.id != winner_comm_user.id and submitter.id != loser_comm_user.id and not submitter.admin):
+                return abort(409, description=f"Submitter is not a player or admin")
+            winner_accept = submitter.id == winner_comm_user.id
+            loser_accept = submitter.id == loser_comm_user.id
+            admin_accept = submitter.admin and (not winner_accept and not loser_accept)
+    
+    #Finally ready to write the row
+    new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
+                                   winner_score, loser_score, 
+                                   winner_elo, loser_elo, 
+                                   winner_accept, loser_accept, admin_accept)
+    db.session.add(new_game_history)
+    db.session.commit()
+
+    return {'GameID': new_game_history.id}

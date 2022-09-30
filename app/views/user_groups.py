@@ -141,3 +141,14 @@ def get_groups_for_users():
 @app.route('/user_group/remove_member', methods=['GET'])
 def remove_user_from_group():
     return '200'
+
+def is_user_in_groups(user_id, group_list):
+    group_list = [group.lower() for group in group_list]
+        
+    user_groups = UserGroup.query.filter(UserGroup.name_lowercase.in_(group_list))
+    group_id_list = []
+    for group in user_groups:
+        group_id_list.append(group.id)
+    user_group_user_count = UserGroupUser.query.filter(
+        (UserGroupUser.user_id==user_id) & (UserGroupUser.id.in_(group_id_list))).count()
+    return (user_group_user_count > 0)

@@ -6,12 +6,14 @@ from ..email import send_email
 import secrets
 from ..models import db, RioUser, CommunityUser, Community, Tag
 from ..consts import *
+from app.views.user_groups import *
 import time
 
 @app.route('/community/create', methods=['POST'])
 @jwt_required(optional=True)
 def community_create():
     in_comm_name = request.json['Community Name']
+    in_comm_type = request.json['Type']
     private = (request.json['Private'] == 1)
     create_global_link = (request.json['Global Link'] == 1) or not private
     in_comm_desc = request.json['Description']
@@ -36,9 +38,13 @@ def community_create():
         return abort(409, description='Username associated with JWT not found. Community not created')
     elif in_comm_name.isalnum() == False:
         return abort(406, description='Provided community name is not alphanumeric. Community not created')
+    elif in_comm_type not in cCOMM_TYPES.values():
+        return abort(410, description='Invalid community type')
+    elif in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
+        return abort(411, description='Non admin user cannot create official community')
     else:
         # === Create Community row ===
-        new_comm = Community(in_comm_name, private, create_global_link, in_comm_desc)
+        new_comm = Community(in_comm_name, in_comm_type, private, create_global_link, in_comm_desc)
         db.session.add(new_comm)
         db.session.commit()
 
@@ -65,11 +71,15 @@ def community_create():
             '''
         )
 
+        # === Take action based comm type === 
+        # Add all users to new official community TODO
+        if (new_comm.comm_type == 'Official'):
+            add_all_users_to_comm(new_comm.id)
         try:
             send_email(user.email, subject, html_content)
         except:
             return abort(502, description='Failed to send email')
-        
+            
     return jsonify({
         'community name': new_comm.name,
         'private': new_comm.private,
@@ -123,7 +133,7 @@ def community_join(in_comm_name = None, in_active_url = None):
 
     if comm_user != None:
         if comm_user.active == True:
-            return abort (409, "User already a community member")
+            return abort (410, "User already a community member")
         if comm_user.invited == True:
             comm_user.active = True
             comm_user.date_joined = int( time.time() )
@@ -444,3 +454,25 @@ def community_manage():
             pass
 
     return jsonify({"Members": updated_comm_users_list})
+
+def add_all_users_to_comm(comm_id):
+    rio_user_list = RioUser.query.all()
+    for rio_user in rio_user_list:
+        new_comm_user = CommunityUser(rio_user.id, comm_id, False, False, True)
+        db.session.add(new_comm_user)
+        db.session.commit()
+    return
+
+def add_user_to_comm(comm_id, rio_user_id):
+    new_comm_user = CommunityUser(rio_user_id, comm_id, False, False, True)
+    db.session.add(new_comm_user)
+    db.session.commit()
+    return
+
+def add_user_to_all_comms(user_id, comm_type):
+    comm_list = Community.query.filter_by(comm_type=comm_type)
+    for comm in comm_list:
+        new_comm_user = CommunityUser(user_id, comm.id, False, False, True)
+        db.session.add(new_comm_user)
+        db.session.commit()
+    return
