@@ -459,9 +459,17 @@ class Ladder(db.Model):
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     community_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     started_searching = db.Column(db.Integer)
-    adjusted_rating = db.Column(db.Integer)
+    rating = db.Column(db.Integer)
     rd = db.Column(db.Integer)
     vol = db.Column(db.Integer)
+
+    def __init__(self, in_tag_set_id, in_comm_user_id, in_rating, in_rd, in_vol):
+        self.tag_set_id = in_tag_set_id
+        self.community_user_id = in_comm_user_id
+        self.rating = in_rating
+        self.rd = in_rd
+        self.vol = in_vol
+        self.start_searching = False
 
 class GameHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
