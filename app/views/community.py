@@ -468,3 +468,11 @@ def add_user_to_comm(comm_id, rio_user_id):
     db.session.add(new_comm_user)
     db.session.commit()
     return
+
+def add_user_to_all_comms(user_id, comm_type):
+    comm_list = Community.query.filter_by(comm_type=comm_type)
+    for comm in comm_list:
+        new_comm_user = CommunityUser(user_id, comm.id, False, False, True)
+        db.session.add(new_comm_user)
+        db.session.commit()
+    return
