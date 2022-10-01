@@ -28,10 +28,10 @@ def request_apikey():
     db.session.add(rio_user)
     db.session.commit()
 
-    subject = 'Verify your email to recieve your Project Rio API Key'
+    subject = 'Your Rio Web API Key!'
 
     html_content = (
-        'Here is your Project Rio API Key:\n'
+        'Here is your Rio Web API Key:\n'
         f'{new_api_key.api_key}\n'
         'We look forward to seeing what you do with it!\n'
         'Happy Hitting!\n'

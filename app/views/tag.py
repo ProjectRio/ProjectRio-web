@@ -161,49 +161,49 @@ def tagset_create():
 
 # If RioKey/JWT provided get TagSet for user. Else get all
 # Uses:
-#   Get all active TagSets
-#   Get users TagSets
-#   Get community TagSets
-@app.route('/tag_set/list', methods=['GET'])
-def tagset_list():
-    statement_list = list()
-    
-    active_only = request.is_json and 'Active' in request.json and request.json['Active'].lower() in ['yes', 'y', 'true', 't']
+#   Get all active TagSets for rio_key
+#   Get all active and inactive TagSets for rio_key
+#   Get all active/inactive TagSets for provided communities per RioKey
+@app.route('/tag_set/list', methods=['POST'])
+def tagset_list():    
     current_unix_time = int( time.time() )
-
+    active_only = request.is_json and 'Active' in request.json and request.json['Active'].lower() in ['yes', 'y', 'true', 't']
     communities_provided = request.is_json and 'Communities' in request.json
     community_id_list = request.json.get('Communities') if communities_provided else list()
 
-    # Todo: Add fail if any bad id is provided
-    # if communities_provided and len(community_id_list)
-   
+    if (communities_provided and len(community_id_list) > 0):
+        return abort(409, description="Communities key added to JSON but no community ids passed")
+    
     rio_key_provided = request.is_json and 'Rio Key' in request.json
     if rio_key_provided:
-        rio_key_list = request.json.get('Rio Key')
+        rio_key = request.json.get('Rio Key')
+        tag_sets = db.session.query(
+            TagSet
+        ).join(
+            Community
+        ).join(
+            CommunityUser
+        ).join(
+            RioUser
+        ).filter(
+            RioUser.rio_key == rio_key
+        ).all()
 
-        common_communities = Community.query.join(CommunityUser, Community.id == CommunityUser.community_id)\
-            .join(RioUser, CommunityUser.user_id == RioUser.id)\
-            .filter(RioUser.rio_key.in_(rio_key_list)).all()
+        tag_set_list = list()
+        for tag_set in tag_sets:
+            # Skip this tag set if current time is not within start/end time
+            if (active_only and (current_unix_time < tag_set.start_date or current_unix_time > tag_set.end_date)):
+                continue
+            # Skip this tag set if community_id is not from a requested community
+            if (communities_provided and tag_set.community_id not in community_id_list):
+                continue
 
-        for comm in common_communities:
-            community_id_list.append(comm.id)
+            # Append passing tag set information
+            tag_set_list.append(tag_set.to_dict())
+    else:
+        abort(409, "No Rio Key provided")
 
-        
-    # Todo: Add fail if any bad key is provided
-
-    result = TagSet.query.all()
-
-    tagset_list = list()
-    for tagset in result:
-        # Evaluate if current time is within start/end time
-        if (active_only and (current_unix_time < tagset.start_date or current_unix_time > tagset.end_date)):
-            continue
-        if ((communities_provided or rio_key_provided) and tagset.community_id not in community_id_list):
-            continue
-        tagset_list.append(tagset.to_dict())
-    print(tagset_list)
-    return jsonify(tagset_list)
-
+    return {"Tag Sets": tag_set_list}
 
 @app.route('/tag_set/<tag_set_id>', methods=['GET'])
 def tagset_get_tags(tag_set_id):
@@ -211,4 +211,4 @@ def tagset_get_tags(tag_set_id):
     if result == None:
         return abort(409, description=f"Could not find TagSet with id={tag_set_id}")
 
-    return jsonify(result.to_dict())
+    return {"Tag Set": [result.to_dict()]}
