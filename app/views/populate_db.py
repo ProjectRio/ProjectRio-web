@@ -567,10 +567,11 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     return {'GameID': new_game_history.id}
 
 
-@app.route('/confirm_game/', methods=['POST'])
-def confirm_game():
+@app.route('/update_game_status/', methods=['POST'])
+def update_game_status():
     game_id = request.json.get('GameID')
     confirmer_rio_key = request.json.get('Rio Key')
+    confirmer_accept = request.json.get('Accept') == 1
 
     game_history = GameHistory.query.filter_by(game_id=game_id).first()
 
@@ -584,9 +585,9 @@ def confirm_game():
     comm_id = winner_comm_user.community_id
 
     if (confirmer_rio_key == winner_comm_user.rio_user.rio_key):
-        game_history.winner_accept = True
+        game_history.winner_accept = confirmer_accept
     if (confirmer_rio_key == loser_comm_user.rio_user.rio_key):
-        game_history.loser_accept = True
+        game_history.loser_accept = confirmer_accept
 
     # Check for admin verification
     admin = db.session.query(
@@ -599,7 +600,7 @@ def confirm_game():
         ).first()
     
     if admin != None:
-        game_history.admin_accept = True
+        game_history.admin_accept = confirmer_accept
 
     # Commit changes to GameHistory
     db.session.commit()
