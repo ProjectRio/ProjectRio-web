@@ -474,9 +474,17 @@ def populate_db2():
 def submit_game_history(in_game_id=None, in_tag_set_id=None,
                         in_winner_username=None, in_winner_score=None, 
                         in_loser_username=None, in_loser_score=None):
-    game_id = in_game_id 
-    if (in_game_id == None):
-        rand_gameid = random.getrandbits(32)
+    game_id = in_game_id if (in_game_id != None) else random.getrandbits(32)
+    
+    #Reroll game id untill unique one is found
+    unique_id = False
+    while (not unique_id):
+        game = Game.query.filter_by(game_id=game_id).first()
+        if game == None:
+            unique_id = True
+        else:
+            game_id = random.getrandbits(32)
+
     winner_username = in_winner_username if (in_winner_username != None) else request.json['Winner Username']
     winner_score = in_winner_score if (in_winner_score != None) else request.json['Winner Score']
     loser_username = in_loser_username if (in_loser_username != None) else request.json['Loser Username']
