@@ -514,7 +514,7 @@ class RioUser(db.Model, UserMixin):
     active_url = db.Column(db.String(50), unique = True)
     date_created = db.Column(db.Integer)
 
-    community_user = db.relationship('CommunityUser', backref='community_user.user_id')
+    community_user = db.relationship('CommunityUser', backref='rio_user')
     character_game_summaries = db.relationship('CharacterGameSummary', backref = 'rio_user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')

@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, RioUser, Character, Game, GameHistory, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, Tag, GameTag, TagSet, CommunityUser, Ladder
+from ..models import *
 from ..consts import *
 from ..glicko2 import Player
 from random import random
@@ -474,7 +474,9 @@ def populate_db2():
 def submit_game_history(in_game_id=None, in_tag_set_id=None,
                         in_winner_username=None, in_winner_score=None, 
                         in_loser_username=None, in_loser_score=None):
-    game_id = in_game_id if (in_game_id != None) else random.getrandbits(32)
+    game_id = in_game_id 
+    if (in_game_id == None):
+        rand_gameid = random.getrandbits(32)
     winner_username = in_winner_username if (in_winner_username != None) else request.json['Winner Username']
     winner_score = in_winner_score if (in_winner_score != None) else request.json['Winner Score']
     loser_username = in_loser_username if (in_loser_username != None) else request.json['Loser Username']
@@ -528,7 +530,6 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     admin_accept = False
 
     #Get submitters key, if it matches set accept for them
-    submitters_key = None
     if (in_game_id == None):
         submitter_key_provided = request.is_json and 'Submitter Rio Key' in request.json
         if submitter_key_provided:
@@ -543,6 +544,9 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
             winner_accept = submitter.id == winner_comm_user.id
             loser_accept = submitter.id == loser_comm_user.id
             admin_accept = submitter.admin and (not winner_accept and not loser_accept)
+    else:
+        winner_accept = True
+        loser_accept = True
     
     #Finally ready to write the row
     new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
@@ -553,3 +557,95 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     db.session.commit()
 
     return {'GameID': new_game_history.id}
+
+
+@app.route('/confirm_game/', methods=['POST'])
+def confirm_game():
+    game_id = request.json.get('GameID')
+    confirmer_rio_key = request.json.get('Rio Key')
+
+    game_history = GameHistory.query.filter_by(game_id=game_id).first()
+
+    if game_history == None:
+        return abort(409, description="")
+
+    #Get comm users
+    winner_comm_user = CommunityUser.query.filter_by(id=game_history.winner_comm_user_id)
+    loser_comm_user = CommunityUser.query.filter_by(id=game_history.loser_comm_user_id)
+
+    comm_id = winner_comm_user.community_id
+
+    if (confirmer_rio_key == winner_comm_user.rio_user.rio_key):
+        game_history.winner_accept = True
+    if (confirmer_rio_key == loser_comm_user.rio_user.rio_key):
+        game_history.loser_accept = True
+
+    # Check for admin verification
+    admin = db.session.query(
+            CommunityUser
+        ).join(
+            RioUser
+        ).filter(
+            (RioUser.rio_key == confirmer_rio_key)
+            & (Community.id == comm_id)
+        ).first()
+    
+    if admin != None:
+        game_history.admin_accept = True
+
+    # Commit changes to GameHistory
+    db.session.commit()
+
+    # Update ELO if tag_set is a season
+    tag_set = TagSet.query.filter_by(id=game_history.tag_set_id)
+
+    if (tag_set == None):
+        return abort(409, description='Somehow tagset is invalid')
+
+    if (tag_set.type == 'Season' and
+       ((game_history.winner_accept and game_history.loser_accept) or game_history.admin_accept)):
+        calc_elo(game_history.tag_set_id, winner_comm_user.rio_user.id, loser_comm_user.rio_user.id)
+    
+    return 'Success', 200
+
+def calc_elo(tag_set_id, winner_user_id, loser_user_id):
+    winner_ladder = db.session.query(
+            Ladder
+        ).join(
+            CommunityUser
+        ).filter(
+            (Ladder.tag_set_id == tag_set_id) &
+            (CommunityUser.user_id == winner_user_id)
+        ).first()
+    loser_ladder = db.session.query(
+            Ladder
+        ).join(
+            CommunityUser
+        ).filter(
+            (Ladder.tag_set_id == tag_set_id) &
+            (CommunityUser.user_id == loser_user_id)
+        ).first()
+
+    if winner_ladder == None:
+        return abort(409, description="No winner ladder entry")
+    if loser_ladder == None:
+        return abort(409, description="No loser ladder entry")
+
+    winner_player = Player(winner_ladder.rating, winner_ladder.rd, winner_ladder.vol)
+    loser_player = Player(loser_ladder.rating, loser_ladder.rd, loser_ladder.vol)
+
+    winner_player.update_player([loser_ladder.rating], [loser_ladder.rd], [1])
+    loser_player.update_player([winner_ladder.rating], [winner_ladder.rd], [0])
+
+    #Todo function in Ladder
+    winner_ladder.rating = winner_player.rating
+    winner_ladder.rd = winner_ladder.rd
+    winner_ladder.vol = winner_ladder.vol
+
+    loser_ladder.rating = loser_player.rating
+    loser_ladder.rd = loser_player.rd
+    loser_ladder.vol = loser_player.vol
+
+    db.session.commit()
+
+    return
