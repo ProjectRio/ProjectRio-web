@@ -459,14 +459,24 @@ class Ladder(db.Model):
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     community_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     started_searching = db.Column(db.Integer)
-    adjusted_rating = db.Column(db.Integer)
+    rating = db.Column(db.Integer)
     rd = db.Column(db.Integer)
     vol = db.Column(db.Integer)
 
-class EloGame(db.Model):
+    def __init__(self, in_tag_set_id, in_comm_user_id, in_rating, in_rd, in_vol):
+        self.tag_set_id = in_tag_set_id
+        self.community_user_id = in_comm_user_id
+        self.rating = in_rating
+        self.rd = in_rd
+        self.vol = in_vol
+        self.start_searching = False
+
+class GameHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     winner_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
+    winner_score = db.Column(db.Integer)
+    loser_score = db.Column(db.Integer)
     winner_elo = db.Column(db.Integer)
     loser_elo = db.Column(db.Integer)
     winner_accept = db.Column(db.Boolean)
@@ -475,6 +485,20 @@ class EloGame(db.Model):
     game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=True)
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     date_created = db.Column(db.Integer)
+
+    def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
+        self.game_id = in_game_id
+        self.tag_set_id = in_tag_set_id
+        self.winner_comm_user_id = in_winner_comm_id
+        self.loser_comm_user_id = in_loser_com_id
+        self.winner_score = in_winner_score
+        self.loser_score = in_loser_score
+        self.winner_elo = in_winner_elo
+        self.loser_elo = in_loser_elo
+        self.winner_accept = in_winner_accept
+        self.loser_accept = in_loser_accept
+        self.admin_accept = in_admin_accept
+        self.date_created = int( time.time() )
 
 
 class RioUser(db.Model, UserMixin):
@@ -490,7 +514,7 @@ class RioUser(db.Model, UserMixin):
     active_url = db.Column(db.String(50), unique = True)
     date_created = db.Column(db.Integer)
 
-    community_user = db.relationship('CommunityUser', backref='community_user.user_id')
+    community_user = db.relationship('CommunityUser', backref='rio_user')
     character_game_summaries = db.relationship('CharacterGameSummary', backref = 'rio_user', lazy = 'dynamic')
     away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
