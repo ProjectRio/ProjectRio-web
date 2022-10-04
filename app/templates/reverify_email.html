@@ -8,7 +8,7 @@
       <section class="Login-form">
         <h1>Reverify your account</h1>
         <ul>
-          <li id="rio-key-tip">Rio Key must be 32 characters long</li>
+          <!-- <li id="rio-key-tip">Rio Key must be 32 characters long</li> -->
           <li id="username-tip">Username included</li>
           <li id="email-at-tip">Email must include an @</li>
           <li id="email-dot-tip">Email must include a .</li>
@@ -44,7 +44,7 @@
     const password2Input = document.getElementById("password2");
 
     // Tooltips
-    const rioKeyTip = document.getElementById("rio-key-tip");
+    // const rioKeyTip = document.getElementById("rio-key-tip");
     const usernameTip = document.getElementById("username-tip");
     const emailAtTip = document.getElementById("email-at-tip");
     const emailDotTip = document.getElementById("email-dot-tip");
@@ -116,11 +116,11 @@
     rioKeyInput.addEventListener('input', (event) => {
       const input = event.target.value;
 
-      if (input.length == 32) {
-        rioKeyTip.style.color = "green";
-      } else {
-        rioKeyTip.style.color = "red";
-      }
+      // if (input.length == 32) {
+      //   rioKeyTip.style.color = "green";
+      // } else {
+      //   rioKeyTip.style.color = "red";
+      // }
     });
 
     emailInput.addEventListener('input', (event) => {
@@ -140,10 +140,10 @@
     })
 
     submitButton.addEventListener('click', () => {
-      if (rioKeyInput.value.length != 32) {
-        alert("Rio Key entered incorrectly. All Rio Keys are 32 characters in length.");
-        return;
-      }
+      // if (rioKeyInput.value.length != 32) {
+      //   alert("Rio Key entered incorrectly. All Rio Keys are 32 characters in length.");
+      //   return;
+      // }
 
       if (usernameInput.value.length === 0) {
         alert("Please enter a username.");

@@ -16,14 +16,15 @@ def submit_reverify_email():
     username = request.json['Username']
     username_lowercase = username.lower()
     password = request.json['Password']
-    email_lowercase = request.json['Email'].lower()
-    riokey = request.json['Rio Key']
+    email = request.json['Email'].lower()
+    rio_key = request.json['Rio Key']
 
     # Validate username
     if not len(username) > 0:
         return abort(409, description="Username must be at least 1 character long.")
-    if any(c.isalnum() or c.isspace() for c in username):
-        return abort(409, description='Provided username is not alphanumeric.')
+    for char in username:
+        if not char.isalnum() or char.isspace():
+            return abort(409, description='Provided username is not alphanumeric.')
 
     # Validate password
     if len(password) < 8:
@@ -36,23 +37,21 @@ def submit_reverify_email():
         return abort(409, description="No lowercase character provided")
 
     # Validate email
-    if not email.contains("@") or not email.contains("."):
+    if "@" not in email or "." not in email:
         return abort(409, description="Invalid email address")
 
     # Verify that Username and Rio Key match a Rio User
-    user = db.session.query(
-        RioUser
-    ).filter(
+    user = db.session.query(RioUser).filter(
         (RioUser.username_lowercase == username_lowercase)
-        & (RioUser.rio_key == riokey)
+        & (RioUser.rio_key == rio_key)
     ).first()
 
     if not user:
-        abort(409, description='Matching Rio User not found.')
+        return abort(409, description='Matching Rio User not found.')
 
     # Update RioUser with provided email and password for verification
     user.verified = False
-    user.email = email_lowercase
+    user.email = email
     user.password = password
     user.active_url = secrets.token_urlsafe(32)
 
@@ -78,8 +77,7 @@ def submit_reverify_email():
     
     db.session.add(user)
     db.session.commit()
-    
-    return 200, "Email sent"
+    return "Email sent"
 
 @app.route("/confirm_reverification/<active_url>", methods=["GET"])
 def confirm_reverification(active_url):
@@ -90,4 +88,4 @@ def confirm_reverification(active_url):
     user.active_url = None
     db.session.add(user)
     db.session.commit()
-    return 200, "Reverification complete!"
+    return "Reverification complete!"
