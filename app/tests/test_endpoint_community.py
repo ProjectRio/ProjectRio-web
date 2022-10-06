@@ -1,291 +1,451 @@
 import json
 import requests
+from helpers import *
 from connection import Connection
 
 db = Connection()
 
-# Users we will actually create
-cFOUNDER_USER = {"Username": "founder", "Password": "123password", "Email": "founder@test"}
-cADMIN_USER = {"Username": "admin", "Password": "123password", "Email": "admin@test"}
-cMEMBER_USER = {"Username": "member", "Password": "123password", "Email": "member@test"}
-cNONMEMBER_USER = {"Username": "nonmember", "Password": "123password", "Email": "nonmember@test"}
-
-cPRIVATE_GLOBAL_COMM = {'Community Name': 'PrivateGlobal', 'Type': 'Unofficial', 'Private': 1, 'Global Link': 1, 'Description': 'Test'}
-cPRIVATE_NONGLOBAL_COMM = {'Community Name': 'PrivateNonGlobal', 'Type': 'Unofficial', 'Private': 1, 'Global Link': 0, 'Description': 'Test'}
-cPUBLIC_COMM = {'Community Name': 'Public', 'Type': 'Unofficial', 'Private': 0, 'Global Link': 0, 'Description': 'Test'}
-
-cOFFICIAL_COMM = {}
-
-# External tests
-def test_external_endpoint_community_create():
-    #Wipe db
+def wipe_db():
     response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"RESET_DB": "NUKE"})
-
-    #Create users
-    response = requests.post("http://127.0.0.1:5000/register/", json=cFOUNDER_USER)
+    return response.status_code == 200
 
 
-    #Create users
-    response = requests.post("http://127.0.0.1:5000/register/", json=cMEMBER_USER)
+def test_community_create_official():
+    wipe_db()
 
-    # Get founder info
-    query = 'SELECT * FROM rio_user WHERE username = %s'
-    params = (cFOUNDER_USER["Username"],)
-    result = db.query(query, params)
-    founder_rio_key = result[0]['rio_key']
-    founder_primary_key = result[0]['id']
+    founder = User()
+    founder.register()
+    assert founder.success == True
 
-    # Get member info
-    query = 'SELECT * FROM rio_user WHERE username = %s'
-    params = (cMEMBER_USER["Username"],)
-    result = db.query(query, params)
-    member_rio_key = result[0]['rio_key']
-    member_primary_key = result[0]['id']
+    nonmember = User()
+    nonmember.register()
 
-    # Create first community
-    cPRIVATE_NONGLOBAL_COMM['Rio Key'] = founder_rio_key
-    response = requests.post("http://127.0.0.1:5000/community/create", json=cPRIVATE_NONGLOBAL_COMM)
-    assert response.status_code == 200
+    #Check that the new user is registered after creating a new official community
 
-    # Check that community user, communty, and tag get created
+    # Assert community is not created, founder not admin
+    community = Community(founder, True, False, False)
+    assert community.success == False
 
-    # Community created check
-    # Check database to confirm creation
-    query = 'SELECT * FROM community WHERE name = %s'
-    params = (cPRIVATE_NONGLOBAL_COMM["Community Name"],)
-    result = db.query(query, params)
+    assert founder.add_to_group('admin') == True
 
-    assert len(result) == 1
-    assert result[0]['private'] == True
-    assert result[0]['active_url'] == None
-    community_id = result[0]['id']
+    # Assert community IS created, founder is admin
+    community = Community(founder, True, False, False)
+    assert community.success == True
 
-    # Community user created check
-    # Check database to confirm creation
-    query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
-    params = (str(community_id),str(founder_primary_key),)
-    result = db.query(query, params)
+    # Did both users get added to the community
+    assert len(community.members) == 2
 
-    assert len(result) == 1
-    assert result[0]['invited'] == False
-    assert result[0]['admin'] == True
-    assert result[0]['active'] == True
+   
+def test_community_create_unofficial():
+    wipe_db()
 
-    # Community tag created check
-    # Check database to confirm creation
-    query = 'SELECT * FROM tag WHERE name = %s'
-    params = (cPRIVATE_NONGLOBAL_COMM["Community Name"],)
-    result = db.query(query, params)
+    founder = User()
+    founder.register()
+    assert founder.success == True
 
-    assert len(result) == 1
-    assert result[0]['community_id'] == community_id
-    assert result[0]['active'] == True
-    assert result[0]['tag_type'] == "Community"
+    nonmember = User()
+    nonmember.register()
 
-    # ==== Repeat creation with Private Community with a global link
-    cPRIVATE_GLOBAL_COMM['Rio Key'] = founder_rio_key
-    response = requests.post("http://127.0.0.1:5000/community/create", json=cPRIVATE_GLOBAL_COMM)
-    assert response.status_code == 200
+    #Check that the new user is registered after creating a new official community
 
-    # Community created check, do not check comm user and tag (they function the same regardless, redundant)
-    query = 'SELECT * FROM community WHERE name = %s'
-    params = (cPRIVATE_GLOBAL_COMM["Community Name"],)
-    result = db.query(query, params)
+    # Assert community is not created, founder not admin
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
 
-    assert len(result) == 1
-    assert result[0]['private'] == True
-    assert result[0]['active_url'] != None
-    private_w_global_url = result[0]['active_url']
-    private_w_global_id = result[0]['id']
+    # Did both users get added to the community
+    assert len(community.members) == 1
+
+    # Join community as nonmember
+    assert community.join_via_request(nonmember) == True
+
+    assert len(community.members) == 2
+
+    assert community.get_member(nonmember).active == True
+
+    # Extra Credit: check that a user can be invited to public community
+    invitee = User()
+    invitee.register()
+    community.invite(founder, {invitee.pk: invitee})
+    assert community.get_member(invitee).active  == False
+
+def test_community_create_private_nolink():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    nonmember = User()
+    nonmember.register()
+
+    #Check that the new user is registered after creating a new official community
+
+    # Assert community is not created, founder not admin
+    community = Community(founder, official=False, private=True, link=False)
+    assert community.success == True
+
+    # Join community via link (should not work, user will request)
+    community.join_via_url(nonmember)
+    assert community.get_member(nonmember).active == False
+
+    # Invite -> Request = Join
+    invitee = User()
+    invitee.register()
+    community.invite(founder, {invitee.pk: invitee})
+    assert community.get_member(invitee).active == False
+
+    assert community.join_via_request(invitee) == True
+    assert community.get_member(invitee).active == True
+
+
+    # Request -> Invite = Join
+    requester = User()
+    requester.register()
+
+    assert community.join_via_request(requester) == True
+    assert community.get_member(requester).active == False
+
+    community.invite(founder, {requester.pk: requester})
+    assert community.get_member(requester).active == True
+
+def test_community_create_private_link():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    nonmember = User()
+    nonmember.register()
+
+    #Check that the new user is registered after creating a new official community
+
+    # Assert community is not created, founder not admin
+    community = Community(founder, official=False, private=True, link=True)
+    assert community.success == True
+
+    # Join community via link (should not work, user will request)
+    community.join_via_url(nonmember)
+    assert community.get_member(nonmember).active == True
+
+    # Invite -> Request = Join
+    invitee = User()
+    invitee.register()
+    community.invite(founder, {invitee.pk: invitee})
+    assert community.get_member(invitee).active == False
+
+    assert community.join_via_request(invitee) == True
+    assert community.get_member(invitee).active == True
+
+
+    # Request -> Invite = Join
+    requester = User()
+    requester.register()
+
+    assert community.join_via_request(requester) == True
+    assert community.get_member(requester).active == False
+
+    community.invite(founder, {requester.pk: requester})
+    assert community.get_member(requester).active == True
+
+# def test_community_create_global_no_link():
+#     wipe_db()
+
+#     founder = User()
+#     founder.register()
+#     assert founder.success == True
+
+#     nonmember = User()
+#     nonmember.register()
+
+#     #Check that the new user is registered after creating a new official community
+
+#     # Assert community is not created, founder not admin
+#     community = Community(founder, official=False, private=False, link=False)
+#     assert community.success == True
+
+# # Users we will actually create
+# cFOUNDER_USER = {"Username": "founder", "Password": "123password", "Email": "founder@test"}
+# cADMIN_USER = {"Username": "admin", "Password": "123password", "Email": "admin@test"}
+# cMEMBER_USER = {"Username": "member", "Password": "123password", "Email": "member@test"}
+# cNONMEMBER_USER = {"Username": "nonmember", "Password": "123password", "Email": "nonmember@test"}
+
+# cPRIVATE_GLOBAL_COMM = {'Community Name': 'PrivateGlobal', 'Type': 'Unofficial', 'Private': 1, 'Global Link': 1, 'Description': 'Test'}
+# cPRIVATE_NONGLOBAL_COMM = {'Community Name': 'PrivateNonGlobal', 'Type': 'Unofficial', 'Private': 1, 'Global Link': 0, 'Description': 'Test'}
+# cPUBLIC_COMM = {'Community Name': 'Public', 'Type': 'Unofficial', 'Private': 0, 'Global Link': 0, 'Description': 'Test'}
+
+# cOFFICIAL_COMM = {}
+
+# # External tests
+# def test_external_endpoint_community_create():
+#     #Wipe db
+#     response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"RESET_DB": "NUKE"})
+
+#     #Create users
+#     response = requests.post("http://127.0.0.1:5000/register/", json=cFOUNDER_USER)
+
+
+#     #Create users
+#     response = requests.post("http://127.0.0.1:5000/register/", json=cMEMBER_USER)
+
+#     # Get founder info
+#     query = 'SELECT * FROM rio_user WHERE username = %s'
+#     params = (cFOUNDER_USER["Username"],)
+#     result = db.query(query, params)
+#     founder_rio_key = result[0]['rio_key']
+#     founder_primary_key = result[0]['id']
+
+#     # Get member info
+#     query = 'SELECT * FROM rio_user WHERE username = %s'
+#     params = (cMEMBER_USER["Username"],)
+#     result = db.query(query, params)
+#     member_rio_key = result[0]['rio_key']
+#     member_primary_key = result[0]['id']
+
+#     # Create first community
+#     cPRIVATE_NONGLOBAL_COMM['Rio Key'] = founder_rio_key
+#     response = requests.post("http://127.0.0.1:5000/community/create", json=cPRIVATE_NONGLOBAL_COMM)
+#     assert response.status_code == 200
+
+#     # Check that community user, communty, and tag get created
+
+#     # Community created check
+#     # Check database to confirm creation
+#     query = 'SELECT * FROM community WHERE name = %s'
+#     params = (cPRIVATE_NONGLOBAL_COMM["Community Name"],)
+#     result = db.query(query, params)
+
+#     assert len(result) == 1
+#     assert result[0]['private'] == True
+#     assert result[0]['active_url'] == None
+#     community_id = result[0]['id']
+
+#     # Community user created check
+#     # Check database to confirm creation
+#     query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
+#     params = (str(community_id),str(founder_primary_key),)
+#     result = db.query(query, params)
+
+#     assert len(result) == 1
+#     assert result[0]['invited'] == False
+#     assert result[0]['admin'] == True
+#     assert result[0]['active'] == True
+
+#     # Community tag created check
+#     # Check database to confirm creation
+#     query = 'SELECT * FROM tag WHERE name = %s'
+#     params = (cPRIVATE_NONGLOBAL_COMM["Community Name"],)
+#     result = db.query(query, params)
+
+#     assert len(result) == 1
+#     assert result[0]['community_id'] == community_id
+#     assert result[0]['active'] == True
+#     assert result[0]['tag_type'] == "Community"
+
+#     # ==== Repeat creation with Private Community with a global link
+#     cPRIVATE_GLOBAL_COMM['Rio Key'] = founder_rio_key
+#     response = requests.post("http://127.0.0.1:5000/community/create", json=cPRIVATE_GLOBAL_COMM)
+#     assert response.status_code == 200
+
+#     # Community created check, do not check comm user and tag (they function the same regardless, redundant)
+#     query = 'SELECT * FROM community WHERE name = %s'
+#     params = (cPRIVATE_GLOBAL_COMM["Community Name"],)
+#     result = db.query(query, params)
+
+#     assert len(result) == 1
+#     assert result[0]['private'] == True
+#     assert result[0]['active_url'] != None
+#     private_w_global_url = result[0]['active_url']
+#     private_w_global_id = result[0]['id']
     
-    # ==== Repeat creation with public Community with a global link
-    cPUBLIC_COMM['Rio Key'] = founder_rio_key
-    response = requests.post("http://127.0.0.1:5000/community/create", json=cPUBLIC_COMM)
-    assert response.status_code == 200
+#     # ==== Repeat creation with public Community with a global link
+#     cPUBLIC_COMM['Rio Key'] = founder_rio_key
+#     response = requests.post("http://127.0.0.1:5000/community/create", json=cPUBLIC_COMM)
+#     assert response.status_code == 200
 
-    # Community created check, do not check comm user and tag (they function the same regardless, redundant)
-    query = 'SELECT * FROM community WHERE name = %s'
-    params = (cPUBLIC_COMM["Community Name"],)
-    result = db.query(query, params)
+#     # Community created check, do not check comm user and tag (they function the same regardless, redundant)
+#     query = 'SELECT * FROM community WHERE name = %s'
+#     params = (cPUBLIC_COMM["Community Name"],)
+#     result = db.query(query, params)
 
-    assert len(result) == 1
-    assert result[0]['private'] == False
-    assert result[0]['active_url'] != None
-    public_w_global_url = result[0]['active_url']
+#     assert len(result) == 1
+#     assert result[0]['private'] == False
+#     assert result[0]['active_url'] != None
+#     public_w_global_url = result[0]['active_url']
 
-    # def test_external_endpoint_community_join():
-    # check join for each type (private GL, public GL, private invite, )
+#     # def test_external_endpoint_community_join():
+#     # check join for each type (private GL, public GL, private invite, )
 
-    # == Private Community, Global Link ===
+#     # == Private Community, Global Link ===
 
-    # Private community, global link. Incorrect link. User will request to join
-    response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'], private_w_global_url+"L"), json={'Rio Key': member_rio_key})
-    assert response.status_code == 200
+#     # Private community, global link. Incorrect link. User will request to join
+#     response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'], private_w_global_url+"L"), json={'Rio Key': member_rio_key})
+#     assert response.status_code == 200
 
-    query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
-    params = (str(private_w_global_id),str(member_primary_key),)
-    result = db.query(query, params)
-    assert len(result) == 1
-    assert result[0]['active'] == False
-    assert result[0]['invited'] == False
+#     query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
+#     params = (str(private_w_global_id),str(member_primary_key),)
+#     result = db.query(query, params)
+#     assert len(result) == 1
+#     assert result[0]['active'] == False
+#     assert result[0]['invited'] == False
 
-    # Private community, global link. Incorrect name
-    response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'] +"L", private_w_global_url), json={'Rio Key': member_rio_key})
-    assert response.status_code == 409
+#     # Private community, global link. Incorrect name
+#     response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'] +"L", private_w_global_url), json={'Rio Key': member_rio_key})
+#     assert response.status_code == 409
 
-    # Private community, global link. Incorrect rio key (none)
-    response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'], private_w_global_url))
-    assert response.status_code == 409
+#     # Private community, global link. Incorrect rio key (none)
+#     response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'], private_w_global_url))
+#     assert response.status_code == 409
 
-    # Private community, global link. Correct key
-    response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'], private_w_global_url), json={'Rio Key': member_rio_key})
-    assert response.status_code == 200
+#     # Private community, global link. Correct key
+#     response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPRIVATE_GLOBAL_COMM['Community Name'], private_w_global_url), json={'Rio Key': member_rio_key})
+#     assert response.status_code == 200
 
-    #User should now be active
-    query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
-    params = (str(private_w_global_id),str(member_primary_key),)
-    result = db.query(query, params)
-    assert len(result) == 1
-    assert result[0]['active'] == True
-    assert result[0]['invited'] == False
+#     #User should now be active
+#     query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
+#     params = (str(private_w_global_id),str(member_primary_key),)
+#     result = db.query(query, params)
+#     assert len(result) == 1
+#     assert result[0]['active'] == True
+#     assert result[0]['invited'] == False
 
-    # == Public Community, Global Link ===
+#     # == Public Community, Global Link ===
 
-    # Public community, incorrect link
-    #Should pass since we don't actually need the link to join a public community
-    response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPUBLIC_COMM['Community Name'], public_w_global_url+"L"), json={'Rio Key': member_rio_key})
-    assert response.status_code == 200
+#     # Public community, incorrect link
+#     #Should pass since we don't actually need the link to join a public community
+#     response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(cPUBLIC_COMM['Community Name'], public_w_global_url+"L"), json={'Rio Key': member_rio_key})
+#     assert response.status_code == 200
 
-    # === Private community, No Global Link===
-    #Test inviting a user, wrong username
-    invite_json = {'Rio Key': founder_rio_key, 'Community Name': cPRIVATE_NONGLOBAL_COMM["Community Name"], "Invite List": ["invld"]}
-    response = requests.post("http://127.0.0.1:5000/community/invite", json=invite_json)
-    assert response.status_code == 409
+#     # === Private community, No Global Link===
+#     #Test inviting a user, wrong username
+#     invite_json = {'Rio Key': founder_rio_key, 'Community Name': cPRIVATE_NONGLOBAL_COMM["Community Name"], "Invite List": ["invld"]}
+#     response = requests.post("http://127.0.0.1:5000/community/invite", json=invite_json)
+#     assert response.status_code == 409
 
-    #Inviting a user, correct username
-    invite_json = {'Rio Key': founder_rio_key, 'Community Name': cPRIVATE_NONGLOBAL_COMM["Community Name"], "Invite List": [cMEMBER_USER["Username"]]}
-    response = requests.post("http://127.0.0.1:5000/community/invite", json=invite_json)
-    assert response.status_code == 200
+#     #Inviting a user, correct username
+#     invite_json = {'Rio Key': founder_rio_key, 'Community Name': cPRIVATE_NONGLOBAL_COMM["Community Name"], "Invite List": [cMEMBER_USER["Username"]]}
+#     response = requests.post("http://127.0.0.1:5000/community/invite", json=invite_json)
+#     assert response.status_code == 200
 
-    #User should be invited but not active
-    query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
-    params = (str(community_id),str(member_primary_key),)
-    result = db.query(query, params)
-    assert len(result) == 1
-    assert result[0]['active'] == False
-    assert result[0]['invited'] == True
+#     #User should be invited but not active
+#     query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
+#     params = (str(community_id),str(member_primary_key),)
+#     result = db.query(query, params)
+#     assert len(result) == 1
+#     assert result[0]['active'] == False
+#     assert result[0]['invited'] == True
 
-    # Request to join
-    response = requests.post("http://127.0.0.1:5000/community/join", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 'Rio Key': member_rio_key})
-    assert response.status_code == 200
+#     # Request to join
+#     response = requests.post("http://127.0.0.1:5000/community/join", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 'Rio Key': member_rio_key})
+#     assert response.status_code == 200
 
-    #Check user has joined
-    query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
-    params = (str(community_id),str(member_primary_key),)
-    result = db.query(query, params)
-    assert len(result) == 1
-    assert result[0]['active'] == True
-    assert result[0]['invited'] == True
+#     #Check user has joined
+#     query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
+#     params = (str(community_id),str(member_primary_key),)
+#     result = db.query(query, params)
+#     assert len(result) == 1
+#     assert result[0]['active'] == True
+#     assert result[0]['invited'] == True
 
-    # === Manage ===
-    # Upgrade to admin as non admin
+#     # === Manage ===
+#     # Upgrade to admin as non admin
 
-    response = requests.post("http://127.0.0.1:5000/community/manage", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 
-                                                                             'Rio Key': member_rio_key, 
-                                                                             'User List': [{'Username': cMEMBER_USER["Username"], 'Admin': 't'}]})
+#     response = requests.post("http://127.0.0.1:5000/community/manage", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 
+#                                                                              'Rio Key': member_rio_key, 
+#                                                                              'User List': [{'Username': cMEMBER_USER["Username"], 'Admin': 't'}]})
 
-    assert response.status_code == 409
+#     assert response.status_code == 409
 
-    #Upgrade to admin as admin
-    response = requests.post("http://127.0.0.1:5000/community/manage", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 
-                                                                             'Rio Key': founder_rio_key, 
-                                                                             'User List': [{'Username': cMEMBER_USER["Username"], 'Admin': 't'}]})
+#     #Upgrade to admin as admin
+#     response = requests.post("http://127.0.0.1:5000/community/manage", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 
+#                                                                              'Rio Key': founder_rio_key, 
+#                                                                              'User List': [{'Username': cMEMBER_USER["Username"], 'Admin': 't'}]})
 
-    assert response.status_code == 200
+#     assert response.status_code == 200
 
-    #Check user is admin
-    query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
-    params = (str(community_id),str(member_primary_key),)
-    result = db.query(query, params)
-    assert len(result) == 1
-    assert result[0]['admin'] == True
+#     #Check user is admin
+#     query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
+#     params = (str(community_id),str(member_primary_key),)
+#     result = db.query(query, params)
+#     assert len(result) == 1
+#     assert result[0]['admin'] == True
 
-    #Get members
-    response = requests.get("http://127.0.0.1:5000/community/members", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 
-                                                                             'Rio Key': member_rio_key})
-    data = response.json()
-    assert len(data['Members']) == 2
+#     #Get members
+#     response = requests.get("http://127.0.0.1:5000/community/members", json={'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'], 
+#                                                                              'Rio Key': member_rio_key})
+#     data = response.json()
+#     assert len(data['Members']) == 2
 
     
-    # === Create Tag ===
-    #Member is now admin so this will work
-    tag_json = {"Tag Name": "TestTag", "Description":"Description of tag", "Community Name":cPRIVATE_NONGLOBAL_COMM['Community Name'], 'Rio Key': member_rio_key}
-    response = requests.post("http://127.0.0.1:5000/tag/create", json=tag_json)
+#     # === Create Tag ===
+#     #Member is now admin so this will work
+#     tag_json = {"Tag Name": "TestTag", "Description":"Description of tag", "Community Name":cPRIVATE_NONGLOBAL_COMM['Community Name'], 'Rio Key': member_rio_key}
+#     response = requests.post("http://127.0.0.1:5000/tag/create", json=tag_json)
 
-    assert response.status_code == 200
+#     assert response.status_code == 200
 
-    query = 'SELECT * FROM tag WHERE name = %s'
-    params = (tag_json['Tag Name'],)
-    result = db.query(query, params)
-    assert len(result) == 1
-    tag_id = result[0]['id']
+#     query = 'SELECT * FROM tag WHERE name = %s'
+#     params = (tag_json['Tag Name'],)
+#     result = db.query(query, params)
+#     assert len(result) == 1
+#     tag_id = result[0]['id']
 
-    #See if we get tags out (4 thus far, 1 for each community + 1 we just created)
-    response = requests.get("http://127.0.0.1:5000/tag/list")
-    data = response.json()
-    assert len(data['Tags']) == 4
+#     #See if we get tags out (4 thus far, 1 for each community + 1 we just created)
+#     response = requests.get("http://127.0.0.1:5000/tag/list")
+#     data = response.json()
+#     assert len(data['Tags']) == 4
 
-    # Get only component tags, typo for 409
-    response = requests.get("http://127.0.0.1:5000/tag/list", json={'Types': ['Junk']})
-    assert response.status_code == 409
+#     # Get only component tags, typo for 409
+#     response = requests.get("http://127.0.0.1:5000/tag/list", json={'Types': ['Junk']})
+#     assert response.status_code == 409
 
-    # Get only component tags
-    response = requests.get("http://127.0.0.1:5000/tag/list", json={'Types': ['Component']})
-    assert response.status_code == 200    
-    data = response.json()
-    assert len(data['Tags']) == 1
+#     # Get only component tags
+#     response = requests.get("http://127.0.0.1:5000/tag/list", json={'Types': ['Component']})
+#     assert response.status_code == 200    
+#     data = response.json()
+#     assert len(data['Tags']) == 1
 
-    # === Create a TagSet ===
-    tagset_json={
-        'TagSet Name': 'TagSetA',
-        'Description': 'New TagSet',
-        'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'],
-        'Tags': [tag_id],
-        'Type': 'Season',
-        'Start': 0,
-        'End': 1,
-        'Rio Key': member_rio_key
-    }
-    response = requests.post("http://127.0.0.1:5000/tag_set/create", json=tagset_json)
-    print(response)
-    assert response.status_code == 200
+#     # === Create a TagSet ===
+#     tagset_json={
+#         'TagSet Name': 'TagSetA',
+#         'Description': 'New TagSet',
+#         'Community Name': cPRIVATE_NONGLOBAL_COMM['Community Name'],
+#         'Tags': [tag_id],
+#         'Type': 'Season',
+#         'Start': 0,
+#         'End': 1,
+#         'Rio Key': member_rio_key
+#     }
+#     response = requests.post("http://127.0.0.1:5000/tag_set/create", json=tagset_json)
+#     print(response)
+#     assert response.status_code == 200
 
-    # Without any options
-    response = requests.get("http://127.0.0.1:5000/tag_set/list")
-    assert response.status_code == 200
-    assert len(response.json()) == 1
+#     # Without any options
+#     response = requests.get("http://127.0.0.1:5000/tag_set/list")
+#     assert response.status_code == 200
+#     assert len(response.json()) == 1
 
-    # With correct key
-    tagset_list_json = { 'Rio Key': [member_rio_key] }
-    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
-    assert response.status_code == 200
-    assert len(response.json()) == 1
+#     # With correct key
+#     tagset_list_json = { 'Rio Key': [member_rio_key] }
+#     response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+#     assert response.status_code == 200
+#     assert len(response.json()) == 1
 
-    # Incorrect key, pass but no data
-    tagset_list_json = { 'Rio Key': [member_rio_key + 'X'] }
-    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
-    assert response.status_code == 200
-    assert len(response.json()) == 0
+#     # Incorrect key, pass but no data
+#     tagset_list_json = { 'Rio Key': [member_rio_key + 'X'] }
+#     response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+#     assert response.status_code == 200
+#     assert len(response.json()) == 0
 
-    # Incorrect community, pass but no data
-    tagset_list_json = { 'Communities': ['invalid'] }
-    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
-    assert response.status_code == 200
-    assert len(response.json()) == 0
+#     # Incorrect community, pass but no data
+#     tagset_list_json = { 'Communities': ['invalid'] }
+#     response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+#     assert response.status_code == 200
+#     assert len(response.json()) == 0
 
-    # Incorrect community, pass but no data
-    tagset_list_json = { 'Active': 'true' }
-    response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
-    assert response.status_code == 200
-    assert len(response.json()) == 0
+#     # Incorrect community, pass but no data
+#     tagset_list_json = { 'Active': 'true' }
+#     response = requests.get("http://127.0.0.1:5000/tag_set/list", json=tagset_list_json)
+#     assert response.status_code == 200
+#     assert len(response.json()) == 0
 
