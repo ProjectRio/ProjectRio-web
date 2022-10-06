@@ -5,7 +5,8 @@ from sendgrid.helpers.mail import Mail, From
 
 def send_email(to_email, subject, html_content):
     # If the application is running in production, send emails using sendgrid.
-    if (app.config['rio_env'] == "production"):
+    if (os.getenv('rio_env') == "production"):
+        print("PASSED IF")
         message = Mail(
             from_email=From('email@projectrio.app', 'Rio Web'),
             to_emails=to_email,
@@ -16,6 +17,6 @@ def send_email(to_email, subject, html_content):
             sg = SendGridAPIClient(os.getenv("SEND_GRID_KEY"))
             response = sg.send(message)
         except:
-            kill(502, 'Failed to send email')
+            return kill(502, 'Failed to send email')
 
     return "Email sent..."
