@@ -35,16 +35,13 @@ def init_db():
 @app.route('/wipe_db/', methods=['POST'])
 def wipe_db():
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
-        try:
-            db.drop_all()
-            db.create_all()
-            create_character_tables()
-            create_default_groups()
-            return 'DB Wiped'
-        except:
-            abort(400, "Error dropping tables.")  
+        db.drop_all()
+        db.create_all()
+        create_character_tables()
+        create_default_groups()
+        return 'DB Wiped'
     else:
-        abort(400, 'Invalid password')
+        abort(401, 'Invalid password')
     return 'Success...'
 
 def create_character_tables():
