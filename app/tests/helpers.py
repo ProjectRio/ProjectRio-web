@@ -1,6 +1,7 @@
 import random
 import string
 import requests
+import time
 
 from connection import Connection
 
@@ -117,7 +118,10 @@ class Community:
         self.members = dict()
         self.members[self.founder.pk] = self.founder
 
-        #Get all users (if official community)
+        self.tags = dict()
+        self.tagsets = dict()
+
+        #Get all users and tags that have been created automatically 
         self.refresh()
 
     #def join_via_url(self, user, name_err=False, url_err=False, rk_err=False):
@@ -172,11 +176,13 @@ class Community:
     def manage(self, admin_user, user_list, modification):
         manage_user_list = list()
         for user in user_list:
-            temp_dict = {'Username': user.name}
-            if modification == 'Admin':
+            temp_dict = {'Username': user.username}
+            if modification.lower() == 'admin':
                 temp_dict['Admin'] = 't'
-            elif modification == 'Ban':
+            elif modification.lower() == 'ban':
                 temp_dict['Ban'] = 't'
+            elif modification.lower() == 'remove':
+                temp_dict['Remove'] = 't'
             manage_user_list.append(temp_dict)
 
         
@@ -186,15 +192,7 @@ class Community:
         success = (response.status_code == 200)
 
         if (success):
-            #Update list of comm users from DB
-            for user in user_list:
-                query = 'SELECT * FROM community_user WHERE community_id = %s AND user_id = %s'
-                params = (str(self.pk),str(user.pk),)
-                result = db.query(query, params)
-
-                comm_user = self.members[result[0]['id']]
-                comm_user.admin = result[0]['admin']
-                comm_user.banned = result[0]['banned']
+            self.refresh()
         return success
     
     # Pulls all comm users and updates members list
@@ -216,6 +214,32 @@ class Community:
                                     result_row['active'], result_row['banned'])
             self.members[comm_user.pk] = comm_user
 
+        #Get tags
+        query = ('SELECT * \n'
+                 'FROM tag \n'
+                 'WHERE community_id = %s')
+        params = (str(self.pk),)
+        result = db.query(query, params)
+        for result_row in result:
+            tag = Tag(self.founder, self)        
+            tag.pk      = result_row['id']
+            tag.refresh()
+
+            self.tags[tag.pk] = tag
+
+        #Get tagsets
+        query = ('SELECT * \n'
+                 'FROM tag_set \n'
+                 'WHERE community_id = %s')
+        params = (str(self.pk),)
+        result = db.query(query, params)
+        for result_row in result:
+            tagset = TagSet(self.founder, self, self.tags.values(), "NULL")        
+            tagset.pk         = result_row['id']
+            tagset.refresh()
+
+            self.tagsets[tagset.pk] = tagset
+
     def get_member(self, user):
         for comm_user in self.members.values():
             if comm_user.pk == user.pk:
@@ -223,26 +247,151 @@ class Community:
         return None
 
 class Tag:
-    def __init__(self, admin_user, community, tag_details=None):
+    # Tag type will always be component if a test is creating it
+    def __init__(self, admin_comm_user, community, tag_details=None):
         if tag_details == None:
             tag_details = dict()
             length = random.randint(3,20)
             tag_details['Tag Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tag_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
         tag_details['Community Name'] = community.name
-        tag_details['Rio Key'] = admin_user.rk
+        tag_details['Rio Key'] = admin_comm_user.user.rk
 
+        self.init_dict = tag_details
+
+        self.community = community
+
+    def create(self):
         # Post Tag
-        response = requests.post("http://127.0.0.1:5000/tag/create", json=tag_details)
+        response = requests.post("http://127.0.0.1:5000/tag/create", json=self.init_dict)
 
         self.success = (response.status_code == 200)
 
+        if not self.success:
+            return self.success
+
         query = 'SELECT * FROM tag WHERE name = %s'
-        params = (tag_details['Tag Name'],)
+        params = (self.init_dict['Tag Name'],)
         result = db.query(query, params)
         
-        self.pk = result[0]['id']
-        self.name = result[0]['name']
+        self.pk      = result[0]['id']
+        self.name    = result[0]['name']
         self.comm_id = result[0]['community_id']
-        self.type = result[0]['tag_type']
-        self.active = result[0]['active']
+        self.type    = result[0]['tag_type']
+        self.active  = result[0]['active']
+
+        self.community.refresh()
+
+        return self.success
+
+    def refresh(self):
+        query = 'SELECT * FROM tag WHERE id = %s'
+        params = (str(self.pk),)
+        result = db.query(query, params)
+
+        self.pk      = result[0]['id']
+        self.name    = result[0]['name']
+        self.comm_id = result[0]['community_id']
+        self.type    = result[0]['tag_type']
+        self.active  = result[0]['active']
+
+class TagSet:
+    def __init__(self, admin_comm_user, community, tags, tag_type, tagset_details=None):
+        if tagset_details == None:
+            tagset_details = dict()
+            length = random.randint(3,20)
+            tagset_details['TagSet Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
+            tagset_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
+            tagset_details['Start'] = int( time.time() )
+            tagset_details['End'] = int( time.time() ) + random.randrange(60, 10000)
+        tagset_details['Community Name'] = community.name
+        tagset_details['Rio Key'] = admin_comm_user.user.rk
+        tagset_details['Type'] = tag_type
+        tagset_details['Tags'] = [tag.pk for tag in tags]
+
+        self.community = community
+        self.creator_comm_user = admin_comm_user
+        self.tags = dict()
+        self.init_dict = tagset_details
+
+    def create(self):
+        response = requests.post("http://127.0.0.1:5000/tag_set/create", json=self.init_dict)
+        self.success = (response.status_code == 200)
+        if not self.success:
+            return self.success
+
+        query = 'SELECT * FROM tag_set WHERE name = %s'
+        params = (self.init_dict['TagSet Name'],)
+        result = db.query(query, params)
+        
+        self.pk         = result[0]['id']
+        self.name       = result[0]['name']
+        self.comm_id    = result[0]['community_id']
+        self.type       = result[0]['type']
+        self.start_date = result[0]['start_date']
+        self.end_date   = result[0]['end_date']
+
+        self.refresh() # NEed to refresh to get the non provided tags
+        self.community.refresh()
+
+        return self.success
+
+    def refresh(self):
+        #Get tagsets
+        query = ('SELECT * \n'
+                 'FROM tag_set \n'
+                 'WHERE id = %s')
+        params = (str(self.pk),)
+        result = db.query(query, params)      
+        self.pk         = result[0]['id']
+        self.name       = result[0]['name']
+        self.comm_id    = result[0]['community_id']
+        self.type       = result[0]['type']
+        self.start_date = result[0]['start_date']
+        self.end_date   = result[0]['end_date']
+
+        #Get tags
+        query = ('SELECT * \n'
+                 'FROM tag_set_tag \n'
+                 'WHERE tagset_id = %s')
+        params = (str(self.pk),)
+        result = db.query(query, params)
+        for result_row in result:
+            tag = Tag(self.creator_comm_user, self.community)
+            tag.pk      = result_row['tag_id']
+            tag.refresh()
+
+            self.tags[tag.pk] = tag
+
+def get_community_members(community_name, user):
+    json = {'Community Name': community_name, 'Rio Key': user.rk}
+    response = requests.get("http://127.0.0.1:5000/community/members", json=json)
+    success = response.status_code == 200
+
+    data = response.json()
+
+    return [success, data]
+
+def compare_comm_user_to_dict(comm_user_dict, comm_user):
+    return ( comm_user_dict['user_id'] == comm_user.user.pk
+         and comm_user_dict['id']      == comm_user.pk
+         and comm_user_dict['admin']   == comm_user.admin
+         and comm_user_dict['active']  == comm_user.active
+         and comm_user_dict['invited'] == comm_user.invited
+         and comm_user_dict['banned']  == comm_user.banned )
+
+def get_community_tags(community_name, user):
+    json = {'Community Name': community_name, 'Rio Key': user.rk}
+    response = requests.get("http://127.0.0.1:5000/community/tags", json=json)
+    success = response.status_code == 200
+
+    data = response.json()
+
+    return [success, data]
+
+def compare_comm_tag_to_dict(tag_dict, tag):
+    return ( tag_dict['id']      == tag.pk
+         and tag_dict['comm_id'] == tag.comm_id
+         and tag_dict['name']    == tag.name
+         and tag_dict['type']    == tag.type
+         and tag_dict['active']  == tag.active )
