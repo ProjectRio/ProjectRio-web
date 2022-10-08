@@ -302,6 +302,8 @@ class PitchSummary(db.Model):
     type_of_swing = db.Column(db.Integer)
     ball_position_strikezone = db.Column(db.Integer)
     in_strikezone = db.Column(db.Boolean)
+    bat_x_contact_pos = db.Column(db.Float)
+    bat_z_contact_pos = db.Column(db.Float)
 
     event = db.relationship('Event', backref='pitch_summary')
 
@@ -327,11 +329,7 @@ class ContactSummary(db.Model):
     ball_y_velocity = db.Column(db.Float)
     ball_z_velocity = db.Column(db.Float)
     ball_x_contact_pos = db.Column(db.Float)
-    ball_y_contact_pos = db.Column(db.Float)
     ball_z_contact_pos = db.Column(db.Float)
-    bat_x_contact_pos = db.Column(db.Float)
-    bat_y_contact_pos = db.Column(db.Float)
-    bat_z_contact_pos = db.Column(db.Float)
     ball_x_landing_pos = db.Column(db.Float)
     ball_y_landing_pos = db.Column(db.Float)
     ball_z_landing_pos = db.Column(db.Float)
