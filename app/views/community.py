@@ -355,7 +355,7 @@ def community_tags():
 
     tag_info_list = list()
     for tag in tag_list:
-        tag_info_list.append({"Name": tag.name, "Type": tag.tag_type, "Description": tag.desc})
+        tag_info_list.append(tag.to_dict())
 
     return jsonify({'Tags': tag_info_list})
 

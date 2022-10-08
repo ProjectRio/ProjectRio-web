@@ -148,21 +148,207 @@ def test_community_create_private_link():
     community.invite(founder, {requester.pk: requester})
     assert community.get_member(requester).active == True
 
-# def test_community_create_global_no_link():
-#     wipe_db()
+def test_community_manage_admin():
+    wipe_db()
 
-#     founder = User()
-#     founder.register()
-#     assert founder.success == True
+    founder = User()
+    founder.register()
+    assert founder.success == True
 
-#     nonmember = User()
-#     nonmember.register()
+    member = User()
+    member.register()
 
-#     #Check that the new user is registered after creating a new official community
+    future_admin = User()
+    future_admin.register()
+    
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
 
-#     # Assert community is not created, founder not admin
-#     community = Community(founder, official=False, private=False, link=False)
-#     assert community.success == True
+    # Member join
+    assert community.join_via_request(member)
+    assert community.join_via_request(future_admin)
+
+    # Upgrade future admin user as non-admin (not permitted)
+    assert not community.manage(member, [future_admin], "admin")
+    assert not community.get_member(future_admin).admin
+
+    # Upgrade future admin user as admin
+    assert community.manage(founder, [future_admin], "admin")
+    assert community.get_member(future_admin).admin
+
+def test_community_manage_ban():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    member = User()
+    member.register()
+
+    future_bannee = User()
+    future_bannee.register()
+    
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
+
+    # Member join
+    assert community.join_via_request(member)
+    assert community.join_via_request(future_bannee)
+
+    # Upgrade future admin user as non-admin (not permitted)
+    assert not community.manage(member, [future_bannee], "ban")
+    assert not community.get_member(future_bannee).banned
+
+    # Upgrade future admin user as admin
+    assert community.manage(founder, [future_bannee], "ban")
+    assert community.get_member(future_bannee).banned
+
+
+def test_community_manage_remove():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    member = User()
+    member.register()
+
+    future_removee = User()
+    future_removee.register()
+    
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
+
+    # Member join
+    assert community.join_via_request(member)
+    assert community.join_via_request(future_removee)
+
+    # Remove user as non-admin (not permitted)
+    assert not community.manage(member, [future_removee], "remove")
+    assert community.get_member(future_removee).active
+
+    # Remove user as admin
+    assert community.manage(founder, [future_removee], "remove")
+    assert not community.get_member(future_removee).active
+
+def test_community_tags():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    member = User()
+    member.register()
+    
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
+    # Member join
+    assert community.join_via_request(member)
+
+    # Should just have community tag
+    assert len(community.tags) == 1
+
+    # Add tag with non-admin (should not work)
+    tag = Tag(community.get_member(member), community)
+    tag.create()
+    assert not tag.success
+    assert len(community.tags) == 1
+
+    # Add tag with admin
+    tag = Tag(community.founder, community)
+    tag.create()
+
+    assert tag.active
+    assert tag.type == 'Component'
+    assert len(community.tags) == 2
+
+def test_community_tagsets():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
+
+    # Add tag with admin
+    tag = Tag(community.founder, community)
+    tag.create()
+
+    tagset = TagSet(community.founder, community, [tag], 'League')
+    tagset.create()
+
+    assert tagset.success
+    assert len(community.tags) == 3
+
+def test_endpoint_community_get_tags():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
+
+
+    tag1 = Tag(community.founder, community)
+    tag1.create()
+
+
+    tag2 = Tag(community.founder, community)
+    tag2.create()
+
+    tagset = TagSet(community.founder, community, [tag1, tag2], 'League')
+    tagset.create()
+
+    tags = get_community_tags(community.name, founder)
+
+    assert tags[0]
+
+    # 2 tags above + tagset tag + the community tag
+    assert len(tags[1]['Tags']) == 4
+
+    #Check that all tags match what we have been tracking
+    for x in tags[1]['Tags']:
+        assert compare_comm_tag_to_dict(x, community.tags[x['id']])
+
+def test_endpoint_community_get_members():
+    wipe_db()
+
+    founder = User()
+    founder.register()
+    assert founder.success == True
+
+    member = User()
+    member.register()
+
+    future_admin = User()
+    future_admin.register()
+    
+    community = Community(founder, official=False, private=False, link=False)
+    assert community.success == True
+
+    # Member join
+    assert community.join_via_request(member)
+    assert community.join_via_request(future_admin)
+
+    # Upgrade future admin user as admin
+    assert community.manage(founder, [future_admin], "admin")
+    assert community.get_member(future_admin).admin
+
+    members = get_community_members(community.name, founder)
+
+    assert members[0]
+
+    assert len(members[1]['Members']) == 3
+
+    for x in members[1]['Members']:
+        assert compare_comm_user_to_dict(x, community.members[x['id']])
 
 # # Users we will actually create
 # cFOUNDER_USER = {"Username": "founder", "Password": "123password", "Email": "founder@test"}
