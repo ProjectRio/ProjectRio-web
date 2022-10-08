@@ -400,13 +400,13 @@ class Tag(db.Model):
     
     def to_dict(self):
         return {
-            'ID': self.id,
-            'Comm ID': self.community_id,
-            'Name': self.name,
-            'Type': self.tag_type,
-            'Desc': self.desc,
-            'Active': self.active,
-            'Date Created': self.date_created
+            'id': self.id,
+            'comm_id': self.community_id,
+            'name': self.name,
+            'type': self.tag_type,
+            'desc': self.desc,
+            'active': self.active,
+            'date_created': self.date_created
         }
 
 
@@ -439,13 +439,13 @@ class TagSet(db.Model):
     
     def to_dict(self):
         return {
-            'ID': self.id,
-            'Comm ID': self.community_id,
-            'Name': self.name,
-            'Type': self.type,
-            'Start Date': self.start_date,
-            'End Date': self.end_date,
-            'Tags': self.expand_tag_list()
+            'id': self.id,
+            'comm_id': self.community_id,
+            'name': self.name,
+            'type': self.type,
+            'start_date': self.start_date,
+            'end_date': self.end_date,
+            'tags': self.expand_tag_list()
         }
 
     def expand_tag_list(self):
@@ -598,6 +598,7 @@ class CommunityUser(db.Model):
 
     def to_dict(self):
         return {
+            "id": self.id,
             "user_id": self.user_id,
             "admin": self.admin,
             "active": self.active,
