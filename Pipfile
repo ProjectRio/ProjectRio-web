@@ -45,3 +45,6 @@ apscheduler = "*"
 
 [requires]
 python_version = "3.9"
+
+[packages.db-to-sqlite]
+extras = [ "postgresql",]
