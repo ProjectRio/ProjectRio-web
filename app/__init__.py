@@ -51,6 +51,7 @@ def init_app():
         from .views import tag
         from .views import sql_exec
         from .views import reverify_emails
+        from .views import db_manage
         # from .views import log
 
         daily_trigger = CronTrigger(year="*", month="*", day="*", hour="6", minute="0", second="0")
