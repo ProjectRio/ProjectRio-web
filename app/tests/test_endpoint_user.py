@@ -14,6 +14,7 @@ cINVLD_USER_DUP_EMAIL = {"Username": "invlduser2", "Password": "123password", "E
 cINVLD_USER_DUP_USERNAME = {"Username": "validuser1", "Password": "123password", "Email": "invld@test"}
 
 # External tests
+'''
 def test_external_endpoint_register():
     #Wipe db
     response = requests.post("http://127.0.0.1:5000/reset_db", json={"RESET_DB": "NUKE"})
@@ -77,3 +78,4 @@ def test_external_endpoint_change_password():
 
 # COMMENTED OUT SOME MODEL UPDATES, MAKE SURE TO UNCOMMENT THEM
 # Internal tests
+'''
