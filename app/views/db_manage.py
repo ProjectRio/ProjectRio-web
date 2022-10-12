@@ -4,6 +4,7 @@ from ..models import *
 import json
 import os
 import subprocess
+import sqlite_utils
 
 @app.route('/db_to_sqlite/', methods=['POST'])
 def endpoint_db_to_sqlite():
@@ -24,3 +25,9 @@ def run_db_to_sqlite():
                        + os.getenv('POSTGRES_DB') + '?sslmode=require')
 
     subprocess.run([cmd, connection_string, output_name, '--all', '--redact', 'rio_user', 'email', '--redact', 'rio_user', 'password'], capture_output=True)
+    censor_sqlite_db(output_name)
+
+def censor_sqlite_db(db_name):
+    sqlite_db = sqlite_utils.Database(db_name)
+    for pk, row in sqlite_db['rio_user'].pks_and_rows_where():
+        sqlite_db["rio_user"].update(pk, {"rio_key": pk})

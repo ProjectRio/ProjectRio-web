@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "691b07a100cb6a98b5a97aa4f3da9597878d7c088b8c390121a3f5e9c924f17a"
+            "sha256": "b229d393377f43cf003ae781c72be6b4a438e0eae4fd34b1325fe5ac5fe22d89"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -585,6 +585,7 @@
                 "sha256:9e6b2bf7ae89e02e107557b0cff1121f1fbb06128a815122743332197693b272",
                 "sha256:d9ea1026a9c007a895cdd04abdcbe3cd2ac03515c2a2ebbad9233939aa111f5b"
             ],
+            "index": "pypi",
             "version": "==3.29"
         },
         "starkbank-ecdsa": {

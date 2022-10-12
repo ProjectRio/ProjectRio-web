@@ -40,6 +40,7 @@ starkbank-ecdsa = "==2.0.3"
 werkzeug = "==2.0.2"
 flask-migrate = "*"
 apscheduler = "*"
+sqlite-utils = "*"
 
 [dev-packages]
 
