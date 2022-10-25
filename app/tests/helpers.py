@@ -363,6 +363,14 @@ class TagSet:
 
             self.tags[tag.pk] = tag
 
+def wipe_db():
+    response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"RESET_DB": "NUKE"})
+    return response.status_code == 200
+
+def reset_db():
+    response = requests.post("http://127.0.0.1:5000/init_db/", json={"RESET_DB": "NUKE"})
+    return response.status_code == 200
+
 def get_community_members(community_name, user):
     json = {'Community Name': community_name, 'Rio Key': user.rk}
     response = requests.get("http://127.0.0.1:5000/community/members", json=json)
