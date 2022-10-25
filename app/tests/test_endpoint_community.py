@@ -5,11 +5,6 @@ from connection import Connection
 
 db = Connection()
 
-def wipe_db():
-    response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"RESET_DB": "NUKE"})
-    return response.status_code == 200
-
-
 def test_community_create_official():
     wipe_db()
 
@@ -32,8 +27,8 @@ def test_community_create_official():
     community = Community(founder, True, False, False)
     assert community.success == True
 
-    # Did both users get added to the community
-    assert len(community.members) == 2
+    # Did both users get added to the community (plus default members)
+    assert len(community.members) == 3
 
    
 def test_community_create_unofficial():
