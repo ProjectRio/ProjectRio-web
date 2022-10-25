@@ -518,9 +518,9 @@ class RioUser(db.Model, UserMixin):
     home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
     user_group_user = db.relationship('UserGroupUser', backref='user_from_ugu')
 
-    def __init__(self, in_username, username_lowercase, in_email, in_password):
+    def __init__(self, in_username, in_email, in_password):
         self.username = in_username
-        self.username_lowercase = username_lowercase
+        self.username_lowercase = in_username.lower()
         self.email    = in_email
         self.password = bc.generate_password_hash(in_password)
         self.rio_key  = secrets.token_urlsafe(32)

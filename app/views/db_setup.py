@@ -21,8 +21,9 @@ def init_db():
             Game.__table__.drop(engine)
             db.create_all()
             create_character_tables()
-            create_default_tags()
+            #create_default_tags()
             create_default_groups()
+            create_official_infrastructure()
             return 'DB Init'
         except:
             abort(400, "Error dropping or creating tables.")  
@@ -39,6 +40,7 @@ def wipe_db():
         db.create_all()
         create_character_tables()
         create_default_groups()
+        create_official_infrastructure()
         return 'DB Wiped'
     else:
         abort(401, 'Invalid password')
@@ -210,6 +212,46 @@ def create_default_groups():
     db.session.add(developer)
     db.session.add(patron)
     db.session.add(general)
+    db.session.commit()
+
+
+def create_official_infrastructure():
+    admin_user = create_admin_users()
+    create_official_comms(admin_user)
+
+def create_admin_users():
+    admin_user = RioUser('ProjectRio', 'projectrio.dev@gmail.com', secrets.token_urlsafe(32))
+    admin_user.verified = True
+    admin_user.active_url = None
+    db.session.add(admin_user)
+    db.session.commit()
+
+    #Get admin group
+    user_group = UserGroup.query.filter_by(name_lowercase='admin').first()
+
+    #Add admin user to group
+    new_user_group_user = UserGroupUser(
+        user_id=admin_user.id,
+        user_group_id=user_group.id
+    )
+    db.session.add(new_user_group_user)
+    db.session.commit()
+
+    return admin_user
+
+def create_official_comms(admin_user):
+    new_comm = Community('OfficialRanked', 'Official', False, True, 'Official community of ProjectRio')
+    db.session.add(new_comm)
+    db.session.commit()
+
+    # === Create CommunityUser (admin)
+    new_comm_user = CommunityUser(admin_user.id, new_comm.id, True, False, True)
+    db.session.add(new_comm_user)
+    db.session.commit()
+
+    # === Create Community Tag ===
+    new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", f"Community tag for {new_comm.name}")
+    db.session.add(new_comm_tag)
     db.session.commit()
 
 @app.route('/restore_users/', methods=['GET'])

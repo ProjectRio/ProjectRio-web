@@ -32,7 +32,7 @@ def register():
         return abort(406, description='Not a valid email')
     else:
         # === Create User row ===
-        new_user = RioUser(in_username, username_lowercase, in_email, in_password)
+        new_user = RioUser(in_username, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
 
