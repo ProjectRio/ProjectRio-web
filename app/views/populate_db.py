@@ -474,7 +474,7 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
                         in_loser_username=None, in_loser_score=None):
     game_id = in_game_id
     
-    #Reroll game id untill unique one is found
+    #Reroll game id until unique one is found. Do not create gameid for man submitted games
     unique_id = False
     while (not unique_id and in_game_id != None):
         game = Game.query.filter_by(game_id=game_id).first()
