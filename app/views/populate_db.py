@@ -472,11 +472,11 @@ def populate_db2():
 def submit_game_history(in_game_id=None, in_tag_set_id=None,
                         in_winner_username=None, in_winner_score=None, 
                         in_loser_username=None, in_loser_score=None):
-    game_id = in_game_id if (in_game_id != None) else random.getrandbits(32)
+    game_id = in_game_id
     
     #Reroll game id untill unique one is found
     unique_id = False
-    while (not unique_id):
+    while (not unique_id and in_game_id != None):
         game = Game.query.filter_by(game_id=game_id).first()
         if game == None:
             unique_id = True
@@ -511,25 +511,30 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     if winner_comm_user == None or loser_comm_user == None:
         return abort(409, description='No CommunityUser found for at least one of the RioUsers')
 
-    #Get ELOs
-    winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id).first()
-    loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id).first()
+    #Get TagSet. If season, update/track ELO. Else just add the GameHistory row
+    winner_elo = None
+    loser_elo = None
+    tag_set = TagSet.query.filter_by(id=tag_set_id).first()
+    if (tag_set.type == 'Season'):
+        #Get ELOs
+        winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id).first()
+        loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id).first()
 
-    #Create elos for new players
-    if winner_ladder == None:
-        new_glicko_player = Player()
-        winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
-        db.session.add(winner_ladder)
-        db.session.commit()
-    if loser_ladder == None:
-        new_glicko_player = Player()
-        loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
-        db.session.add(loser_ladder)
-        db.session.commit()
+        #Create elos for new players
+        if winner_ladder == None:
+            new_glicko_player = Player()
+            winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+            db.session.add(winner_ladder)
+            db.session.commit()
+        if loser_ladder == None:
+            new_glicko_player = Player()
+            loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+            db.session.add(loser_ladder)
+            db.session.commit()
 
-    winner_elo = winner_ladder.rating
-    loser_elo = loser_ladder.rating
-
+        winner_elo = winner_ladder.rating
+        loser_elo = loser_ladder.rating
+    
     #Acceptance
     winner_accept = False
     loser_accept = False
@@ -553,7 +558,7 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     else:
         winner_accept = True
         loser_accept = True
-    
+
     #Finally ready to write the row
     new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
                                    winner_score, loser_score, 
@@ -562,7 +567,10 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     db.session.add(new_game_history)
     db.session.commit()
 
-    return {'GameID': new_game_history.id}
+    if (in_game_id == None):
+        return {'GameID': new_game_history.id}
+    else:
+        return {'GameID': new_game_history.game_id}
 
 
 @app.route('/update_game_status/', methods=['POST'])
