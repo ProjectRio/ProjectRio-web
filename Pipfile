@@ -41,6 +41,8 @@ werkzeug = "==2.0.2"
 flask-migrate = "*"
 apscheduler = "*"
 sqlite-utils = "*"
+google-auth = "*"
+google-auth-oauthlib = "*"
 
 [dev-packages]
 
