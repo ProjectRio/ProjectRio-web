@@ -51,6 +51,8 @@ cCOMM_TYPES = {
     1: "Unofficial",
 }
 
+cPATREON_TIERS = ['Patron: Fan', 'Patron: Rookie', 'Patron: MVP', 'Patron: Hall of Famer']
+
 cCHAR_ALIASES = {
     "Mario": 0,
     "Luigi": 1,

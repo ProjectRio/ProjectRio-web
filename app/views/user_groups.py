@@ -157,9 +157,23 @@ def is_user_in_groups(user_id, group_list):
 
     return (user_group_user_count > 0)
 
+
+def wipe_patrons():
+        # Get Patreon UserGroups
+    patreon_user_groups = db.session.query(UserGroup).filter(UserGroup.name_lowercase in cPATREON_TIERS).all()
+
+    # Create an array of UserGroup ids
+    patreon_user_group_ids = [group.id for group in patreon_user_groups]
+
+    # Delete UserGroupUsers with patreon UserGroup ids
+    UserGroupUser.__table__.delete().where(UserGroupUser.user_group_id in patreon_user_group_ids)
+
 # Get groups for users
 @app.route('/patreon/refresh/')
+@api_key_check(['Admin'])
 def refresh_patrons():
+    wipe_patrons()
+
     campaign_api_url = 'https://www.patreon.com/api/oauth2/api/current_user/campaigns'
     header = {'Authorization': 'Bearer ' + os.getenv('PATREON_API_KEY')}
 
@@ -167,7 +181,7 @@ def refresh_patrons():
     data = response.json()
     campaign_id = data['data'][0]['id']
 
-    print('Rio Campaign ID =', campaign_id)
+    # print('Rio Campaign ID =', campaign_id)
 
     patrons_api_url = f'https://www.patreon.com/api/oauth2/api/campaigns/{campaign_id}/pledges?include=patron.null'
     response = req.get(patrons_api_url, headers=header)
@@ -178,29 +192,29 @@ def refresh_patrons():
     def get_patrons_from_page(data, user_dict, tier_dict):
         for entry in data['included']:
             if entry['type'] == 'user':
-                print('USER:')
-                pprint(entry)
+                # print('USER:')
+                # pprint(entry)
                 patron_id = int(entry['id'])
                 user_dict[patron_id] = dict()
                 user_dict[patron_id]['id'] = patron_id
                 user_dict[patron_id]['name'] = entry['attributes']['first_name']
                 user_dict[patron_id]['email'] = entry['attributes']['email']
-                print('\n')
+                # print('\n')
             # Garbage reward tiers have id of -1 and 0, not sure why
             elif entry['type'] == 'reward' and int(entry['id']) > 0:
-                print('REWARD:')
-                pprint(entry)
+                # print('REWARD:')
+                # pprint(entry)
                 tier_id = int(entry['id'])
                 tier_dict[tier_id] = dict()
                 tier_dict[tier_id]['id'] = tier_id
                 tier_dict[tier_id]['name'] = entry['attributes']['title']
                 tier_dict[tier_id]['required_amount'] = entry['attributes']['amount_cents']
                 tier_dict[tier_id]['required_currency'] = entry['attributes']['currency']
-                print('\n')
+                # print('\n')
         
         for entry in data['data']:
-            print('LINK:')
-            pprint(entry)
+            # print('LINK:')
+            # pprint(entry)
 
             patron_id = int(entry['relationships']['patron']['data']['id'])
             if not entry['relationships'].get('reward'):
@@ -211,7 +225,7 @@ def refresh_patrons():
 
             user_dict[patron_id]['amount'] = entry['attributes']['amount_cents']
             user_dict[patron_id]['currency'] = entry['attributes']['currency']
-            print('\n')
+            # print('\n')
 
         if (data['links'].get('next')):
             next_url = data['links']['next']
@@ -223,24 +237,28 @@ def refresh_patrons():
     
     patron_dict = get_patrons_from_page(data, dict(), dict())
     
-    pprint(patron_dict)
+    # pprint(patron_dict)
     # Associate users with a tier (work around because Patreon API has a bug)
     for user in patron_dict['users'].values():
         if not user.get('amount'):
             continue
-        pprint(user)
+        # pprint(user)
         if not user.get('tier_id'): #Tier hasn't been returned in API (the bug) so manualy figure out
             max_tier = dict()
             for tier in patron_dict['tiers'].values():
                 #If user is paying enough for this tier, and this tier is higher than one we already saw, the user is in this tier
+                #TODO handle currencies
                 if (user['amount'] >= tier['required_amount']) and (not max_tier or (tier['required_amount'] >= max_tier['required_amount'])):
                     max_tier = tier
             user['tier_id'] = max_tier['id']
-    pprint(patron_dict)
+        
+        # Add usergroup for patron tier
+        group_name = 'Patron: ' + patron_dict['tiers'][user['tier_id']]['name']
+        rio_user = RioUser.query.filter_by(email=user['email']).first()
 
-    #Clear all patrons then set them all with this list
+        if rio_user == None:
+            continue
+        add_user_to_user_group(rio_user.username, group_name)
 
-    #Final step is to iterate through patrons, lookup in database, and assign currect user group
-
-    return 
+    return {200: 'Success'}
             
