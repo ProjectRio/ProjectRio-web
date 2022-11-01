@@ -17,6 +17,8 @@ def populate_db2():
 
     if home_player is None or away_player is None:
         return abort(400, 'Invalid Rio User')
+    if home_player.verified is False or away_player.verified is False:
+        return abort(400, "Both users must be verified to submit games.")
     if innings_played < innings_selected and score_difference < 10:
         return abort(400, "Invalid Game: Innings Played < Innings Selected & Score Difference < 10")
     
