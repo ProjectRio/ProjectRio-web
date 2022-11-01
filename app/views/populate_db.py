@@ -11,24 +11,50 @@ def populate_db2():
     if request.json['Home Player'] == "CPU" or request.json['Away Player'] == "CPU":
         return abort(400, 'Database does not accept CPU games')
 
-    tags = []
-
-    # Boolean used to assign a GameTag after creating CharacterGameSummary rows
-    is_superstar_game = False
-
     # Check if rio_keys exist in the db and get associated players
     home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
     away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
 
-    # If provided rio_keys did not exist, use the corresponding generic user
-    if home_player is None:
-        home_player = RioUser.query.filter_by(username="GenericHomeUser").first()
-    if away_player is None:
-        away_player = RioUser.query.filter_by(username="GenericAwayUser").first()
+    if home_player is None or away_player is None:
+        return abort(400, 'Invalid Rio User')
+    if innings_played < innings_selected and score_difference < 10:
+        return abort(400, "Invalid Game: Innings Played < Innings Selected & Score Difference < 10")
+    
+    # Verify Tags exist
+    tag_ids = list()
+    json_tags = request.json['Tags']
+    tag_set_tag = None
+    for id in json_tags:
+        tag = Tag.query.filter_by(id=id).first()
+        if tag is None:
+            abort(400, "Invalid Tag submitted.")
+        if tag.tag_type == "Competition":
+            tag_set_tag = tag
+        tag_ids.append(tag.id)
+    
+    if not tag_set_tag:
+        abort(400, "TagSet Tag not provided.")
 
-    # Check if players exist - TODO Add back after closed beta to validate users
-    #if home_player is None or away_player is None:
-    #    abort(400, 'Invalid RioKey')
+    # Get TagSet Id
+    tag_set_id = db.session.execute((
+        "SELECT \n"
+        "tagset_id \n"
+        "FROM tag_set_tag \n"
+        f"WHERE tag_set_tag.tag_id = {tag_set_tag.id}"
+    )).first()
+
+    # Get all Tags for TagSet
+    tags_by_tag_set_id = db.session.execute((
+        "SELECT \n"
+        "tag_id \n"
+        "FROM tag_set_tag \n"
+        f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
+    )).all()
+
+    # Verify all TagSet Tags are present in passed tags
+    for tag in tags_by_tag_set_id:
+        if tag.id not in tag_ids:
+            abort(400, "Missing Tag from TagSet tag.")
 
     # Detect invalid games
     innings_selected = request.json['Innings Selected']
@@ -36,8 +62,18 @@ def populate_db2():
     score_difference = abs(request.json['Home Score'] - request.json['Away Score'])
     is_valid = False if innings_played < innings_selected and score_difference < 10 else True
 
+    #Reroll game id until unique one is found
+    unique_id = False
+    game_id = int(request.json['GameID'].replace(',', ''), 16)
+    while not unique_id:
+        game = Game.query.filter_by(game_id=game_id).first()
+        if game == None:
+            unique_id = True
+        else:
+            game_id = random.getrandbits(32)
+
     game = Game(
-        game_id = int(request.json['GameID'].replace(',', ''), 16),
+        game_id = game_id,
         away_player_id = away_player.id,
         home_player_id = home_player.id,
         date_time_start = int(request.json['Date - Start']),
@@ -56,9 +92,27 @@ def populate_db2():
         version = request.json['Version'],
     )
 
+    # Get winner and loser rio_user
+    if (game.home_score > game.away_score):
+        winner_player = home_player
+        loser_player = away_player
+        winner_score = game.home_score
+        loser_score = game.away_score
+    else:
+        winner_player = away_player
+        loser_player = home_player
+        winner_score = game.away_score
+        loser_score = game.home_score
+
+    # Add game row to database
     db.session.add(game)
     db.session.commit()
 
+    # Create GameHistory row
+    game_id = submit_game_history(game.game_id, tag_set_id, winner_player.name, winner_score, loser_player.name, loser_score)['GameID']
+
+    # Calc player elo
+    calc_elo(tag_set_id, winner_player.id, loser_player.id)
 
     # ======= Character Game Summary =======
     teams = {
@@ -173,25 +227,6 @@ def populate_db2():
         else:
             teams['Away'][character['RosterID']] = character_game_summary
 
-        # ==== GameTag ====
-        if character['Superstar'] == 1:
-            is_superstar_game = True 
-
-    if game.ranked == True:
-        tags.append('Ranked')
-    else:
-        tags.append('Unranked')
-
-    if is_superstar_game == True:
-        tags.append('Superstar')
-    else:
-        tags.append('Normal')
-    
-    if request.json['Netplay'] == True:
-        tags.append('Netplay')
-    else:
-        tags.append('Local')
-
     rio_client_version_tag = Tag.query.filter_by(name=f'client_{game.version}').first()
     if rio_client_version_tag is None:
         new_rio_client_version_tag = Tag(
@@ -202,7 +237,7 @@ def populate_db2():
         )
         db.session.add(new_rio_client_version_tag)
         db.session.commit()
-    tags.append(f'client_{game.version}')
+    tag_ids.append(new_rio_client_version_tag.id)
 
     # add rio web version tag, create tag if it doesn't exist
     rio_web_version_tag = Tag.query.filter_by(name=f'web_{cRIO_WEB_VERSION}').first()
@@ -215,10 +250,10 @@ def populate_db2():
         )
         db.session.add(new_rio_web_version_tag)
         db.session.commit()
-    tags.append(f'web_{cRIO_WEB_VERSION}')
+    tag_ids.append(new_rio_web_version_tag.id)
 
-    for name in tags:
-        tag = Tag.query.filter_by(name=name).first()
+    for id in tag_ids:
+        tag = Tag.query.filter_by(id=id).first()
         if tag:
             game_tag = GameTag(
                 game_id = game.game_id,
@@ -473,16 +508,6 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
                         in_winner_username=None, in_winner_score=None, 
                         in_loser_username=None, in_loser_score=None):
     game_id = in_game_id
-    
-    #Reroll game id until unique one is found. Do not create gameid for man submitted games
-    unique_id = False
-    while (not unique_id and in_game_id != None):
-        game = Game.query.filter_by(game_id=game_id).first()
-        if game == None:
-            unique_id = True
-        else:
-            game_id = random.getrandbits(32)
-
     winner_username = in_winner_username if (in_winner_username != None) else request.json['Winner Username']
     winner_score = in_winner_score if (in_winner_score != None) else request.json['Winner Score']
     loser_username = in_loser_username if (in_loser_username != None) else request.json['Loser Username']

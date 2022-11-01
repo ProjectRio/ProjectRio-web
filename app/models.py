@@ -149,6 +149,7 @@ class Game(db.Model):
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
     game_tag = db.relationship('GameTag', backref='game')
     event = db.relationship('Event', backref='game')
+    game_history = db.relationship("GameHistory", backref='game')
 
     def to_dict(self):
         return {
@@ -471,6 +472,8 @@ class Ladder(db.Model):
 
 class GameHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=True)
+    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     winner_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     winner_score = db.Column(db.Integer)
@@ -480,8 +483,6 @@ class GameHistory(db.Model):
     winner_accept = db.Column(db.Boolean)
     loser_accept = db.Column(db.Boolean)
     admin_accept = db.Column(db.Boolean)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=True)
-    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     date_created = db.Column(db.Integer)
 
     def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
