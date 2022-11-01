@@ -5,6 +5,7 @@ from ..decorators import api_key_check
 import os
 import requests as req
 from pprint import pprint
+from ..consts import *
 
 # Switch to ApiKey -- Usergroup id
 
@@ -259,6 +260,7 @@ def refresh_patrons():
         if rio_user == None:
             continue
         add_user_to_user_group(rio_user.username, group_name)
+    pprint(patron_dict['users'])
 
     return {200: 'Success'}
             
