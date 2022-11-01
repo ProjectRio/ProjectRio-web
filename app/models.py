@@ -542,6 +542,7 @@ class UserGroup(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     daily_limit = db.Column(db.Integer)
     weekly_limit = db.Column(db.Integer)
+    sponsor_limit = db.Column(db.Integer)
     name = db.Column(db.String(32))
     name_lowercase = db.Column(db.String(32))
     desc = db.Column(db.String(128))

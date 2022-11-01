@@ -2,6 +2,9 @@ from flask import request, abort
 from flask import current_app as app
 from ..models import db, RioUser, UserGroup, UserGroupUser
 from ..decorators import api_key_check
+import os
+import requests as req
+from pprint import pprint
 
 # Switch to ApiKey -- Usergroup id
 
@@ -34,12 +37,12 @@ def create_user_group():
 
 # Add RioUser to UserGroup using RioKey
 @app.route('/user_group/add_user', methods=['POST'])
-def add_user_to_user_group():
+def add_user_to_user_group(in_username = None, in_group_name = None):
     # if os.getenv('RESET_DB') == request.json['RESET_DB']:
     if True:
-        in_username = request.json['username']
+        in_username = in_username if in_username != None else request.json['username']
         in_username_lower = in_username.lower()
-        in_group_name = request.json['group_name']
+        in_group_name = in_group_name if in_group_name != None else request.json['group_name']
         in_group_name_lower = in_group_name.lower()
 
         # Verify User exists
@@ -153,3 +156,91 @@ def is_user_in_groups(user_id, group_list):
         (UserGroupUser.user_id==user_id) & (UserGroupUser.user_group_id.in_(group_id_list))).count()
 
     return (user_group_user_count > 0)
+
+# Get groups for users
+@app.route('/patreon/refresh/')
+def refresh_patrons():
+    campaign_api_url = 'https://www.patreon.com/api/oauth2/api/current_user/campaigns'
+    header = {'Authorization': 'Bearer ' + os.getenv('PATREON_API_KEY')}
+
+    response = req.get(campaign_api_url, headers=header)
+    data = response.json()
+    campaign_id = data['data'][0]['id']
+
+    print('Rio Campaign ID =', campaign_id)
+
+    patrons_api_url = f'https://www.patreon.com/api/oauth2/api/campaigns/{campaign_id}/pledges?include=patron.null'
+    response = req.get(patrons_api_url, headers=header)
+    data = response.json()
+    #pprint(patron_list)
+
+    patron_dict = dict()
+    def get_patrons_from_page(data, user_dict, tier_dict):
+        for entry in data['included']:
+            if entry['type'] == 'user':
+                print('USER:')
+                pprint(entry)
+                patron_id = int(entry['id'])
+                user_dict[patron_id] = dict()
+                user_dict[patron_id]['id'] = patron_id
+                user_dict[patron_id]['name'] = entry['attributes']['first_name']
+                user_dict[patron_id]['email'] = entry['attributes']['email']
+                print('\n')
+            # Garbage reward tiers have id of -1 and 0, not sure why
+            elif entry['type'] == 'reward' and int(entry['id']) > 0:
+                print('REWARD:')
+                pprint(entry)
+                tier_id = int(entry['id'])
+                tier_dict[tier_id] = dict()
+                tier_dict[tier_id]['id'] = tier_id
+                tier_dict[tier_id]['name'] = entry['attributes']['title']
+                tier_dict[tier_id]['required_amount'] = entry['attributes']['amount_cents']
+                tier_dict[tier_id]['required_currency'] = entry['attributes']['currency']
+                print('\n')
+        
+        for entry in data['data']:
+            print('LINK:')
+            pprint(entry)
+
+            patron_id = int(entry['relationships']['patron']['data']['id'])
+            if not entry['relationships'].get('reward'):
+                pass
+            else:
+                reward_id = int(entry['relationships']['reward']['data']['id'])
+                user_dict[patron_id]['tier_id'] = reward_id
+
+            user_dict[patron_id]['amount'] = entry['attributes']['amount_cents']
+            user_dict[patron_id]['currency'] = entry['attributes']['currency']
+            print('\n')
+
+        if (data['links'].get('next')):
+            next_url = data['links']['next']
+            response = req.get(next_url, headers=header)
+            next_data = response.json()
+            get_patrons_from_page(next_data, user_dict, tier_dict)
+            
+        return {'users': user_dict, 'tiers': tier_dict}
+    
+    patron_dict = get_patrons_from_page(data, dict(), dict())
+    
+    pprint(patron_dict)
+    # Associate users with a tier (work around because Patreon API has a bug)
+    for user in patron_dict['users'].values():
+        if not user.get('amount'):
+            continue
+        pprint(user)
+        if not user.get('tier_id'): #Tier hasn't been returned in API (the bug) so manualy figure out
+            max_tier = dict()
+            for tier in patron_dict['tiers'].values():
+                #If user is paying enough for this tier, and this tier is higher than one we already saw, the user is in this tier
+                if (user['amount'] >= tier['required_amount']) and (not max_tier or (tier['required_amount'] >= max_tier['required_amount'])):
+                    max_tier = tier
+            user['tier_id'] = max_tier['id']
+    pprint(patron_dict)
+
+    #Clear all patrons then set them all with this list
+
+    #Final step is to iterate through patrons, lookup in database, and assign currect user group
+
+    return 
+            
