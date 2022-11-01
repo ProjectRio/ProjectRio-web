@@ -10,6 +10,7 @@ db = Connection()
 class User:
     pk       = None
     rk       = None
+    ak       = None
     url      = None
     verified = False
     groups   = list()
@@ -65,6 +66,23 @@ class User:
             return success
         
         self.groups.append('group_name'.lower())
+        return success
+
+    def register_api_key(self):
+        json = {'Username': self.username}
+        response = requests.post(f"http://127.0.0.1:5000/api_key/register/", json=json)
+        success = (response.status_code == 200)
+
+        if not success:
+            return success
+        # Confirm user is verified
+        query = ('SELECT * '
+                 'FROM api_key ' 
+                 'JOIN rio_user ON api_key.id = rio_user.api_key_id '
+                 'WHERE username = %s ')
+        params = (self.username,)
+        result = db.query(query, params)
+        self.ak = result[0]['api_key']
         return success
 
 
