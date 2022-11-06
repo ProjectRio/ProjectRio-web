@@ -45,6 +45,8 @@ def api_key_check(acceptable_user_groups):
                     api_key.last_ping_date = int(time.time())
                     db.session.add(api_key)
                     db.session.commit()
+
+                    func(*args, **kwargs)
                     return
             return abort(409, 'You do not have valid permissions to use this endpoint.')
         return decorated_function
