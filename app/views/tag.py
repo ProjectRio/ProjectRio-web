@@ -97,6 +97,8 @@ def tagset_create():
 
     if comm == None:
         return abort(409, description=f"No community found with name={in_tag_set_comm_name}")
+    if comm.sponsor_id == None:
+        return abort(410, description=f"Community is not sponsored")
     if in_tag_set_name.isalnum() == False:
         return abort(406, description='Provided tag set name is not alphanumeric. Community not created')
     if in_tag_set_end_time < in_tag_set_start_time:

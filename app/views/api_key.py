@@ -19,11 +19,12 @@ def request_apikey():
         return abort(409, "Please verify your RioWeb account before creating an ApiKey.")
 
     # Check if user already has an api key
-    if rio_user.rio_key_id:
+    if rio_user.api_key_id:
         return abort(409, 'This account already has an api key. If you have lost your api key, please go to /api_key/reset')
     
     new_api_key = ApiKey()
     db.session.add(new_api_key)
+    db.session.commit()
     rio_user.api_key_id = new_api_key.id
     db.session.add(rio_user)
     db.session.commit()
