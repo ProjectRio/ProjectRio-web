@@ -213,10 +213,13 @@ def create_default_groups():
 
     # Limits for Patron perks - TODO possibly make more robust
     # Will have an endpoint to adjust
+    admin.sponsor_limit = 999
+    developer.sponsor_limit = 999
     patron_fan.sponsor_limit = 0
     patron_rookie.sponsor_limit = 1
     patron_mvp.sponsor_limit = 5
     patron_hof.sponsor_limit = 10
+    general.sponsor_limit = 0
 
     db.session.add(admin)
     db.session.add(developer)
@@ -253,7 +256,7 @@ def create_admin_users():
     return admin_user
 
 def create_official_comms(admin_user):
-    new_comm = Community('OfficialRanked', 'Official', False, True, 'Official community of ProjectRio')
+    new_comm = Community('OfficialRanked', admin_user.id, 'Official', False, True, 'Official community of ProjectRio')
     db.session.add(new_comm)
     db.session.commit()
 

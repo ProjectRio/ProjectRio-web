@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, RioUser, UserGroup, UserGroupUser
+from ..models import Community, db, RioUser, UserGroup, UserGroupUser
 from ..decorators import api_key_check
 import os
 import requests as req
@@ -146,7 +146,7 @@ def get_groups_for_users():
 def remove_user_from_group():
     return '200'
 
-def is_user_in_groups(user_id, group_list):
+def is_user_in_groups(user_id, group_list, all=False):
     group_list = [group.lower() for group in group_list]
         
     user_groups = UserGroup.query.filter(UserGroup.name_lowercase.in_(group_list))
@@ -156,11 +156,14 @@ def is_user_in_groups(user_id, group_list):
     user_group_user_count = UserGroupUser.query.filter(
         (UserGroupUser.user_id==user_id) & (UserGroupUser.user_group_id.in_(group_id_list))).count()
 
-    return (user_group_user_count > 0)
+    if (not all):
+        return (user_group_user_count > 0)
+    else:
+        return (user_group_user_count == len(group_list))
 
 
 def wipe_patrons():
-        # Get Patreon UserGroups
+    # Get Patreon UserGroups
     patreon_user_groups = db.session.query(UserGroup).filter(UserGroup.name_lowercase in cPATREON_TIERS).all()
 
     # Create an array of UserGroup ids
@@ -170,9 +173,10 @@ def wipe_patrons():
     UserGroupUser.__table__.delete().where(UserGroupUser.user_group_id in patreon_user_group_ids)
 
 # Get groups for users
-@app.route('/patreon/refresh/')
+@app.route('/patreon/refresh/', methods=['GET'])
 @api_key_check(['Admin'])
 def refresh_patrons():
+    print('refresh_patrons()')
     wipe_patrons()
 
     campaign_api_url = 'https://www.patreon.com/api/oauth2/api/current_user/campaigns'
@@ -261,6 +265,34 @@ def refresh_patrons():
             continue
         add_user_to_user_group(rio_user.username, group_name)
     pprint(patron_dict['users'])
+
+    # Iterate through each community to see if the sponsor is a patron and within their limits. If not, remove sponsor
+    query = (
+        'SELECT \n'
+        'rio_user.id, \n'
+        'MAX(user_group.sponsor_limit) AS sponsor_limit, \n'
+        'COUNT(*) AS communities_sponsored \n'
+        'FROM rio_user \n'
+        'JOIN community ON rio_user.id = community.sponsor_id \n'
+        'JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
+        'JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
+        'GROUP BY rio_user.id \n'
+    )
+    results = db.session.execute(query).all()
+    for result_row in results:
+        result_dict = result_row._asdict()
+        pprint(result_dict)
+        if result_dict['communities_sponsored'] > result_dict['sponsor_limit']:
+            num_comms_to_remove_sponsorship_from = result_dict['communities_sponsored'] - result_dict['sponsor_limit']
+            comm_list = Community.query.filter(sponsor_id=result_dict['id']).order_by(Community.date_created)
+            for comm in comm_list:
+                if num_comms_to_remove_sponsorship_from > 0:
+                    comm.sponsor_id = None
+                    db.session.add(comm)
+                    db.session.commit()
+                    num_comms_to_remove_sponsorship_from -= 1
+                else:
+                    break
 
     return {200: 'Success'}
             

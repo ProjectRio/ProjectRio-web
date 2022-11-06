@@ -42,9 +42,11 @@ def community_create():
         return abort(410, description='Invalid community type')
     elif in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
         return abort(411, description='Non admin user cannot create official community')
+    elif not is_user_in_groups(user.id, cPATREON_TIERS):
+        return abort(412, description='Creator is not a patron')
     else:
         # === Create Community row ===
-        new_comm = Community(in_comm_name, in_comm_type, private, create_global_link, in_comm_desc)
+        new_comm = Community(in_comm_name, user.id, in_comm_type, private, create_global_link, in_comm_desc)
         db.session.add(new_comm)
         db.session.commit()
 
@@ -306,7 +308,7 @@ def community_members():
         #If user is logged in, must be a part of private community to see memebers
         else:
             comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
-            if comm_user == None:
+            if comm_user == None and comm.sponsor_id != user.id :
                 return abort(409, description='Must be a member of private community to see all members.')
 
     #If we get to this point the user is allowed to get the memeber list
@@ -454,6 +456,67 @@ def community_manage():
             pass
 
     return jsonify({"Members": updated_comm_users_list})
+
+@app.route('/community/sponsor', methods=['POST'])
+@jwt_required(optional=True)
+def community_sponsor():
+    in_comm_name = request.json['Community Name']
+    comm_name_lower = in_comm_name.lower()
+    comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
+
+
+    if comm == None:
+        return abort(409, description='Could not find community with name={in_comm_name}')
+
+    # Action - Get, Remove, Add
+    action = request.json['Action']
+    #Get
+    if action == 'Get':
+        if comm.sponsor_id == None:
+            return jsonify({'Sponsor': None})
+        else:
+            sponsor_user = RioUser.query.filter_by(id=comm.sponsor_id).first()
+            return jsonify({'Sponsor': sponsor_user})
+
+    #Get user via JWT or RioKey 
+    user=None
+    current_user_username = get_jwt_identity()
+    if current_user_username:
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    else:
+        try:
+            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+        except:
+            return abort(409, description="No Rio Key or JWT Provided")
+
+    if user == None:
+        return abort(409, description='No user logged in or associated with RioKey.')
+
+    #Remove
+    if action == 'Remove':
+        if comm.sponsor_id == None:
+            return jsonify({'Sponsor': None})
+        else:
+            sponsor_user = RioUser.query.filter_by(id=comm.sponsor_id).first()
+            if sponsor_user == user:
+                comm.sponsor_id = None
+                db.session.add(comm)
+                db.session.commit()
+                return jsonify({'Sponsor': None})
+            else:
+                return abort(409, description="Only current sponsor can withdraw sponsorship")
+    #Add
+    elif action == 'Add':
+        if comm.sponsor_id == None:
+            comm.sponsor_id = user.id
+            db.session.add(comm)
+            db.session.commit()
+            return jsonify({'Sponsor': None})
+        else:
+            return abort(409, description="Community is already sponsored")
+
+    return
+
 
 def add_all_users_to_comm(comm_id):
     rio_user_list = RioUser.query.all()
