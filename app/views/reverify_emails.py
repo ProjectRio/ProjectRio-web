@@ -4,7 +4,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, GameTag
-from ..email import send_email
+from ..send_email import send_email
 
 @app.route("/reverification/")
 def reverify_email():

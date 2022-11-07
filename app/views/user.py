@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, GameTag
-from ..email import send_email
+from ..send_email import send_email
 from app.views.community import add_user_to_all_comms
 
 # === User Registration Front End ===
