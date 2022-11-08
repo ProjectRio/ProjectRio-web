@@ -70,8 +70,21 @@ def submit_reverify_email():
         <p>Rio Team</p>
         '''
     )
+    text_content = (
+        f'''
+            Hey, {user.username}!\n
+            Your reverification is underway!\n
+            \n
+            Next steps\n
+            Please click the following link to reverify your account\n
+            https://projectrio-api-1.api.projectrio.app/confirm_reverification/{user.active_url}\n
+            \n
+            Happy Hitting!\n
+            Project Rio Web Team
+        '''
+    )
     try:
-        send_email(user.email, subject, html_content)
+        send_email(user.email, subject, html_content, text_content)
     except:
         return abort(502, 'Failed to send email')
     

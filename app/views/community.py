@@ -62,14 +62,21 @@ def community_create():
 
         # === Send Email ===
         subject = 'ProjectRio - New community created!'
-
         community_type = 'private' if private else 'public'
         html_content = (
             f'''
-            <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
+                <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
+                <br/>
+                <p>Happy Hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Congratulations on starting a new {community_type} community, {new_comm.name}!\n
+                \n
+                Happy hitting!
+                Project Rio Web Team
             '''
         )
 
@@ -78,7 +85,7 @@ def community_create():
         if (new_comm.comm_type == 'Official'):
             add_all_users_to_comm(new_comm.id)
         try:
-            send_email(user.email, subject, html_content)
+            send_email(user.email, subject, html_content, text_content)
         except:
             return abort(502, description='Failed to send email')
             
@@ -261,16 +268,25 @@ def community_invite():
         #TODO figure out the URL to join
         html_content = (
             f'''
-            <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
-            <p>Follow the link below to join (TODO add link below)!</p>
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
+                <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
+                <p>Follow the link below to join (TODO add link below)!</p>
+                <br/>
+                <p>Happy Hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Congratulations {invited_user.username}! You have been invited to join {comm.name}!
+                Follow the link below to join (TODO add link below)!
+                \n
+                Happy Hitting!\n
+                Project Rio Web Team
             '''
         )
 
         try:
-            send_email(invited_user.email, subject, html_content)
+            send_email(invited_user.email, subject, html_content, text_content)
         except:
             return abort(502, description='Failed to send email')
 

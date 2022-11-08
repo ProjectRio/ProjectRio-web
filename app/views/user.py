@@ -37,20 +37,30 @@ def register():
         db.session.commit()
 
         subject = 'Verify your Project Rio Account'
-
         html_content = (
             f'''
-            <h1>Welcome to Rio Web, {in_username}!</h1>
-            <p>Please click the following link to verify your email address and get your Rio Key.</p>
-            <a href={'https://projectrio-api-1.api.projectrio.app/verify_email/' + new_user.active_url}>Verfiy Me!</a>
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
+                <h1>Welcome to Rio Web, {in_username}!</h1>
+                <p>Please click the following link to verify your email address and get your Rio Key.</p>
+                <a href={'https://projectrio-api-1.api.projectrio.app/verify_email/' + new_user.active_url}>Verfiy Me!</a>
+                <br/>
+                <p>Happy Hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Welcome to Rio Web, {in_username}!\n
+                Please click the following link to verify your email address and get your Rio Key.\n
+                https://projectrio-api-1.api.projectrio.app/verify_email/{new_user.active_url}\n
+                \n
+                \n
+                Happy hitting!\n
+                Project Rio Web Team
             '''
         )
 
         try:
-            send_email(in_email, subject, html_content)
+            send_email(in_email, subject, html_content, text_content)
         except:
             return abort(502, 'Failed to send email')
         
@@ -66,29 +76,46 @@ def verify_email(active_url):
         user.active_url = None
         
         subject = 'Your Rio Key'
-
         html_content = (
             f'''
-            <h1>Welcome to Rio Web, {user.username}!</h1>
-            <p>Your account has been verified!</p> 
-            <br/>
-            <h3>Here is your Rio Key: {user.rio_key}</h3>
-            <h3>Directions</h3>
-            <ol>
-                <li>From the main Rio screen click "Local Play" then "Add Player"</li>
-                <li>Enter your username and Rio Key</li>
-                <li>Have fun!</li>
-            </ol>
-            <p>If you already have a Local Player saved with the same name...</p>
-            <ol>
-                <li>Click the Local Play tab in the client</li>
-                <li>Remove your original local player name</li>
-                <li>Click "Add Player" and enter your new username and rio key</li>
-            </ol>
+                <h1>Welcome to Rio Web, {user.username}!</h1>
+                <p>Your account has been verified!</p> 
+                <br/>
+                <h3>Here is your Rio Key: {user.rio_key}</h3>
+                <h3>Directions</h3>
+                <ol>
+                    <li>From the main Rio screen click "Local Play" then "Add Player"</li>
+                    <li>Enter your username and Rio Key</li>
+                    <li>Have fun!</li>
+                </ol>
+                <p>If you already have a Local Player saved with the same name...</p>
+                <ol>
+                    <li>Click the Local Play tab in the client</li>
+                    <li>Remove your original local player name</li>
+                    <li>Click "Add Player" and enter your new username and rio key</li>
+                </ol>
 
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
+                <br/>
+                <p>Happy hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Welcome to Rio Web, {user.username}!\n
+                Your account has been verified!\n
+                Here is your Rio Key: {user.rio_key}\n
+                Directions\n
+                - From the main Rio screen click "Local Play" then "Add Player"\n
+                - Enter your username and Rio Key\n
+                - Have fun!\n
+                If you already have a Local Player saved with the same name...\n
+                - Click the Local Play tab in the client\n
+                - Remove your original local player name\n
+                - Click "Add Player" and enter your new username and rio key\n
+                \n
+                Happy hitting!\n
+                Project Rio Web Team
             '''
         )
 
@@ -96,7 +123,7 @@ def verify_email(active_url):
         add_user_to_all_comms(user.id, 'Official')
 
         try:
-            send_email(user.email, subject, html_content)
+            send_email(user.email, subject, html_content, text_content)
         except:
             return abort(502, 'Failed to send email')
 
@@ -131,20 +158,33 @@ def request_password_change():
     db.session.commit()
 
     subject = 'Project Rio Password Reset Request'
-
     html_content =  (
-        f'Dear {user.email},\n'
-        '\n'
-        'We received a password reset request for your account. If you did not make this request, please ignore this email.\n'
-        'Otherwise, follow this link to reset your password:\n'
-        f'{user.active_url}\n'
-        '\n'
-        'Happy hitting!\n'
-        'Project Rio Web Team'
+        f'''
+            Dear {user.email},\n
+            \n
+            We received a password reset request for your account. If you did not make this request, please ignore this email.\n
+            Otherwise, follow this link to reset your password:\n
+            {user.active_url}\n
+            \n
+            Happy hitting!\n
+            Project Rio Web Team     
+        '''
+    )
+    text_content = (
+        f'''
+            Dear {user.email},\n
+            We received a password reset request for your account. If you did not make this request, please ignore this email.\n
+            Otherwise, follow this link to reset your password:\n
+            {user.active_url}\n
+            \n
+            Happy hitting!\n
+            Project Rio Web Team     
+
+        '''
     )
     
     try:
-        send_email(user.email, subject, html_content)
+        send_email(user.email, subject, html_content, text_content)
     except:
         abort(502, 'Failed to send email')
 
