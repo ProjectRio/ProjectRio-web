@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from ...models import db, RioUser, Game
-from ...helper_functions import calculate_era
+from ...util import calculate_era
 
 '''
 @ Description: Returns box score data

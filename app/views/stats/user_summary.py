@@ -1,7 +1,7 @@
 from flask import request, abort
 from flask import current_app as app
 from ...models import db, RioUser
-from ...helper_functions import calculate_era
+from ...util import calculate_era
 
 # API Request URL example: /profile/stats/?recent=10&username=demouser1
 '''

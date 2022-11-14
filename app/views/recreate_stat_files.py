@@ -2,7 +2,7 @@ from flask import request, jsonify, abort
 from flask import current_app as app
 from ..models import db, Game, Event, RioUser, CharacterGameSummary
 from .stat_retrieval import endpoint_games, endpoint_event
-from ..helper_functions import format_tuple_for_SQL, sanatize_ints
+from ..util import format_tuple_for_SQL, sanatize_ints
 import json
 import itertools
 

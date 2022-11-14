@@ -3,7 +3,7 @@ from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag, Event
 from ..consts import *
-from ..helper_functions import calculate_era, format_tuple_for_SQL, format_list_for_SQL
+from ..util import calculate_era, format_tuple_for_SQL, format_list_for_SQL
 import pprint
 import time
 import datetime

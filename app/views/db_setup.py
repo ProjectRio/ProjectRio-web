@@ -1,6 +1,7 @@
 from flask import request, abort
 from flask import current_app as app
 from ..models import *
+from ..consts import *
 import json
 import os
 
@@ -256,7 +257,7 @@ def create_admin_users():
     return admin_user
 
 def create_official_comms(admin_user):
-    new_comm = Community('OfficialRanked', admin_user.id, 'Official', False, True, 'Official community of ProjectRio')
+    new_comm = Community('OfficialRanked', admin_user.id, 'Official', False, cACTIVE_TAGSET_LIMIT, True, 'Official community of ProjectRio')
     db.session.add(new_comm)
     db.session.commit()
 
