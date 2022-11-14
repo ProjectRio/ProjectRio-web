@@ -36,57 +36,84 @@ def community_create():
         return abort(409, description='Community name already in use')
     if user == None:
         return abort(409, description='Username associated with JWT not found. Community not created')
-    elif in_comm_name.isalnum() == False:
+    if in_comm_name.isalnum() == False:
         return abort(406, description='Provided community name is not alphanumeric. Community not created')
-    elif in_comm_type not in cCOMM_TYPES.values():
+    if in_comm_type not in cCOMM_TYPES.values():
         return abort(410, description='Invalid community type')
-    elif in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
+    if in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
         return abort(411, description='Non admin user cannot create official community')
-    elif not is_user_in_groups(user.id, cPATREON_TIERS):
+    if not is_user_in_groups(user.id, cPATREON_TIERS) and not is_user_in_groups(user.id, ['Admin']):
         return abort(412, description='Creator is not a patron')
-    else:
-        # === Create Community row ===
-        new_comm = Community(in_comm_name, user.id, in_comm_type, private, create_global_link, in_comm_desc)
-        db.session.add(new_comm)
-        db.session.commit()
 
-        # === Create CommunityUser (admin)
-        new_comm_user = CommunityUser(user.id, new_comm.id, True, False, True)
-        db.session.add(new_comm_user)
-        db.session.commit()
+    # Check that patron can sponsor a new community
+    communities_sponsored = Community.query.filter(Community.sponsor_id==user.id).count()
 
-        # === Create Community Tag ===
-        new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", f"Community tag for {new_comm.name}")
-        db.session.add(new_comm_tag)
-        db.session.commit()
+    limit_query = (
+        'SELECT \n'
+        'rio_user.id, \n'
+        'MAX(user_group.sponsor_limit) AS sponsor_limit \n'
+        'FROM rio_user \n'
+        'JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
+        'JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
+        f'WHERE rio_user.id = {user.id} \n'
+        'GROUP BY rio_user.id \n'
+    )
+    results = db.session.execute(limit_query).first()
+    sponsor_limit = 0 if results == None else results._asdict()['sponsor_limit']
 
-        # === Send Email ===
-        subject = 'ProjectRio - New community created!'
+    # Results will be None if patron is not sponsoring any communities
+    # Allow this community to be created if None or if under the limit
+    if communities_sponsored >= sponsor_limit:
+        return abort(413, description='Patron has reached limit of sponsored communities')
 
-        community_type = 'private' if private else 'public'
-        html_content = (
-            f'''
-            <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
-            '''
-        )
+    # === Create Community row ===
+    new_comm = Community(in_comm_name, user.id, in_comm_type, private, 
+                            cACTIVE_TAGSET_LIMIT, create_global_link,
+                            in_comm_desc)
+    db.session.add(new_comm)
+    db.session.commit()
 
-        # === Take action based comm type === 
-        # Add all users to new official community TODO
-        if (new_comm.comm_type == 'Official'):
-            add_all_users_to_comm(new_comm.id)
-        try:
-            send_email(user.email, subject, html_content)
-        except:
-            return abort(502, description='Failed to send email')
+    # === Create CommunityUser (admin)
+    new_comm_user = CommunityUser(user.id, new_comm.id, True, False, True)
+    db.session.add(new_comm_user)
+    db.session.commit()
+
+    # === Create Community Tag ===
+    new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", f"Community tag for {new_comm.name}")
+    db.session.add(new_comm_tag)
+    db.session.commit()
+
+    # === Send Email ===
+    subject = 'ProjectRio - New community created!'
+
+    community_type = 'private' if private else 'public'
+    html_content = (
+        f'''
+        <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
+        <br/>
+        <p>Happy Hitting!</p>
+        <p>Rio Team</p>
+        '''
+    )
+
+    # === Take action based comm type === 
+    # Add all users to new official community TODO
+    if (new_comm.comm_type == 'Official'):
+        add_all_users_to_comm(new_comm.id)
+    try:
+        send_email(user.email, subject, html_content)
+    except:
+        return abort(502, description='Failed to send email')
             
     return jsonify({
         'community name': new_comm.name,
         'private': new_comm.private,
         'active_url': new_comm.active_url
     })
+
+@app.route('/community/join/<comm_name>', methods=['POST'])
+def community_join_url_simple(comm_name):
+    return community_join(comm_name, None)
 
 @app.route('/community/join/<comm_name>/<active_url>', methods=['POST'])
 def community_join_url(comm_name, active_url):
@@ -508,6 +535,27 @@ def community_sponsor():
     #Add
     elif action == 'Add':
         if comm.sponsor_id == None:
+            # Make sure that user is under limit
+            communities_sponsored = Community.query.filter(Community.sponsor_id==user.id).count()
+
+            limit_query = (
+                'SELECT \n'
+                'rio_user.id, \n'
+                'MAX(user_group.sponsor_limit) AS sponsor_limit \n'
+                'FROM rio_user \n'
+                'JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
+                'JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
+               f'WHERE rio_user.id = {user.id} \n'
+                'GROUP BY rio_user.id \n'
+            )
+            results = db.session.execute(limit_query).first()
+            sponsor_limit = 0 if results == None else results._asdict()['sponsor_limit']
+
+            # Results will be None if patron is not sponsoring any communities
+            # Allow this community to be created if None or if under the limit
+            if communities_sponsored >= sponsor_limit:
+                return abort(413, description='Patron has reached limit of sponsored communities')
+            # Add new sponsor
             comm.sponsor_id = user.id
             db.session.add(comm)
             db.session.commit()

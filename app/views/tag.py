@@ -106,6 +106,25 @@ def tagset_create():
     if in_tag_set_type not in cTAG_SET_TYPES.values():
         return abort(409, description='Invalid tag type')
 
+    # Make sure community is under the limit of active tag types
+    current_unix_time = int( time.time() )
+
+    query = (
+        'SELECT \n'
+        'MAX(community.active_tag_set_limit) AS tag_set_limit, \n'
+        'COUNT(*) AS active_tag_sets \n'
+        'FROM tag_set \n'
+        'JOIN community ON community.id = tag_set.community_id \n'
+       f'WHERE tag_set.end_date > {current_unix_time} \n'
+        'GROUP BY tag_set.community_id \n'
+    )
+    results = db.session.execute(query).first()
+    if results != None:
+        result_dict = results._asdict()
+        print(result_dict)
+        if result_dict['active_tag_sets'] >= result_dict['tag_set_limit']:
+            return abort(413, description='Community has reached active tag_set_limit')
+
     # Get user making the new community
     #Get user via JWT or RioKey
     user=None
