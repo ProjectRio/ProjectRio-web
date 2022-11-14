@@ -2,8 +2,7 @@ from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
-from ..email import send_email
-import secrets
+from ..send_email import send_email
 from ..models import db, RioUser, CommunityUser, Community, Tag
 from ..consts import *
 from app.views.user_groups import *
@@ -85,14 +84,21 @@ def community_create():
 
     # === Send Email ===
     subject = 'ProjectRio - New community created!'
-
     community_type = 'private' if private else 'public'
     html_content = (
         f'''
-        <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
-        <br/>
-        <p>Happy Hitting!</p>
-        <p>Rio Team</p>
+            <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
+            <br/>
+            <p>Happy Hitting!</p>
+            <p>Rio Team</p>
+        '''
+    )
+    text_content = (
+        f'''
+            Congratulations on starting a new {community_type} community, {new_comm.name}!\n
+            \n
+            Happy hitting!
+            Project Rio Web Team
         '''
     )
 
@@ -101,10 +107,10 @@ def community_create():
     if (new_comm.comm_type == 'Official'):
         add_all_users_to_comm(new_comm.id)
     try:
-        send_email(user.email, subject, html_content)
+        send_email(user.email, subject, html_content, text_content)
     except:
         return abort(502, description='Failed to send email')
-            
+
     return jsonify({
         'community name': new_comm.name,
         'private': new_comm.private,
@@ -284,20 +290,30 @@ def community_invite():
 
         # === Send Email ===
         subject = 'ProjectRio - You have been invited to a community!'
-
-        #TODO figure out the URL to join
         html_content = (
             f'''
-            <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
-            <p>Follow the link below to join (TODO add link below)!</p>
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
+                <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
+                <p>Click the following link to join: </p>
+                <a href={'https://www.projectrio-api-1.api.projectrio.app/community/join/' + comm.name + '/'}>Click here to join!</a>
+                <br/>
+                <p>Happy Hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Congratulations {invited_user.username}! You have been invited to join {comm.name}!
+                Click the following link to join:\n
+                https://www.projectrio-api-1.api.projectrio.app/community/join/{comm.name}/
+                \n
+                \n
+                Happy Hitting!\n
+                Project Rio Web Team
             '''
         )
 
         try:
-            send_email(invited_user.email, subject, html_content)
+            send_email(invited_user.email, subject, html_content, text_content)
         except:
             return abort(502, description='Failed to send email')
 

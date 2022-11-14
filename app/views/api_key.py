@@ -2,7 +2,7 @@ from flask import request, abort
 from flask import current_app as app
 import secrets
 from ..models import db, ApiKey, RioUser
-from ..email import send_email
+from ..send_email import send_email
 
 @app.route('/api_key/register/', methods=['POST'])
 def request_apikey():
@@ -30,17 +30,28 @@ def request_apikey():
     db.session.commit()
 
     subject = 'Your Rio Web API Key!'
-
     html_content = (
-        'Here is your Rio Web API Key:\n'
-        f'{new_api_key.api_key}\n'
-        'We look forward to seeing what you do with it!\n'
-        'Happy Hitting!\n'
-        'Project Rio Web Team'
+        f'''
+            <h1>Here is your Rio Web API Key:</h1>
+            <p>{new_api_key.api_key}</p>
+            <p>We look forward to seeing what you do with it!</p>
+            </br>
+            <p>Happy Hitting!</p>
+            <p>Project Rio Web Team</p>
+        '''
+    )
+    text_content = (
+        f'''
+            Here is your Rio Web API Key:\n
+            {new_api_key.api_key}\n
+            We look forward to seeing what you do with it!\n
+            Happy Hitting!\n
+            Project Rio Web Team
+        '''
     )
 
     try:
-        send_email(rio_user.email, subject, html_content)
+        send_email(rio_user.email, subject, html_content, text_content)
     except:
         return abort(502, 'Failed to send email')
 
@@ -60,17 +71,26 @@ def reset_api_key():
         db.session.commit()
 
         subject = 'Your Project Rio API Key has been reset'
-
         html_content = (
-            'Your new Project Rio API Key is listed below.\n'
-            f'{api_key.api_key}'
-            '\n'
-            'Happy Hitting!\n'
-            'Project Rio Web Team'
+            f'''
+                <h1>Your new Project Rio API Key is listed below:</h1>
+                <p>{api_key.api_key}</p>
+                </br>
+                <p>Happy Hitting!</p>
+                <p>Project Rio Web Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Your new Project Rio API Key is listed below.\n
+                {api_key.api_key}\n
+                Happy Hitting!\n
+                Project Rio Web Team
+            '''
         )
       
         try:
-            send_email(api_key.email, subject, html_content)
+            send_email(api_key.email, subject, html_content, text_content)
         except:
             abort(502, 'Failed to send email')
 
