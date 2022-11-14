@@ -23,7 +23,7 @@ class User:
             length = random.randint(3,20)
             in_user_dict['Username'] = ''.join(random.choices(string.ascii_letters, k=length))
             in_user_dict['Email'] =  ''.join(random.choices(string.ascii_letters, k=length)) + "@email.com"
-            in_user_dict['Password'] =  ''.join(random.choices(string.ascii_letters + string.digits + string.punctuation , k=length))
+            in_user_dict['Password'] =  ''.join(random.choices(string.ascii_letters + string.digits + string.punctuation , k=20))
         self.username = in_user_dict['Username']
         self.email = in_user_dict['Email']
         self.password = in_user_dict['Password']
@@ -79,13 +79,51 @@ class User:
         query = ('SELECT * '
                  'FROM api_key ' 
                  'JOIN rio_user ON api_key.id = rio_user.api_key_id '
-                 'WHERE username = %s ')
+                 'WHERE rio_user.username = %s ')
         params = (self.username,)
         result = db.query(query, params)
         self.ak = result[0]['api_key']
         return success
 
+    def refresh(self):
+        query = ('SELECT * FROM rio_user \n'
+                 'WHERE username = %s')
+        params = (self.username,)
+        result = db.query(query, params)
 
+        print(result[0])
+
+        self.username = result[0]['username']
+        self.email    = result[0]['email']
+        self.pk       = result[0]['id']
+        self.url      = result[0]['active_url']
+        self.verified = result[0]['verified']
+        self.rk       = result[0]['rio_key']
+
+        query = ('SELECT * FROM rio_user \n'
+                 'JOIN api_key ON api_key.id = rio_user.api_key_id \n'
+                 'WHERE username = %s')
+        params = (self.username,)
+        result = db.query(query, params)
+
+        print('API Key len:', len(result))
+
+        if len(result) > 0:
+            self.ak = result[0]['api_key']
+        else:
+            self.ak = None
+
+        # User groups
+        self.groups.clear()
+        query = ('SELECT * '
+                 'FROM rio_user ' 
+                 'JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
+                 'JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
+                 'WHERE rio_user.username = %s ')
+        params = (self.username,)
+        result = db.query(query, params)
+        for result_row in result:
+            self.groups.append(result_row['name'])
 
 class CommUser():
     def __init__(self, user, comm_user_pk, comm_id, admin, invited, active, banned):
@@ -136,6 +174,9 @@ class Community:
         self.members = dict()
         self.members[self.founder.pk] = self.founder
 
+        # Save sponsor
+        self.sponsor = founder_user
+
         self.tags = dict()
         self.tagsets = dict()
 
@@ -144,7 +185,11 @@ class Community:
 
     #def join_via_url(self, user, name_err=False, url_err=False, rk_err=False):
     def join_via_url(self, user):
-        response = requests.post("http://127.0.0.1:5000/community/join/{}/{}".format(self.name, self.url), json={'Rio Key': user.rk})
+        if (self.url != None):
+            endpoint = "http://127.0.0.1:5000/community/join/{}/{}".format(self.name, self.url)
+        else:
+            endpoint = "http://127.0.0.1:5000/community/join/{}".format(self.name)
+        response = requests.post(endpoint, json={'Rio Key': user.rk})
         success = (response.status_code == 200)
 
         if not success:
@@ -212,7 +257,18 @@ class Community:
         if (success):
             self.refresh()
         return success
-    
+
+    def manage_sponsor(self, user, modification):
+        json = {'Community Name': self.name, 'Action': modification, 'Rio Key': user.rk}
+
+        response = requests.post("http://127.0.0.1:5000/community/sponsor", json=json)
+
+        success = (response.status_code == 200)
+
+        self.refresh()
+
+        return success
+
     # Pulls all comm users and updates members list
     def refresh(self):
         query = ('SELECT * \n'
@@ -257,6 +313,27 @@ class Community:
             tagset.refresh()
 
             self.tagsets[tagset.pk] = tagset
+
+        # Get the sponsor
+        query = ('SELECT * \n'
+                 'FROM rio_user \n'
+                 'JOIN community ON community.sponsor_id = rio_user.id \n'
+                 'WHERE community.id = %s')
+        params = (str(self.pk),)
+        result = db.query(query, params)
+
+        if len(result) == 0:
+            self.sponsor = None
+        else:
+            user = User()
+            user.username = result[0]['username']
+            user.email    = result[0]['email']
+            user.pk       = result[0]['id']
+            user.verified = result[0]['verified']
+            user.rk       = result[0]['rio_key']
+            user.refresh()
+
+            self.sponsor = user   
 
     def get_member(self, user):
         for comm_user in self.members.values():
@@ -421,3 +498,10 @@ def compare_comm_tag_to_dict(tag_dict, tag):
          and tag_dict['name']    == tag.name
          and tag_dict['type']    == tag.type
          and tag_dict['active']  == tag.active )
+
+def compare_users(user_a, user_b):
+    return (user_a.pk == user_b.pk
+        and user_a.rk == user_b.rk
+        and user_a.ak == user_b.ak
+        and user_a.url == user_b.url
+        and user_a.verified == user_b.verified)
