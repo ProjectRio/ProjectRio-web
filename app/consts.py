@@ -53,6 +53,8 @@ cCOMM_TYPES = {
 
 cPATREON_TIERS = ['Patron: Fan', 'Patron: Rookie', 'Patron: MVP', 'Patron: Hall of Famer']
 
+cACTIVE_TAGSET_LIMIT = 5
+
 cCHAR_ALIASES = {
     "Mario": 0,
     "Luigi": 1,
