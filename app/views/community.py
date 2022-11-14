@@ -3,7 +3,6 @@ from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 from ..send_email import send_email
-import secrets
 from ..models import db, RioUser, CommunityUser, Community, Tag
 from ..consts import *
 from app.views.user_groups import *
@@ -268,7 +267,7 @@ def community_invite():
             f'''
                 <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
                 <p>Click the following link to join: </p>
-                <a href={'https://projectrio-api-1.api.projectrio.app/community/join/' + comm.name + '/'}>Click here to join!</a>
+                <a href={'https://www.projectrio-api-1.api.projectrio.app/community/join/' + comm.name + '/'}>Click here to join!</a>
                 <br/>
                 <p>Happy Hitting!</p>
                 <p>Rio Team</p>
@@ -278,7 +277,7 @@ def community_invite():
             f'''
                 Congratulations {invited_user.username}! You have been invited to join {comm.name}!
                 Click the following link to join:\n
-                https://projectrio-api-1.api.projectrio.app/community/join/{comm.name}/
+                https://www.projectrio-api-1.api.projectrio.app/community/join/{comm.name}/
                 \n
                 \n
                 Happy Hitting!\n
