@@ -2,6 +2,7 @@ from flask import request, abort
 from flask import current_app as app
 from ..models import Community, db, RioUser, UserGroup, UserGroupUser
 from ..decorators import api_key_check
+from ..util import format_list_for_SQL
 import os
 import requests as req
 from pprint import pprint
@@ -62,7 +63,7 @@ def add_user_to_user_group(in_username = None, in_group_name = None):
             user_group_id=user_group.id
         ).first()
         if user_group_user:
-            return abort(409, description='User is already a member of this group.')
+            return {200: 'User is already a member of this group.'}
 
         # Create a UserGroupUser row
         try:
@@ -156,7 +157,9 @@ def is_user_in_groups(user_id, group_list, all=False):
     user_group_user_count = UserGroupUser.query.filter(
         (UserGroupUser.user_id==user_id) & (UserGroupUser.user_group_id.in_(group_id_list))).count()
 
-    if (not all):
+    print(user_group_user_count)
+
+    if (all==False):
         return (user_group_user_count > 0)
     else:
         return (user_group_user_count == len(group_list))
@@ -164,13 +167,18 @@ def is_user_in_groups(user_id, group_list, all=False):
 
 def wipe_patrons():
     # Get Patreon UserGroups
-    patreon_user_groups = db.session.query(UserGroup).filter(UserGroup.name_lowercase in cPATREON_TIERS).all()
+    patreon_user_groups = db.session.query(UserGroup).filter(UserGroup.name.in_(cPATREON_TIERS)).all()
 
     # Create an array of UserGroup ids
     patreon_user_group_ids = [group.id for group in patreon_user_groups]
+    patreon_user_group_ids_tuple, empty = format_list_for_SQL(patreon_user_group_ids)
 
-    # Delete UserGroupUsers with patreon UserGroup ids
-    UserGroupUser.__table__.delete().where(UserGroupUser.user_group_id in patreon_user_group_ids)
+    # SQL to clear all users from patron groups
+    cmd = (
+        'DELETE from user_group_user \n'
+       f'WHERE user_group_id IN {patreon_user_group_ids_tuple}'
+    )
+    db.session.execute(cmd)
 
 # Get groups for users
 @app.route('/patreon/refresh/', methods=['GET'])
@@ -186,13 +194,11 @@ def refresh_patrons():
     data = response.json()
     campaign_id = data['data'][0]['id']
 
-    # print('Rio Campaign ID =', campaign_id)
-
     patrons_api_url = f'https://www.patreon.com/api/oauth2/api/campaigns/{campaign_id}/pledges?include=patron.null'
     response = req.get(patrons_api_url, headers=header)
     data = response.json()
-    #pprint(patron_list)
 
+    #Build a more readable dict from the patreon response
     patron_dict = dict()
     def get_patrons_from_page(data, user_dict, tier_dict):
         for entry in data['included']:
@@ -264,7 +270,6 @@ def refresh_patrons():
         if rio_user == None:
             continue
         add_user_to_user_group(rio_user.username, group_name)
-    pprint(patron_dict['users'])
 
     # Iterate through each community to see if the sponsor is a patron and within their limits. If not, remove sponsor
     query = (
@@ -284,15 +289,15 @@ def refresh_patrons():
         pprint(result_dict)
         if result_dict['communities_sponsored'] > result_dict['sponsor_limit']:
             num_comms_to_remove_sponsorship_from = result_dict['communities_sponsored'] - result_dict['sponsor_limit']
-            comm_list = Community.query.filter(sponsor_id=result_dict['id']).order_by(Community.date_created)
+            comm_list = Community.query.filter_by(sponsor_id=result_dict['id']).order_by(Community.date_created)
             for comm in comm_list:
                 if num_comms_to_remove_sponsorship_from > 0:
                     comm.sponsor_id = None
                     db.session.add(comm)
                     db.session.commit()
                     num_comms_to_remove_sponsorship_from -= 1
-                else:
+                if num_comms_to_remove_sponsorship_from == 0:
                     break
 
-    return {200: 'Success'}
+    return 200
             
