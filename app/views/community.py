@@ -264,12 +264,11 @@ def community_invite():
 
         # === Send Email ===
         subject = 'ProjectRio - You have been invited to a community!'
-
-        #TODO figure out the URL to join
         html_content = (
             f'''
                 <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
-                <p>Follow the link below to join (TODO add link below)!</p>
+                <p>Click the following link to join: </p>
+                <a href={'https://projectrio-api-1.api.projectrio.app/community/join/' + comm.name + '/'}>Click here to join!</a>
                 <br/>
                 <p>Happy Hitting!</p>
                 <p>Rio Team</p>
@@ -278,7 +277,9 @@ def community_invite():
         text_content = (
             f'''
                 Congratulations {invited_user.username}! You have been invited to join {comm.name}!
-                Follow the link below to join (TODO add link below)!
+                Click the following link to join:\n
+                https://projectrio-api-1.api.projectrio.app/community/join/{comm.name}/
+                \n
                 \n
                 Happy Hitting!\n
                 Project Rio Web Team
