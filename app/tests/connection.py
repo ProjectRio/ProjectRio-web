@@ -4,11 +4,15 @@ import os
 
 class Connection(object):
     def __init__(self):
-        self.url = os.getenv("POSTGRES_URL")[:-6]
+        self.db = os.getenv("POSTGRES_DB")
+        if self.db == "dev":
+            self.url = os.getenv("POSTGRES_URL")[:-5]
+            self.port = os.getenv("POSTGRES_URL")[-4:]
+        else:
+            self.url = os.getenv("POSTGRES_URL")[:-6]
+            self.port = os.getenv("POSTGRES_URL")[-5:]
         self.user = os.getenv("POSTGRES_USER")
         self.pw = os.getenv("POSTGRES_PW")
-        self.db = os.getenv("POSTGRES_DB")
-        self.port = os.getenv("POSTGRES_URL")[-5:]
 
     def query(self, query, params):
         try:
