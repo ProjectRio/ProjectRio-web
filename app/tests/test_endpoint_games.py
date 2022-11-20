@@ -19,7 +19,7 @@ import requests
 @ Output:
     - List of games and highlevel info based on flags
 '''
-
+'''
 # External tests
 def test_external_endpoint_games_limit_games_param_works_as_expected_1():
     response = requests.get("http://127.0.0.1:5000/games/?limit_games=1")
@@ -97,7 +97,7 @@ def test_games_excludes_specified_tags():
 # exclude username
 
 # captain vs_captain exclude_captain
-
+'''
 
 
 # COMMENTED OUT SOME MODEL UPDATES, MAKE SURE TO UNCOMMENT THEM
