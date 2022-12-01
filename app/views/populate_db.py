@@ -7,7 +7,7 @@ from random import random
 
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
-    version_split = game.version.split('.')
+    version_split = request.json['Version'].split('.')
     if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
         abort(400, "Not accepting games from clients below 1.9.5")
 
@@ -20,20 +20,28 @@ def populate_db2():
     away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
 
     if home_player is None or away_player is None:
-        return abort(400, 'Invalid Rio User')
+        return abort(410, 'Invalid Rio User')
     if home_player.verified is False or away_player.verified is False:
-        return abort(400, "Both users must be verified to submit games.")
+        return abort(411, "Both users must be verified to submit games.")
+    
+
+    # Detect invalid games
+    innings_selected = request.json['Innings Selected']
+    innings_played = request.json['Innings Played']
+    score_difference = abs(request.json['Home Score'] - request.json['Away Score'])
+    is_valid = False if innings_played < innings_selected and score_difference < 10 else True
+
     if innings_played < innings_selected and score_difference < 10:
-        return abort(400, "Invalid Game: Innings Played < Innings Selected & Score Difference < 10")
+        return abort(412, "Invalid Game: Innings Played < Innings Selected & Score Difference < 10")
     
     # Verify Tags exist
-    tag_ids = list()
+    tag_ids = list() # THIS ARRAY WILL BE FILLED WITH FOREIGN KEYS, DO NOT POPULATE IT UNLESS ADDING VALUES FROM SQL ROWS
     json_tags = request.json['Tags']
     tag_set_tag = None
 
     tags = Tag.query.filter(Tag.id.in_(json_tags))
-    if len(tags) != len(json_tags):
-        abort(400, "Invalid Tag(s) submitted.")
+    print(type(tags))
+    print(dir(tags))
 
     # Iterate through SQLAlchemy tags objects and find the TagSetTag.
     # If there is more than 1 abort.
@@ -41,37 +49,35 @@ def populate_db2():
         # All TagSet Tags have the type Competition
         if tag.tag_type == "Competition":
             if tag_set_tag != None:
-                abort(400, "Only one TagSet Tag can be submitted per game.")
+                abort(414, "Only one TagSet Tag can be submitted per game.")
             tag_set_tag = tag
 
-    if not tag_set_tag:
-        abort(400, "TagSet Tag not provided.")
+    if tag_set_tag:   
+        # Get TagSet Id
+        tag_set_id = db.session.execute((
+            "SELECT \n"
+            "tagset_id \n"
+            "FROM tag_set_tag \n"
+            f"WHERE tag_set_tag.tag_id = {tag_set_tag.id}"
+        )).first()[0]
 
-    # Get TagSet Id
-    tag_set_id = db.session.execute((
-        "SELECT \n"
-        "tagset_id \n"
-        "FROM tag_set_tag \n"
-        f"WHERE tag_set_tag.tag_id = {tag_set_tag.id}"
-    )).first()
+        # Get all Tags for TagSet
+        tag_ids_from_tag_set = db.session.execute((
+            "SELECT \n"
+            "tag_id \n"
+            "FROM tag_set_tag \n"
+            f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
+        )).all()
 
-    # Get all Tags for TagSet
-    tags_by_tag_set_id = db.session.execute((
-        "SELECT \n"
-        "tag_id \n"
-        "FROM tag_set_tag \n"
-        f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
-    )).all()
-
-    # Verify all TagSet Tags are present in passed tags
-    for tag in tags_by_tag_set_id:
-        if tag.id not in tag_ids:
-            abort(400, "Missing Tag from TagSet tag.")
+        # Verify all TagSet Tags are present in passed tags
+        for tag_id in tag_ids_from_tag_set:
+            tag_ids.append(tag_id)
     
-    rio_client_version_tag = Tag.query.filter_by(name=f'client_{game.version}').first()
+    version = request.json['Version']
+    rio_client_version_tag = Tag.query.filter_by(name=f'client_{version}').first()
     if rio_client_version_tag is None:
         new_rio_client_version_tag = Tag(
-            in_tag_name = f'client_{game.version}',
+            in_tag_name = f'client_{version}',
             in_desc = "Rio Client Version Tag",
             in_tag_type = "Global",
             in_comm_id = None
@@ -92,23 +98,6 @@ def populate_db2():
         db.session.add(new_rio_web_version_tag)
         db.session.commit()
     tag_ids.append(new_rio_web_version_tag.id)
-
-    for id in tag_ids:
-        tag = Tag.query.filter_by(id=id).first()
-        if tag:
-            game_tag = GameTag(
-                game_id = game.game_id,
-                tag_id = tag.id
-            )
-            db.session.add(game_tag)
-
-
-
-    # Detect invalid games
-    innings_selected = request.json['Innings Selected']
-    innings_played = request.json['Innings Played']
-    score_difference = abs(request.json['Home Score'] - request.json['Away Score'])
-    is_valid = False if innings_played < innings_selected and score_difference < 10 else True
 
     #Reroll game id until unique one is found
     unique_id = False
@@ -156,8 +145,18 @@ def populate_db2():
     db.session.add(game)
     db.session.commit()
 
+    # Populate GameTag table with matching tags
+    # tag_ids is a list of tag foreign keys
+    for tag_id in tag_ids:
+        game_tag = GameTag(
+            game_id = game.game_id,
+            tag_id = tag_id
+        )
+        db.session.add(game_tag)
+    db.session.commit()
+
     # Create GameHistory row
-    game_id = submit_game_history(game.game_id, tag_set_id, winner_player.name, winner_score, loser_player.name, loser_score)['GameID']
+    game_id = submit_game_history(game.game_id, tag_set_id, winner_player.username, winner_score, loser_player.username, loser_score)['GameID']
 
     # Calc player elo
     calc_elo(tag_set_id, winner_player.id, loser_player.id)
@@ -537,14 +536,14 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
         tag_set_id = tag_set.id
 
     #Get users and community users
-    winner_user = RioUser.query.filter_by(username_lowercase=winner_username.lower())
-    loser_user = RioUser.query.filter_by(username_lowercase=loser_username.lower())
+    winner_user = RioUser.query.filter_by(username_lowercase=winner_username.lower()).first()
+    loser_user = RioUser.query.filter_by(username_lowercase=loser_username.lower()).first()
 
     if winner_user == None or loser_user == None:
         return abort(409, description='No RioUser found for at least one of the provided usernames')
 
-    winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user)
-    loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user)
+    winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user).first()
+    loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user).first()
 
 
     if winner_comm_user == None or loser_comm_user == None:
