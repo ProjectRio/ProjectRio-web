@@ -91,8 +91,6 @@ class User:
         params = (self.username,)
         result = db.query(query, params)
 
-        print(result[0])
-
         self.username = result[0]['username']
         self.email    = result[0]['email']
         self.pk       = result[0]['id']
@@ -105,8 +103,6 @@ class User:
                  'WHERE username = %s')
         params = (self.username,)
         result = db.query(query, params)
-
-        print('API Key len:', len(result))
 
         if len(result) > 0:
             self.ak = result[0]['api_key']
@@ -227,7 +223,7 @@ class Community:
         invite_json = {'Rio Key': admin_user.rk, 
                        'Community Name': self.name, 
                        'Invite List': [invitee.username for invitee in invitee_dict.values()] }
-        print(invite_json)
+
         response = requests.post("http://127.0.0.1:5000/community/invite", json=invite_json)
         success = (response.status_code == 200)
 

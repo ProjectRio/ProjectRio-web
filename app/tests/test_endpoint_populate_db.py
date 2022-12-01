@@ -1,5 +1,7 @@
 import json
+import os
 import requests
+from pprint import pprint
 from helpers import *
 from connection import Connection
 
@@ -7,6 +9,8 @@ db = Connection()
 
 def test_populate_db():
     wipe_db()
+
+    print(os.getcwd())
 
     # Make official community
     sponsor = User()
@@ -38,15 +42,18 @@ def test_populate_db():
 
     # Read dummy game
     data = dict()
-    with open('/data/game_785756763.json') as file:
+    with open('app/tests/data/game_785756763.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
-        data['Tags'] = community.tags.keys()
-    
+        data['Tags'] = list(community.tags.keys())
 
-    # Submit game
+    # Submit game, nonverified users
     response = requests.post("http://127.0.0.1:5000/populate_db", json=data)
-    print(response.status_code)
-    assert response.status_code == 200
+    assert response.status_code == 411
     
+    # Submit game, verified users
+    player_away.verify_user()
+    player_home.verify_user()
+    response = requests.post("http://127.0.0.1:5000/populate_db", json=data)
+    assert response.status_code == 200
