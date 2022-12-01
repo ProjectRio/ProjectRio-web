@@ -7,6 +7,10 @@ from random import random
 
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
+    version_split = game.version.split('.')
+    if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
+        abort(400, "Not accepting games from clients below 1.9.5")
+
     # Ignore game if it's a CPU game
     if request.json['Home Player'] == "CPU" or request.json['Away Player'] == "CPU":
         return abort(400, 'Database does not accept CPU games')
@@ -26,14 +30,20 @@ def populate_db2():
     tag_ids = list()
     json_tags = request.json['Tags']
     tag_set_tag = None
-    for id in json_tags:
-        tag = Tag.query.filter_by(id=id).first()
-        if tag is None:
-            abort(400, "Invalid Tag submitted.")
+
+    tags = Tag.query.filter(Tag.id.in_(json_tags))
+    if len(tags) != len(json_tags):
+        abort(400, "Invalid Tag(s) submitted.")
+
+    # Iterate through SQLAlchemy tags objects and find the TagSetTag.
+    # If there is more than 1 abort.
+    for tag in tags:
+        # All TagSet Tags have the type Competition
         if tag.tag_type == "Competition":
+            if tag_set_tag != None:
+                abort(400, "Only one TagSet Tag can be submitted per game.")
             tag_set_tag = tag
-        tag_ids.append(tag.id)
-    
+
     if not tag_set_tag:
         abort(400, "TagSet Tag not provided.")
 
@@ -57,6 +67,42 @@ def populate_db2():
     for tag in tags_by_tag_set_id:
         if tag.id not in tag_ids:
             abort(400, "Missing Tag from TagSet tag.")
+    
+    rio_client_version_tag = Tag.query.filter_by(name=f'client_{game.version}').first()
+    if rio_client_version_tag is None:
+        new_rio_client_version_tag = Tag(
+            in_tag_name = f'client_{game.version}',
+            in_desc = "Rio Client Version Tag",
+            in_tag_type = "Global",
+            in_comm_id = None
+        )
+        db.session.add(new_rio_client_version_tag)
+        db.session.commit()
+    tag_ids.append(new_rio_client_version_tag.id)
+
+    # add rio web version tag, create tag if it doesn't exist
+    rio_web_version_tag = Tag.query.filter_by(name=f'web_{cRIO_WEB_VERSION}').first()
+    if rio_web_version_tag is None:
+        new_rio_web_version_tag = Tag(
+            in_tag_name = f'web_{cRIO_WEB_VERSION}',
+            in_desc = "Rio Web Version Tag",
+            in_tag_type = "Global",
+            in_comm_id = None
+        )
+        db.session.add(new_rio_web_version_tag)
+        db.session.commit()
+    tag_ids.append(new_rio_web_version_tag.id)
+
+    for id in tag_ids:
+        tag = Tag.query.filter_by(id=id).first()
+        if tag:
+            game_tag = GameTag(
+                game_id = game.game_id,
+                tag_id = tag.id
+            )
+            db.session.add(game_tag)
+
+
 
     # Detect invalid games
     innings_selected = request.json['Innings Selected']
@@ -228,40 +274,6 @@ def populate_db2():
             teams['Home'][character['RosterID']] = character_game_summary
         else:
             teams['Away'][character['RosterID']] = character_game_summary
-
-    rio_client_version_tag = Tag.query.filter_by(name=f'client_{game.version}').first()
-    if rio_client_version_tag is None:
-        new_rio_client_version_tag = Tag(
-            in_tag_name = f'client_{game.version}',
-            in_desc = "Rio Client Version Tag",
-            in_tag_type = "Global",
-            in_comm_id = None
-        )
-        db.session.add(new_rio_client_version_tag)
-        db.session.commit()
-    tag_ids.append(new_rio_client_version_tag.id)
-
-    # add rio web version tag, create tag if it doesn't exist
-    rio_web_version_tag = Tag.query.filter_by(name=f'web_{cRIO_WEB_VERSION}').first()
-    if rio_web_version_tag is None:
-        new_rio_web_version_tag = Tag(
-            in_tag_name = f'web_{cRIO_WEB_VERSION}',
-            in_desc = "Rio Web Version Tag",
-            in_tag_type = "Global",
-            in_comm_id = None
-        )
-        db.session.add(new_rio_web_version_tag)
-        db.session.commit()
-    tag_ids.append(new_rio_web_version_tag.id)
-
-    for id in tag_ids:
-        tag = Tag.query.filter_by(id=id).first()
-        if tag:
-            game_tag = GameTag(
-                game_id = game.game_id,
-                tag_id = tag.id
-            )
-            db.session.add(game_tag)
 
     # Create Events, Runners, PitchSummaries, ContactSummaries, and FieldingSummaries
     # contains json data for comparing events
