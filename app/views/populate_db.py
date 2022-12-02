@@ -344,7 +344,10 @@ def populate_db2():
                     if key == 'Runner Batter':
                         event.runner_on_0 = runner.id
                         # Increment batter plate appearances on new appearance
-                        batter_character_game_summary = teams['Away'][event_data[key]['Runner Roster Loc']] if event_data['Half Inning'] == 0 else teams['Home'][event_data[key]['Runner Roster Loc']]
+                        if event_data['Half Inning'] == 0:
+                            batter_character_game_summary = teams['Away'][event_data[key]['Runner Roster Loc']]
+                        else:
+                            batter_character_game_summary = teams['Home'][event_data[key]['Runner Roster Loc']]
                         batter_character_game_summary.plate_appearances += 1
                     elif key == 'Runner 1B':
                         event.runner_on_1 = runner.id
