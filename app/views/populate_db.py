@@ -71,7 +71,7 @@ def populate_db2():
 
         # Verify all TagSet Tags are present in passed tags
         for tag_id in tag_ids_from_tag_set:
-            tag_ids.append(tag_id)
+            tag_ids.append(tag_id.tag_id)
     
     version = request.json['Version']
     rio_client_version_tag = Tag.query.filter_by(name=f'client_{version}').first()
@@ -542,8 +542,8 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     if winner_user == None or loser_user == None:
         return abort(409, description='No RioUser found for at least one of the provided usernames')
 
-    winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user).first()
-    loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user).first()
+    winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user.id).first()
+    loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user.id).first()
 
 
     if winner_comm_user == None or loser_comm_user == None:
