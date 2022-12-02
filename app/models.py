@@ -472,7 +472,7 @@ class Ladder(db.Model):
 
 class GameHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.Integer, db.ForeignKey('game.game_id'), nullable=True)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=True)
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     winner_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
