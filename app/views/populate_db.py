@@ -422,8 +422,14 @@ def populate_db2():
                 if 'First Fielder' in event_data['Pitch']['Contact']:
                     fielder_data = event_data['Pitch']['Contact']['First Fielder']
 
+                    fielder_character_game_summary_id = int()
+                    if event_data['Half Inning'] == 0:
+                        fielder_character_game_summary_id = teams['Home'][fielder_data['Fielder Roster Location']].id
+                    else:
+                        fielder_character_game_summary_id = teams['Away'][fielder_data['Fielder Roster Location']].id
+
                     fielding_summary = FieldingSummary(
-                        fielder_character_game_summary_id = teams['Home'][fielder_data['Fielder Roster Location']].id if event_data['Half Inning'] == 0 else teams['Away'][fielder_data['Fielder Roster Location']].id,
+                        fielder_character_game_summary_id = fielder_character_game_summary_id,
                         position = fielder_data['Fielder Position'],
                         action = fielder_data['Fielder Action'],
                         jump = fielder_data['Fielder Jump'],
