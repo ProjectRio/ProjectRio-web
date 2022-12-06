@@ -460,7 +460,7 @@ class Ladder(db.Model):
     started_searching = db.Column(db.Integer)
     rating = db.Column(db.Integer)
     rd = db.Column(db.Integer)
-    vol = db.Column(db.Integer)
+    vol = db.Column(db.Float)
 
     def __init__(self, in_tag_set_id, in_comm_user_id, in_rating, in_rd, in_vol):
         self.tag_set_id = in_tag_set_id
