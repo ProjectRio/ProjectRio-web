@@ -4,7 +4,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 from ..send_email import send_email
 import secrets
-from ..models import db, RioUser, CommunityUser, Community, Tag, TagSet
+from ..models import *
 from ..consts import *
 import time
 
@@ -233,3 +233,35 @@ def tagset_get_tags(tag_set_id):
         return abort(409, description=f"Could not find TagSet with id={tag_set_id}")
 
     return {"Tag Set": [result.to_dict()]}
+
+
+# @app.route('/tag_set/ladder', methods=['POST'])
+# @jwt_required(optional=True)
+# def community_sponsor():
+#     pass
+    
+@app.route('/tag_set/ladder/', methods=['POST'])
+@jwt_required(optional=True)
+def get_ladder(in_tag_set=None):
+    tag_set_name =  in_tag_set if in_tag_set != None else request.json['TagSet']
+    tag_set = TagSet.query.filter_by(name_lowercase=tag_set_name.lower()).first()
+    if tag_set == None:
+        return abort(409, description=f"Could not find TagSet with name={tag_set_name}")
+
+    query = (
+        'SELECT \n'
+        'ladder.rating, \n'
+        'rio_user.id, \n'
+        'rio_user.username \n'
+        'FROM ladder \n'
+        'JOIN community_user on community_user.id = ladder.community_user_id \n'
+        'JOIN rio_user on rio_user.id = community_user.user_id \n'
+       f"WHERE ladder.tag_set_id = {tag_set.id}"
+    )
+
+    results = db.session.execute(query).all()
+    ladder_results = dict()
+    for result_row in results:
+        result_dict = result_row._asdict()
+        ladder_results[result_dict['username']] = result_row._asdict()
+    return jsonify(ladder_results)

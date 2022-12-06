@@ -581,10 +581,17 @@ def community_sponsor():
 
     return
 
-
 def add_all_users_to_comm(comm_id):
+    # Do not create duplicate users 
+    community_user_list = CommunityUser.query.filter_by(community_id=comm_id)
+    # List of all RioUser ids who are already in the comm
+    existing_comm_user_rio_user_id_list = [ comm_user.user_id for comm_user in community_user_list]    
+
     rio_user_list = RioUser.query.all()
     for rio_user in rio_user_list:
+        # Skip CommUser creation if RioUser already associated with CommUser
+        if rio_user.id in existing_comm_user_rio_user_id_list:
+            continue
         new_comm_user = CommunityUser(rio_user.id, comm_id, False, False, True)
         db.session.add(new_comm_user)
         db.session.commit()

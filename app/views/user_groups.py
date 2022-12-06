@@ -51,6 +51,8 @@ def add_user_to_user_group(in_username = None, in_group_name = None):
         user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
         if not user:
             return abort(409, description='User does not exist.')
+        if not user.verified:
+            return abort(409, description='User is not verified.')
 
         # Verify Group exists
         user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
