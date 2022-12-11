@@ -181,7 +181,7 @@ def test_patron_refresh():
     sponsor.register()
     sponsor.verify_user()
 
-    assert sponsor.add_to_group('patron: mvp') == True
+    assert sponsor.add_to_group('patron: rookie') == True
 
     # Create+sponsor 2 communities
     communityA = Community(sponsor, official=False, private=False, link=False)
