@@ -159,8 +159,6 @@ def is_user_in_groups(user_id, group_list, all=False):
     user_group_user_count = UserGroupUser.query.filter(
         (UserGroupUser.user_id==user_id) & (UserGroupUser.user_group_id.in_(group_id_list))).count()
 
-    print(user_group_user_count)
-
     if (all==False):
         return (user_group_user_count > 0)
     else:
