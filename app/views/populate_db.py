@@ -73,10 +73,10 @@ def populate_db2():
 
         # Confirm that both users are community members for given TagSet
         # Get TagSet obj to verify users
-        tag_set = TagSet.query.filter_by(id=tag_set_id)
+        tag_set = TagSet.query.filter_by(id=tag_set_id).first()
 
-        home_comm_user = CommunityUser.query.filter_by(user_id=home_player.id, community_id=tag_set.comm_id).first()
-        away_comm_user = CommunityUser.query.filter_by(user_id=away_player.id, community_id=tag_set.comm_id).first()
+        home_comm_user = CommunityUser.query.filter_by(user_id=home_player.id, community_id=tag_set.community_id).first()
+        away_comm_user = CommunityUser.query.filter_by(user_id=away_player.id, community_id=tag_set.community_id).first()
 
         if home_comm_user == None or away_comm_user == None:
             abort(415, "One or both users are not part of the community for this TagSet.")
