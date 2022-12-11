@@ -58,7 +58,7 @@ def populate_db2():
             "FROM tag_set_tag \n"
             f"WHERE tag_set_tag.tag_id = {tag_set_tag.id}"
         )).first()[0]
-
+        
         # Get all Tags for TagSet
         tag_ids_from_tag_set = db.session.execute((
             "SELECT \n"
@@ -67,10 +67,20 @@ def populate_db2():
             f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
         )).all()
 
-        # Verify all TagSet Tags are present in passed tags
+        # Add all tags from provided TagSet to tag_ids to be added to database
         for tag_id in tag_ids_from_tag_set:
             tag_ids.append(tag_id.tag_id)
-    
+
+        # Confirm that both users are community members for given TagSet
+        # Get TagSet obj to verify users
+        tag_set = TagSet.query.filter_by(id=tag_set_id)
+
+        home_comm_user = CommunityUser.query.filter_by(user_id=home_player.id, community_id=tag_set.comm_id).first()
+        away_comm_user = CommunityUser.query.filter_by(user_id=away_player.id, community_id=tag_set.comm_id).first()
+
+        if home_comm_user == None or away_comm_user == None:
+            abort(415, "One or both users are not part of the community for this TagSet.")
+
     version = request.json['Version']
     rio_client_version_tag = Tag.query.filter_by(name=f'client_{version}').first()
     if rio_client_version_tag is None:
