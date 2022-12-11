@@ -2,7 +2,7 @@ from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
-from ..send_email import send_email
+from app.utils.send_email import send_email
 import secrets
 from ..models import *
 from ..consts import *
