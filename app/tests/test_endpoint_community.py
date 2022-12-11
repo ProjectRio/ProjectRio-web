@@ -23,6 +23,7 @@ def test_community_create_official():
     community = Community(sponsor, True, False, False)
     assert community.success == False
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('admin') == True
 
     # Assert community IS created, sponsor is admin
@@ -40,12 +41,13 @@ def test_community_create_unofficial():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     nonmember = User()
     nonmember.register()
 
-    #Check that the new user is registered after creating a new official community
+    #Check that the new user is registered after creating a new unofficial community
 
     # Assert community is not created, sponsor not admin
     community = Community(sponsor, official=False, private=False, link=False)
@@ -65,6 +67,7 @@ def test_community_create_unofficial():
     invitee = User()
     invitee.register()
     community.invite(sponsor, {invitee.pk: invitee})
+    print('Test', community.get_member(invitee).to_dict())
     assert community.get_member(invitee).active  == False
 
 def test_community_create_private_nolink():
@@ -74,6 +77,7 @@ def test_community_create_private_nolink():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     nonmember = User()
@@ -116,6 +120,7 @@ def test_community_create_private_link():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     nonmember = User()
@@ -168,6 +173,7 @@ def test_community_manage_admin():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     member = User()
@@ -198,6 +204,7 @@ def test_community_manage_ban():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     member = User()
@@ -229,6 +236,7 @@ def test_community_manage_remove():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     member = User()
@@ -259,6 +267,7 @@ def test_community_tags():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     member = User()
@@ -293,6 +302,7 @@ def test_community_tagsets():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     community = Community(sponsor, official=False, private=False, link=False)
@@ -315,6 +325,7 @@ def test_community_tagsets_limit():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     community = Community(sponsor, official=False, private=False, link=False)
@@ -352,6 +363,7 @@ def test_endpoint_community_get_tags():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     community = Community(sponsor, official=False, private=False, link=False)
@@ -386,6 +398,7 @@ def test_endpoint_community_get_members():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     member = User()
@@ -421,6 +434,7 @@ def test_community_sponsor_manage():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: mvp') == True
 
     member = User()
@@ -440,6 +454,8 @@ def test_community_sponsor_manage():
 
     # Try to remove sponsor as regular member
     assert not community.manage_sponsor(future_sponsor, 'Remove')
+    print(community.sponsor.to_dict())
+    print(future_sponsor.to_dict())
     assert compare_users(community.sponsor, sponsor)
     
     # Remove sponsor as sponsor
@@ -451,8 +467,11 @@ def test_community_sponsor_manage():
     assert community.sponsor == None
 
     # Add new sponsor who is now patron
+    future_sponsor.verify_user()
     assert future_sponsor.add_to_group('patron: mvp') == True
     assert community.manage_sponsor(future_sponsor, 'Add')
+    print(community.sponsor)
+    print(future_sponsor)
     assert compare_users(community.sponsor, future_sponsor)
 
 
@@ -461,6 +480,7 @@ def test_community_sponsorless_tagset_create():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: rookie') == True
 
     community = Community(sponsor, official=False, private=False, link=False)
@@ -496,6 +516,7 @@ def test_community_create_patreon_limit():
     sponsor.register()
     assert sponsor.success == True
 
+    sponsor.verify_user()
     assert sponsor.add_to_group('patron: rookie') == True
 
     community = Community(sponsor, official=False, private=False, link=False)
