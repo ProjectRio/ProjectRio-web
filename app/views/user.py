@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, GameTag
-from ..send_email import send_email
+from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
 
 # === User Registration Front End ===
@@ -60,7 +60,7 @@ def register():
         )
 
         try:
-            send_email(in_email, subject, html_content, text_content)
+            send_email(new_user.email, subject, html_content, text_content)
         except:
             return abort(502, 'Failed to send email')
         
@@ -133,7 +133,7 @@ def verify_email(active_url):
             'Rio Key': user.rio_key,
         }, 200
     except:
-        return abort(422, 'Invalid Key')
+        return abort(422, 'Invalid url')
 
 
 # === Password change endpoints ===
@@ -279,23 +279,47 @@ def refresh_expiring_jwts(response):
 
 
 # === Get/Set user settings ===
-#GET retreives user key, POST with empty JSON will generate new rio key and return it
-@app.route('/key/', methods=['GET', 'POST'])
-@jwt_required()
-def update_rio_key():
-    current_user_username = get_jwt_identity()
-    current_user = RioUser.query.filter_by(username=current_user_username).first()
+#Generates a new Rio Key and sends it in an email.
+@app.route('/request_new_rio_key/', methods=['GET'])
+def update_rio_key():    
+    email_lowercase = request.args.get("email").lower()
+    user = RioUser.query.filter_by(email=email_lowercase).first()
 
-    if request.method == 'GET':
-        return jsonify({
-            "riokey": current_user.rio_key
-        })
-    elif request.method == 'POST':
-        current_user.rio_key = secrets.token_urlsafe(32)
-        db.session.commit()
-        return jsonify({
-            "riokey": current_user.rio_key
-        })
+    if not user:
+        return "Invalid email provided."
+
+    user.rio_key = secrets.token_urlsafe(32)
+    db.session.commit()
+
+    subject = 'Your New Rio Key'
+    html_content = (
+        f'''
+            <h1>Hey, {user.username}!</h1>
+            <p>Here's the new rio key you requested:</p>
+            <p>{user.rio_key}</p>
+            <br/>
+            <p>Happy Hitting!</p>
+            <p>Rio Team</p>
+        '''
+    )
+    text_content = (
+        f'''
+            Hey, {user.username}!\n
+            Here's the new rio key you requested:\n
+            {user.rio_key}\n
+            \n
+            \n
+            Happy hitting!\n
+            Rio Team
+        '''
+    )
+
+    try:
+        send_email(user.email, subject, html_content, text_content)
+    except:
+        abort(502, 'Failed to send email')
+
+    return "Your new rio key has been sent to your email address!"
 
 #GET retreives user privacy, POST with empty JSON will swap privacy setting and return it
 @app.route('/set_privacy/', methods = ['GET', 'POST'])

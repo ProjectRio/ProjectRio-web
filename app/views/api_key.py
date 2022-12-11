@@ -2,7 +2,7 @@ from flask import request, abort
 from flask import current_app as app
 import secrets
 from ..models import db, ApiKey, RioUser
-from ..send_email import send_email
+from app.utils.send_email import send_email
 
 @app.route('/api_key/register/', methods=['POST'])
 def request_apikey():

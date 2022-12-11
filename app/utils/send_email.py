@@ -2,25 +2,21 @@ from __future__ import print_function
 import os
 from flask import abort as kill
 import base64
-from google.oauth2 import service_account
-import googleapiclient.discovery
 from googleapiclient.errors import HttpError
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from app.utils.google_oauth import GoogleCredentials
 
-SERVICE_ACCOUNT_FILE = 'app/rioweb-d74bf247c1d7.json'
 
 def send_email(to_email, subject, html_content, text_content):
     # If the application is running in production, send emails.
-    if (os.getenv('rio_env') == "production"):
+    if (os.getenv('RIO_ENV') == "production"):
         # Create OAuth credentials for sending email
-        SCOPES = ['https://www.googleapis.com/auth/gmail.send']
-        credentials = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-        delegated_credentials = credentials.with_subject('devs@projectrio.app')
+        credentials = GoogleCredentials()
 
         try:
             # create gmail api client
-            service = googleapiclient.discovery.build('gmail', 'v1', credentials=delegated_credentials)
+            service = credentials.generate_email_credential()
 
             # alternative mimemultipart allows html and text to both be sent
             # and the recieving email client decides which to display
@@ -43,6 +39,5 @@ def send_email(to_email, subject, html_content, text_content):
             service.users().messages().send(userId="me",body=message).execute()
 
         except HttpError as error:
-            print(F'An error occurred: {error}')
-            return kill(502, 'Failed to send email')
+            return kill(400, 'Error sending email.')
     return
