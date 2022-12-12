@@ -55,6 +55,8 @@ class User:
         result = db.query(query, params)
         self.verified = (result[0]['verified'] == True)
 
+        self.refresh()
+
         return (response.status_code == 200)
 
     def add_to_group(self, group_name):
@@ -298,6 +300,7 @@ class Community:
                  'rio_user.username AS username,\n'
                  'rio_user.rio_key AS rio_key,\n'
                  'rio_user.verified AS verified,\n'
+                 'rio_user.active_url AS url,\n'
                  'community_user.id AS id,\n'
                  'community_user.admin AS admin,\n'
                  'community_user.invited AS invited,\n'
@@ -315,6 +318,7 @@ class Community:
             user.pk       = result_row['user_id']
             user.verified = result_row['verified']
             user.rk       = result_row['rio_key']
+            user.url      = result_row['url']
             comm_user = CommUser(user, result_row['id'], self.pk, result_row['admin'], result_row['invited'], 
                                     result_row['active'], result_row['banned'])
             print(comm_user.to_dict())

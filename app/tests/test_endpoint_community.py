@@ -454,8 +454,9 @@ def test_community_sponsor_manage():
 
     # Try to remove sponsor as regular member
     assert not community.manage_sponsor(future_sponsor, 'Remove')
-    print(community.sponsor.to_dict())
-    print(future_sponsor.to_dict())
+    # print(community.sponsor.to_dict())
+    # print(sponsor.to_dict())
+    # print(future_sponsor.to_dict())
     assert compare_users(community.sponsor, sponsor)
     
     # Remove sponsor as sponsor
@@ -470,8 +471,8 @@ def test_community_sponsor_manage():
     future_sponsor.verify_user()
     assert future_sponsor.add_to_group('patron: mvp') == True
     assert community.manage_sponsor(future_sponsor, 'Add')
-    print(community.sponsor)
-    print(future_sponsor)
+    # print(community.sponsor)
+    # print(future_sponsor)
     assert compare_users(community.sponsor, future_sponsor)
 
 
