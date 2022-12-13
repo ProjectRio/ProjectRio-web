@@ -39,7 +39,7 @@ def create_user_group():
 
 # Add RioUser to UserGroup using RioKey
 @app.route('/user_group/add_user', methods=['POST'])
-@api_key_check(['Admin'])
+#@api_key_check(['Admin'])
 def add_user_to_user_group(in_username = None, in_group_name = None):
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
         in_username = in_username if in_username != None else request.json['username']
@@ -50,14 +50,14 @@ def add_user_to_user_group(in_username = None, in_group_name = None):
         # Verify User exists
         user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
         if not user:
-            return abort(409, description='User does not exist.')
+            return abort(408, description='User does not exist.')
         if not user.verified:
-            return abort(409, description='User is not verified.')
+            return abort(410, description='User is not verified.')
 
         # Verify Group exists
         user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
         if not user_group:
-            return abort(409, description='UserGroup does not exist.')
+            return abort(411, description='UserGroup does not exist.')
 
         # Verify User is not a member of this group
         user_group_user = UserGroupUser.query.filter_by(
@@ -79,7 +79,7 @@ def add_user_to_user_group(in_username = None, in_group_name = None):
         except:
             return abort(400, description='Error adding User to UserGroup')
     else:
-        return abort(400, description='Incorrect Password')
+        return abort(411, description='Incorrect Password')
 
 # Check if a single user is a member of a group
 @app.route('/user_group/check_for_member', methods=['GET'])
