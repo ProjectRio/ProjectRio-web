@@ -22,7 +22,6 @@ def init_db():
             Game.__table__.drop(engine)
             db.create_all()
             create_character_tables()
-            #create_default_tags()
             create_default_groups()
             create_official_infrastructure()
             return 'DB Init'

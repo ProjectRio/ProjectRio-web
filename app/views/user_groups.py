@@ -39,9 +39,9 @@ def create_user_group():
 
 # Add RioUser to UserGroup using RioKey
 @app.route('/user_group/add_user', methods=['POST'])
+@api_key_check(['Admin'])
 def add_user_to_user_group(in_username = None, in_group_name = None):
-    # if os.getenv('RESET_DB') == request.json['RESET_DB']:
-    if True:
+    if os.getenv('RESET_DB') == request.json['RESET_DB']:
         in_username = in_username if in_username != None else request.json['username']
         in_username_lower = in_username.lower()
         in_group_name = in_group_name if in_group_name != None else request.json['group_name']
@@ -301,3 +301,40 @@ def refresh_patrons():
 
     return 200
             
+# Add all users to a single group
+@app.route('/user_group/add_all_users', methods=['POST'])
+@api_key_check(['Admin'])
+def add_all_users_to_group(in_group_name = None):
+    in_group_name = in_group_name if in_group_name != None else request.json['group_name']
+
+    # Verify Group exists
+    user_group = UserGroup.query.filter_by(name_lowercase=in_group_name.lower()).first()
+    if not user_group:
+        return abort(409, description='UserGroup does not exist.')
+
+    # Iterate through user list
+    rio_user_list = RioUser.query.all()
+    for rio_user in rio_user_list:
+
+        # Verify User is not a member of this group
+        user_group_user = UserGroupUser.query.filter_by(
+            user_id=rio_user.id,
+            user_group_id=user_group.id
+        ).first()
+
+        # If user is in user group, skip user
+        if user_group_user:
+            continue
+
+        # Create a UserGroupUser row
+        try:
+            new_user_group_user = UserGroupUser(
+                user_id=rio_user.id,
+                user_group_id=user_group.id
+            )
+            db.session.add(new_user_group_user)
+            db.session.commit()
+            return 'User added to User Group.'
+        except:
+            return abort(410, description='Error adding User to UserGroup')
+    return
