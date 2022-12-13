@@ -1,4 +1,3 @@
-from ast import Delete
 from flask import request, abort
 from flask import current_app as app
 from ..models import db, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, GameTag
@@ -6,7 +5,7 @@ from ..models import db, Game, CharacterGameSummary, CharacterPositionSummary, E
 @app.route('/delete_game/', methods = ['POST'])
 def delete_game():
     #Not ready for production (Untested)
-    if (app.env == "production"):
+    if (app.config['rio_env'] == "production"):
         return abort(404, description='Endpoint not ready for production')
 
     # Verify key is valid
@@ -24,7 +23,7 @@ def delete_game():
     
     try:
         # Get character game summaries
-        character_game_summaries = CharacterGameSummary.query.filter_by(game_id=game_id).all()
+        character_game_summaries = CharacterGameSummary.query.filter_by(game_id=game.game_id).all()
 
         # Get events
         events = Event.query.filter_by(game_id=game_id).all()

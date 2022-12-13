@@ -1,0 +1,204 @@
+<html>
+  <head>
+     <link rel="stylesheet" href="{{url_for('static', filename='reverify_email.css')}}">
+  </head>
+  <body>
+    <div>
+      <h1 class="Section-header">Rio Web</h1>
+      <section class="Login-form">
+        <h1>Reverify your account</h1>
+        <ul>
+          <!-- <li id="rio-key-tip">Rio Key must be 32 characters long</li> -->
+          <li id="username-tip">Username included</li>
+          <li id="email-at-tip">Email must include an @</li>
+          <li id="email-dot-tip">Email must include a .</li>
+          <p>Password rules</p>
+          <li id="lowercase-tip">At least 1 lowercase character</li>
+          <li id="uppercase-tip">At least 1 uppercase character</li>
+          <li id="integer-tip">At least 1 number</li>
+          <li id="special-tip">At least 1 special character</li>
+          <li id="length-tip">At least 8 characters in length</li>
+          <li id="matching-tip">Password match</l>
+        </ul>
+        <input id="rio-key" placeholder="Rio Key"/>
+        <input id="username" placeholder="Username"/>
+        <input id="email" placeholder="Email"/>
+        <input id="password" placeholder="Password" type="password"/>
+        <input id="password2" placeholder="Re-enter Password" type="password"/>
+        <button id="submit">Submit</button>
+      </section>
+    </div>
+  </body>
+  <script>
+    // Regex Expressions
+    const uppercaseRegex = new RegExp('^(?=.*?[A-Z])'); // >= 1 uppercase English charcter: (?=.*?[A-Z])
+    const lowercaseRegex = new RegExp('^(?=.*?[a-z])'); // >= 1 lowecase English character: (?=.*?[a-z])
+    const numberRegex = new RegExp('^(?=.*?[0-9])');  // >= 1 digit: (?=.*?[0-9])
+    const specialCharRegex = new RegExp('(?=.*?[#?!@$%^&*-])');  // >= 1 special character (?=.*?[#?!@$%^&*-])
+
+    // Input Fields
+    const rioKeyInput = document.getElementById("rio-key");
+    const usernameInput = document.getElementById("username");
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const password2Input = document.getElementById("password2");
+
+    // Tooltips
+    // const rioKeyTip = document.getElementById("rio-key-tip");
+    const usernameTip = document.getElementById("username-tip");
+    const emailAtTip = document.getElementById("email-at-tip");
+    const emailDotTip = document.getElementById("email-dot-tip");
+    const lowercaseTip = document.getElementById("lowercase-tip");
+    const uppercaseTip = document.getElementById("uppercase-tip");
+    const integerTip = document.getElementById("integer-tip");
+    const specialTip = document.getElementById("special-tip");
+    const lengthTip = document.getElementById("length-tip");
+    const matchingTip = document.getElementById("matching-tip");
+
+    // Submission button
+    const submitButton = document.getElementById("submit")
+
+    
+    passwordInput.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      if (lowercaseRegex.test(input)) {
+        lowercaseTip.style.color = "green";
+      } else {
+        lowercaseTip.style.color = "red";
+      }
+
+      if (uppercaseRegex.test(input)) {
+        uppercaseTip.style.color = "green";
+      } else {
+        uppercaseTip.style.color = "red";
+      }
+
+      if (numberRegex.test(input)) {
+        integerTip.style.color = "green";
+      } else {
+        integerTip.style.color = "red";
+      }
+
+      if (specialCharRegex.test(input)) {
+        specialTip.style.color = "green";
+      } else {
+        specialTip.style.color = "red";
+      }
+
+      if (input.length >= 8) {
+        lengthTip.style.color = "green";
+      } else {
+        lengthTip.style.color = "red";
+      }
+    });
+
+    password2Input.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      if (input === passwordInput.value) {
+        matchingTip.style.color = "green";
+      } else {
+        matchingTip.style.color = "red";
+      }
+    })
+
+    usernameInput.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      if (input.length > 0) {
+        usernameTip.style.color = "green";
+      } else {
+        usernameTip.style.color = "red";
+      }
+    })
+
+    rioKeyInput.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      // if (input.length == 32) {
+      //   rioKeyTip.style.color = "green";
+      // } else {
+      //   rioKeyTip.style.color = "red";
+      // }
+    });
+
+    emailInput.addEventListener('input', (event) => {
+      const input = event.target.value;
+
+      if (input.includes("@")) {
+        emailAtTip.style.color = "green";
+      } else {
+        emailAtTip.style.color = "red";
+      }
+
+      if (input.includes(".")) {
+        emailDotTip.style.color = "green";
+      } else {
+        emailDotTip.style.color = "red";
+      }
+    })
+
+    submitButton.addEventListener('click', () => {
+      // if (rioKeyInput.value.length != 32) {
+      //   alert("Rio Key entered incorrectly. All Rio Keys are 32 characters in length.");
+      //   return;
+      // }
+
+      if (usernameInput.value.length === 0) {
+        alert("Please enter a username.");
+        return;
+      }
+
+      if (!emailInput.value.includes("@") || !email.value.includes(".")) {
+        alert("Invalid email address");
+        return;
+      }
+
+      if (
+        !lowercaseRegex.test(passwordInput.value)
+        || !uppercaseRegex.test(passwordInput.value)
+        || !numberRegex.test(passwordInput.value)
+        || !specialCharRegex.test(passwordInput.value)
+        || !passwordInput.value.length >= 8
+        ) {
+        alert("Password must meet requirements.")
+        return;
+      }
+
+      if (passwordInput.value !== password2Input.value) {
+        alert("Passwords do not match.")
+        return;
+      }
+
+      sendRequest();
+    });
+
+    async function sendRequest() {
+      try {
+      const config = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          'Username': usernameInput.value,
+          'Email': emailInput.value,
+          'Rio Key': rioKeyInput.value,
+          'Password': passwordInput.value
+        })
+      }
+      // const response = await fetch('https://projectrio-api-1.api.projectrio.app/submit_reverification/', config);
+      const response = await fetch('http://127.0.0.1:5000/submit_reverification/', config);
+
+      if (response.status === 200) {
+        alert("Your reverification is underway. Check your email to verify your account and for further instructions.")
+      } else if (response.status === 409) {
+        alert('Unable to find an account matching these values.')
+      }
+    } catch (err) {
+      console.log(err);
+    }
+  }
+  </script>
+</html>

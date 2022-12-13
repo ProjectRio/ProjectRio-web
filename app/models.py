@@ -127,36 +127,6 @@ class ChemistryTable(db.Model):
 
     character = db.relationship('Character', backref = 'character')
 
-class RioUser(db.Model, UserMixin):
-    id       = db.Column(db.Integer, primary_key=True)
-    user_group_id = db.Column(db.ForeignKey('user_group.id'), nullable=True)
-    api_key_id = db.Column(db.ForeignKey('api_key.id'), nullable=True)
-    username = db.Column(db.String(64),  unique = True)
-    username_lowercase = db.Column(db.String(64), unique = True)
-    email    = db.Column(db.String(120), unique = True)
-    password = db.Column(db.String(500))
-    rio_key  = db.Column(db.String(50), unique = True)
-    private = db.Column(db.Boolean)
-    verified = db.Column(db.Boolean)
-    active_url = db.Column(db.String(50), unique = True)
-    date_created = db.Column(db.Integer)
-
-    community_user = db.relationship('CommunityUser', backref='community_user.user_id')
-    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'rio_user', lazy = 'dynamic')
-    away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
-    home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
-
-    def __init__(self, in_username, username_lowercase, in_email, in_password):
-        self.username = in_username
-        self.username_lowercase = username_lowercase
-        self.email    = in_email
-        self.password = bc.generate_password_hash(in_password)
-        self.rio_key  = secrets.token_urlsafe(32)
-        self.private = True
-        self.verified = False
-        self.active_url = secrets.token_urlsafe(32)
-        self.date_created = int(time.time())
-
 class Game(db.Model):
     game_id = db.Column(db.BigInteger, primary_key = True)
     away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
@@ -179,6 +149,7 @@ class Game(db.Model):
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
     game_tag = db.relationship('GameTag', backref='game')
     event = db.relationship('Event', backref='game')
+    game_history = db.relationship("GameHistory", backref='game')
 
     def to_dict(self):
         return {
@@ -317,6 +288,7 @@ class Event(db.Model):
     outs = db.Column(db.Integer)
     balls = db.Column(db.Integer)
     strikes = db.Column(db.Integer)
+    result_num_of_outs = db.Column(db.Integer)
     result_rbi = db.Column(db.Integer)
     result_of_ab = db.Column(db.Integer)
 
@@ -327,13 +299,12 @@ class PitchSummary(db.Model):
     charge_pitch_type = db.Column(db.Integer)
     star_pitch = db.Column(db.Integer)
     pitch_speed = db.Column(db.Integer)
-    pitch_ball_x_pos = db.Column(db.Float)
-    pitch_ball_z_pos = db.Column(db.Float)
-    pitch_batter_x_pos = db.Column(db.Float)
-    pitch_batter_z_pos = db.Column(db.Float)
     d_ball = db.Column(db.Boolean)
-    pitch_result = db.Column(db.Integer)
     type_of_swing = db.Column(db.Integer)
+    ball_position_strikezone = db.Column(db.Integer)
+    in_strikezone = db.Column(db.Boolean)
+    bat_x_contact_pos = db.Column(db.Float)
+    bat_z_contact_pos = db.Column(db.Float)
 
     event = db.relationship('Event', backref='pitch_summary')
 
@@ -347,17 +318,24 @@ class ContactSummary(db.Model):
     input_direction = db.Column(db.Integer)
     input_direction_stick = db.Column(db.Integer)
     frame_of_swing_upon_contact = db.Column(db.Integer)
-    ball_angle = db.Column(db.Integer)
-    ball_horiz_power = db.Column(db.Integer)
-    ball_vert_power = db.Column(db.Integer)
+    ball_power = db.Column(db.Integer)
+    ball_horiz_angle = db.Column(db.Integer)
+    ball_vert_angle = db.Column(db.Integer)
+    contact_absolute = db.Column(db.Float)
+    contact_quality = db.Column(db.Float)
+    rng1 = db.Column(db.Float)
+    rng2 = db.Column(db.Float)
+    rng3 = db.Column(db.Float)
     ball_x_velocity = db.Column(db.Float)
     ball_y_velocity = db.Column(db.Float)
     ball_z_velocity = db.Column(db.Float)
-    ball_x_pos = db.Column(db.Float)
-    ball_y_pos = db.Column(db.Float)
-    ball_z_pos = db.Column(db.Float)
+    ball_x_contact_pos = db.Column(db.Float)
+    ball_z_contact_pos = db.Column(db.Float)
+    ball_x_landing_pos = db.Column(db.Float)
+    ball_y_landing_pos = db.Column(db.Float)
+    ball_z_landing_pos = db.Column(db.Float)
     ball_max_height = db.Column(db.Float)
-    multi_out = db.Column(db.Integer)
+    ball_hang_time = db.Column(db.Float)
     primary_result = db.Column(db.Integer)
     secondary_result = db.Column(db.Integer)
 
@@ -418,12 +396,172 @@ class Tag(db.Model):
         self.desc = in_desc
         self.active = True
         self.date_created = int( time.time() )
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'comm_id': self.community_id,
+            'name': self.name,
+            'type': self.tag_type,
+            'desc': self.desc,
+            'active': self.active,
+            'date_created': self.date_created
+        }
+
+
+# Join table for tags and tag set
+tagsettag = db.Table('tag_set_tag',
+    db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True),
+    db.Column('tagset_id', db.Integer, db.ForeignKey('tag_set.id'), primary_key=True)
+)
+
+class TagSet(db.Model):
+    id = db.Column(db.Integer, primary_key=True)    
+    community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
+    name = db.Column(db.String(120))
+    name_lowercase = db.Column(db.String(120))
+    type = db.Column(db.String(120)) #Season, league, tournament.
+    start_date = db.Column(db.Integer)
+    end_date = db.Column(db.Integer)
+
+    tags = db.relationship('Tag', secondary=tagsettag, backref='tagset', cascade='delete')
+
+    ladder = db.relationship('Ladder', backref='tag_set')
+
+    def __init__(self, in_comm_id, in_name, in_type, in_start, in_end):
+        self.community_id = in_comm_id
+        self.name = in_name
+        self.name_lowercase = in_name.lower()
+        self.type = in_type
+        self.start_date = in_start
+        self.end_date = in_end
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'comm_id': self.community_id,
+            'name': self.name,
+            'type': self.type,
+            'start_date': self.start_date,
+            'end_date': self.end_date,
+            'tags': self.expand_tag_list()
+        }
+
+    def expand_tag_list(self):
+        tag_list = list()
+        for tag in self.tags:
+            tag_list.append(tag.to_dict())
+        return tag_list
+
+class Ladder(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
+    community_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
+    started_searching = db.Column(db.Integer)
+    rating = db.Column(db.Integer)
+    rd = db.Column(db.Integer)
+    vol = db.Column(db.Float)
+
+    def __init__(self, in_tag_set_id, in_comm_user_id, in_rating, in_rd, in_vol):
+        self.tag_set_id = in_tag_set_id
+        self.community_user_id = in_comm_user_id
+        self.rating = in_rating
+        self.rd = in_rd
+        self.vol = in_vol
+        self.start_searching = False
+
+class GameHistory(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=True)
+    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
+    winner_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
+    loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
+    winner_score = db.Column(db.Integer)
+    loser_score = db.Column(db.Integer)
+    winner_elo = db.Column(db.Integer, nullable=False)
+    loser_elo = db.Column(db.Integer, nullable=False)
+    winner_accept = db.Column(db.Boolean)
+    loser_accept = db.Column(db.Boolean)
+    admin_accept = db.Column(db.Boolean)
+    date_created = db.Column(db.Integer)
+
+    def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
+        self.game_id = in_game_id
+        self.tag_set_id = in_tag_set_id
+        self.winner_comm_user_id = in_winner_comm_id
+        self.loser_comm_user_id = in_loser_com_id
+        self.winner_score = in_winner_score
+        self.loser_score = in_loser_score
+        self.winner_elo = in_winner_elo
+        self.loser_elo = in_loser_elo
+        self.winner_accept = in_winner_accept
+        self.loser_accept = in_loser_accept
+        self.admin_accept = in_admin_accept
+        self.date_created = int( time.time() )
+
+
+class RioUser(db.Model, UserMixin):
+    id       = db.Column(db.Integer, primary_key=True)
+    api_key_id = db.Column(db.ForeignKey('api_key.id'), nullable=True)
+    username = db.Column(db.String(64),  unique = True)
+    username_lowercase = db.Column(db.String(64), unique = True)
+    email    = db.Column(db.String(120), unique = True)
+    password = db.Column(db.String(500))
+    rio_key  = db.Column(db.String(50), unique = True)
+    private = db.Column(db.Boolean)
+    verified = db.Column(db.Boolean)
+    active_url = db.Column(db.String(50), unique = True)
+    date_created = db.Column(db.Integer)
+
+    community_user = db.relationship('CommunityUser', backref='rio_user')
+    character_game_summaries = db.relationship('CharacterGameSummary', backref = 'rio_user', lazy = 'dynamic')
+    away_games = db.relationship('Game', foreign_keys = 'Game.away_player_id', backref = 'games_as_away_player')
+    home_games = db.relationship('Game', foreign_keys = 'Game.home_player_id', backref = 'games_as_home_player')
+    user_group_user = db.relationship('UserGroupUser', backref='user_from_ugu')
+
+    def __init__(self, in_username, in_email, in_password):
+        self.username = in_username
+        self.username_lowercase = in_username.lower()
+        self.email    = in_email
+        self.password = bc.generate_password_hash(in_password)
+        self.rio_key  = secrets.token_urlsafe(32)
+        self.private = True
+        self.verified = False
+        self.active_url = secrets.token_urlsafe(32)
+        self.date_created = int(time.time())
+
+class UserGroupUser(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False)
+    user_group_id = db.Column(db.ForeignKey('user_group.id'), nullable=False)
+    
+    def __init__(self, user_id, user_group_id):
+        self.user_id = user_id,
+        self.user_group_id = user_group_id
+
+class UserGroup(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    daily_limit = db.Column(db.Integer)
+    weekly_limit = db.Column(db.Integer)
+    sponsor_limit = db.Column(db.Integer)
+    name = db.Column(db.String(32))
+    name_lowercase = db.Column(db.String(32))
+    desc = db.Column(db.String(128))
+    
+    user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')
+
+    def __init__(self, in_group_name):
+        self.name = in_group_name,
+        self.name_lowercase = in_group_name.lower()
 
 class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(32), unique=True)
-    name_lowercase = db.Column(db.String(32), unique=True)
+    name_lowercase = db.Column(db.String(32), unique=True)    
+    sponsor_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=True)
+    comm_type = db.Column(db.String(16))
     private = db.Column(db.Boolean)
+    active_tag_set_limit = db.Column(db.Integer)
     active_url = db.Column(db.String(50), unique=True)
     desc = db.Column(db.String(300))
     date_created = db.Column(db.Integer)
@@ -431,11 +569,14 @@ class Community(db.Model):
     tags = db.relationship('Tag', backref='community_from_tags')
     community_users = db.relationship('CommunityUser', backref='community_from_community_users')
 
-    def __init__(self, in_name, in_private, in_gloabl_link, in_description):
+    def __init__(self, in_name, in_sponsor_id, in_type, in_private, in_active_tag_set_limit, in_gloabl_link, in_description):
         self.name = in_name
         self.name_lowercase = in_name.lower()
+        self.sponsor_id = in_sponsor_id
+        self.comm_type = in_type
         self.private = in_private
-        self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link and not in_private) else None
+        self.active_tag_set_limit = in_active_tag_set_limit
+        self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link) else None
         self.desc = in_description
         self.date_created = int( time.time() )
 
@@ -443,55 +584,48 @@ class CommunityUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=False)
-    is_admin = db.Column(db.Boolean)
-    active_url = db.Column(db.String(50), unique=True)
-    accepted = db.Column(db.Boolean)
-    date_joined = db.Integer
+    admin = db.Column(db.Boolean)
+    invited = db.Column(db.Boolean)
+    active = db.Column(db.Boolean)
+    banned = db.Column(db.Boolean)
+    date_joined = db.Column(db.Integer)
 
-    def __init__(self, in_user_id, in_comm_id, in_is_admin, in_gen_url, in_accepted):
+    ladders = db.relationship('Ladder', backref='community_users')
+
+    def __init__(self, in_user_id, in_comm_id, in_admin, in_invited, in_active):
         self.user_id = in_user_id
         self.community_id = in_comm_id
-        self.is_admin = in_is_admin
-        self.active_url = secrets.token_urlsafe(32) if in_gen_url else None
-        self.accepted = in_accepted
+        self.admin = in_admin
+        self.invited = in_invited
+        self.active = in_active
         self.date_joined = int( time.time() )
 
     def to_dict(self):
         return {
+            "id": self.id,
             "user_id": self.user_id,
-            "admin": self.is_admin,
-            "accepted": self.accepted,
+            "admin": self.admin,
+            "active": self.active,
+            "invited": self.invited,
+            "banned": self.banned,
             "date_joined": self.date_joined,
         }
 
-class UserGroup(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    daily_limit = db.Column(db.Integer)
-    weekly_limit = db.Column(db.Integer)
-    name = db.Column(db.String(32))
-    name_lowercase = db.Column(db.String(32))
-
-    users = db.relationship('RioUser', backref = 'users')
-
 class ApiKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(32), unique=True, nullable=False)
     api_key = db.Column(db.String(50), unique=True)
     date_created = db.Column(db.Integer)
-    active_url = db.Column(db.String(50), unique=True)
     pings_daily = db.Column(db.Integer)
     pings_weekly = db.Column(db.Integer)
     last_ping_date = db.Column(db.Integer)
     total_pings = db.Column(db.Integer)
-    verified = db.Column(db.Boolean)
 
     user = db.relationship('RioUser', backref='api_key')
 
-    def __init__(self, in_email):
-        self.email    = in_email
+    def __init__(self):
         self.date_created = int(time.time())
-        self.active_url = secrets.token_urlsafe(32)
+        self.api_key = secrets.token_urlsafe(32)
+        self.pings_today = 0
         self.total_pings = 0
         self.pings_daily = 0
         self.pings_weekly = 0
-        self.verified = False

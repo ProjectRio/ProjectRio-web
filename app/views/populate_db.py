@@ -1,32 +1,29 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, Tag, GameTag
+from ..models import *
 from ..consts import *
+from ..glicko2 import Player
+from random import random
 
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
+    version_split = request.json['Version'].split('.')
+    if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
+        abort(400, "Not accepting games from clients below 1.9.5")
+
     # Ignore game if it's a CPU game
     if request.json['Home Player'] == "CPU" or request.json['Away Player'] == "CPU":
         return abort(400, 'Database does not accept CPU games')
-
-    tags = []
-
-    # Boolean used to assign a GameTag after creating CharacterGameSummary rows
-    is_superstar_game = False
 
     # Check if rio_keys exist in the db and get associated players
     home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
     away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
 
-    # If provided rio_keys did not exist, use the corresponding generic user
-    if home_player is None:
-        home_player = RioUser.query.filter_by(username="GenericHomeUser").first()
-    if away_player is None:
-        away_player = RioUser.query.filter_by(username="GenericAwayUser").first()
-
-    # Check if players exist - TODO Add back after closed beta to validate users
-    #if home_player is None or away_player is None:
-    #    abort(400, 'Invalid RioKey')
+    if home_player is None or away_player is None:
+        return abort(410, 'Invalid Rio User')
+    if home_player.verified is False or away_player.verified is False:
+        return abort(411, "Both users must be verified to submit games.")
+    
 
     # Detect invalid games
     innings_selected = request.json['Innings Selected']
@@ -34,8 +31,94 @@ def populate_db2():
     score_difference = abs(request.json['Home Score'] - request.json['Away Score'])
     is_valid = False if innings_played < innings_selected and score_difference < 10 else True
 
+    if innings_played < innings_selected and score_difference < 10:
+        return abort(412, "Invalid Game: Innings Played < Innings Selected & Score Difference < 10")
+    
+    # Verify Tags exist
+    tag_ids = list() # THIS ARRAY WILL BE FILLED WITH FOREIGN KEYS, DO NOT POPULATE IT UNLESS ADDING VALUES FROM SQL ROWS
+    json_tags = request.json['Tags']
+    tag_set_tag = None
+
+    tags = Tag.query.filter(Tag.id.in_(json_tags))
+
+    # Iterate through SQLAlchemy tags objects and find the TagSetTag.
+    # If there is more than 1 abort.
+    for tag in tags:
+        # All TagSet Tags have the type Competition
+        if tag.tag_type == "Competition":
+            if tag_set_tag != None:
+                abort(414, "Only one TagSet Tag can be submitted per game.")
+            tag_set_tag = tag
+
+    if tag_set_tag:   
+        # Get TagSet Id
+        tag_set_id = db.session.execute((
+            "SELECT \n"
+            "tagset_id \n"
+            "FROM tag_set_tag \n"
+            f"WHERE tag_set_tag.tag_id = {tag_set_tag.id}"
+        )).first()[0]
+        
+        # Get all Tags for TagSet
+        tag_ids_from_tag_set = db.session.execute((
+            "SELECT \n"
+            "tag_id \n"
+            "FROM tag_set_tag \n"
+            f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
+        )).all()
+
+        # Add all tags from provided TagSet to tag_ids to be added to database
+        for tag_id in tag_ids_from_tag_set:
+            tag_ids.append(tag_id.tag_id)
+
+        # Confirm that both users are community members for given TagSet
+        # Get TagSet obj to verify users
+        tag_set = TagSet.query.filter_by(id=tag_set_id).first()
+
+        home_comm_user = CommunityUser.query.filter_by(user_id=home_player.id, community_id=tag_set.community_id).first()
+        away_comm_user = CommunityUser.query.filter_by(user_id=away_player.id, community_id=tag_set.community_id).first()
+
+        if home_comm_user == None or away_comm_user == None:
+            abort(415, "One or both users are not part of the community for this TagSet.")
+
+    version = request.json['Version']
+    rio_client_version_tag = Tag.query.filter_by(name=f'client_{version}').first()
+    if rio_client_version_tag is None:
+        new_rio_client_version_tag = Tag(
+            in_tag_name = f'client_{version}',
+            in_desc = "Rio Client Version Tag",
+            in_tag_type = "Global",
+            in_comm_id = None
+        )
+        db.session.add(new_rio_client_version_tag)
+        db.session.commit()
+    tag_ids.append(new_rio_client_version_tag.id)
+
+    # add rio web version tag, create tag if it doesn't exist
+    rio_web_version_tag = Tag.query.filter_by(name=f'web_{cRIO_WEB_VERSION}').first()
+    if rio_web_version_tag is None:
+        new_rio_web_version_tag = Tag(
+            in_tag_name = f'web_{cRIO_WEB_VERSION}',
+            in_desc = "Rio Web Version Tag",
+            in_tag_type = "Global",
+            in_comm_id = None
+        )
+        db.session.add(new_rio_web_version_tag)
+        db.session.commit()
+    tag_ids.append(new_rio_web_version_tag.id)
+
+    #Reroll game id until unique one is found
+    unique_id = False
+    game_id = int(request.json['GameID'].replace(',', ''), 16)
+    while not unique_id:
+        game = Game.query.filter_by(game_id=game_id).first()
+        if game == None:
+            unique_id = True
+        else:
+            game_id = random.getrandbits(32)
+
     game = Game(
-        game_id = int(request.json['GameID'].replace(',', ''), 16),
+        game_id = game_id,
         away_player_id = away_player.id,
         home_player_id = home_player.id,
         date_time_start = int(request.json['Date - Start']),
@@ -54,9 +137,38 @@ def populate_db2():
         version = request.json['Version'],
     )
 
+    # Get winner and loser rio_user
+    if (game.home_score > game.away_score):
+        winner_player = home_player
+        loser_player = away_player
+        winner_score = game.home_score
+        loser_score = game.away_score
+    else:
+        winner_player = away_player
+        loser_player = home_player
+        winner_score = game.away_score
+        loser_score = game.home_score
+
+    # Add game row to database
     db.session.add(game)
     db.session.commit()
 
+    # Populate GameTag table with matching tags
+    # tag_ids is a list of tag foreign keys
+    for tag_id in tag_ids:
+        game_tag = GameTag(
+            game_id = game.game_id,
+            tag_id = tag_id
+        )
+        db.session.add(game_tag)
+    db.session.commit()
+
+    # Create GameHistory row
+    # TODO, DO NOT CALL IF TAGSETID IS NONE - Connor
+    game_id = submit_game_history(game.game_id, tag_set_id, winner_player.username, winner_score, loser_player.username, loser_score)['GameID']
+
+    # Calc player elo
+    calc_elo(tag_set_id, winner_player.id, loser_player.id)
 
     # ======= Character Game Summary =======
     teams = {
@@ -66,7 +178,7 @@ def populate_db2():
     character_game_stats = request.json['Character Game Stats']
     characters = [character_game_stats['Team 0 Roster 0'], character_game_stats['Team 0 Roster 1'], character_game_stats['Team 0 Roster 2'], character_game_stats['Team 0 Roster 3'], character_game_stats['Team 0 Roster 4'], character_game_stats['Team 0 Roster 5'], character_game_stats['Team 0 Roster 6'], character_game_stats['Team 0 Roster 7'], character_game_stats['Team 0 Roster 8'], character_game_stats['Team 1 Roster 0'], character_game_stats['Team 1 Roster 1'], character_game_stats['Team 1 Roster 2'], character_game_stats['Team 1 Roster 3'], character_game_stats['Team 1 Roster 4'], character_game_stats['Team 1 Roster 5'], character_game_stats['Team 1 Roster 6'], character_game_stats['Team 1 Roster 7'], character_game_stats['Team 1 Roster 8']]    
     for character in characters:
-        pitches_per_position = character['Defensive Stats']['Pitches Per Position'] if len(character['Defensive Stats']['Pitches Per Position']) == 1 else [{}]
+        pitches_per_position = character['Defensive Stats']['Batters Per Position'] if len(character['Defensive Stats']['Batters Per Position']) == 1 else [{}]
         batter_outs_per_position = character['Defensive Stats']['Batter Outs Per Position'] if len(character['Defensive Stats']['Batter Outs Per Position']) == 1 else [{}]
         outs_per_position = character['Defensive Stats']['Outs Per Position'] if len(character['Defensive Stats']['Outs Per Position']) == 1 else [{}]
 
@@ -171,57 +283,6 @@ def populate_db2():
         else:
             teams['Away'][character['RosterID']] = character_game_summary
 
-        # ==== GameTag ====
-        if character['Superstar'] == 1:
-            is_superstar_game = True 
-
-    if game.ranked == True:
-        tags.append('Ranked')
-    else:
-        tags.append('Unranked')
-
-    if is_superstar_game == True:
-        tags.append('Superstar')
-    else:
-        tags.append('Normal')
-    
-    if request.json['Netplay'] == True:
-        tags.append('Netplay')
-    else:
-        tags.append('Local')
-
-    rio_client_version_tag = Tag.query.filter_by(name=game.version).first()
-    if rio_client_version_tag is None:
-        new_rio_client_version_tag = Tag(
-            name = f'client_{game.version}',
-            name_lowercase = f'client_{game.version.lower()}',
-            desc = "Rio Client Version Tag"
-        )
-        db.session.add(new_rio_client_version_tag)
-        db.session.commit()
-    tags.append(f'client_{game.version}')
-
-    # add rio web version tag, create tag if it doesn't exist
-    rio_web_version_tag = Tag.query.filter_by(name=cRIO_WEB_VERSION).first()
-    if rio_web_version_tag is None:
-        new_rio_web_version_tag = Tag(
-            name = f'web_{cRIO_WEB_VERSION}',
-            name_lowercase = f'web_{cRIO_WEB_VERSION.lower()}',
-            desc = "Rio Web Version Tag"
-        )
-        db.session.add(new_rio_web_version_tag)
-        db.session.commit()
-    tags.append(f'web_{cRIO_WEB_VERSION}')
-
-    for name in tags:
-        tag = Tag.query.filter_by(name=name).first()
-        if tag:
-            game_tag = GameTag(
-                game_id = game.game_id,
-                tag_id = tag.id
-            )
-            db.session.add(game_tag)
-
     # Create Events, Runners, PitchSummaries, ContactSummaries, and FieldingSummaries
     # contains json data for comparing events
     previous_runners_json = {
@@ -258,6 +319,7 @@ def populate_db2():
             outs = event_data['Outs'],
             balls = event_data['Balls'],
             strikes = event_data['Strikes'],
+            result_num_of_outs = event_data['Num Outs During Play'],
             result_rbi = event_data['RBI'],
             result_of_ab = event_data['Result of AB'],
         )
@@ -291,7 +353,10 @@ def populate_db2():
                     if key == 'Runner Batter':
                         event.runner_on_0 = runner.id
                         # Increment batter plate appearances on new appearance
-                        batter_character_game_summary = teams['Away'][event_data[key]['Runner Roster Loc']] if event_data['Half Inning'] == 0 else teams['Home'][event_data[key]['Runner Roster Loc']]
+                        if event_data['Half Inning'] == 0:
+                            batter_character_game_summary = teams['Away'][event_data[key]['Runner Roster Loc']]
+                        else:
+                            batter_character_game_summary = teams['Home'][event_data[key]['Runner Roster Loc']]
                         batter_character_game_summary.plate_appearances += 1
                     elif key == 'Runner 1B':
                         event.runner_on_1 = runner.id
@@ -314,11 +379,10 @@ def populate_db2():
                 charge_pitch_type = event_data['Pitch']['Charge Type'],
                 star_pitch = event_data['Pitch']['Star Pitch'],
                 pitch_speed = event_data['Pitch']['Pitch Speed'],
-                pitch_ball_x_pos = event_data['Pitch']['Ball Position - X'],
-                pitch_ball_z_pos = event_data['Pitch']['Ball Position - Z'],
-                pitch_batter_x_pos = event_data['Pitch']['Batter Position - X'],
-                pitch_batter_z_pos = event_data['Pitch']['Batter Position - Z'],
-                pitch_result = event_data['Pitch']['Pitch Result'],
+                ball_position_strikezone = event_data['Pitch']['Ball Position - Strikezone'],
+                bat_x_contact_pos = event_data['Pitch']['Bat Contact Pos - X'],
+                bat_z_contact_pos = event_data['Pitch']['Bat Contact Pos - Z'],
+                in_strikezone = event_data['Pitch']['In Strikezone'],
                 type_of_swing = event_data['Pitch']['Type of Swing'],
                 d_ball = event_data['Pitch']['DB'],
             )
@@ -337,17 +401,24 @@ def populate_db2():
                     input_direction = event_data['Pitch']['Contact']['Input Direction - Push/Pull'],
                     input_direction_stick = event_data['Pitch']['Contact']['Input Direction - Stick'],
                     frame_of_swing_upon_contact = event_data['Pitch']['Contact']['Frame of Swing Upon Contact'],
-                    ball_angle = int(event_data['Pitch']['Contact']['Ball Angle'].replace(',', '')),
-                    ball_horiz_power = int(event_data['Pitch']['Contact']['Ball Horizontal Power'].replace(',', '')),
-                    ball_vert_power = int(event_data['Pitch']['Contact']['Ball Vertical Power'].replace(',', '')),
+                    ball_power = int(event_data['Pitch']['Contact']['Ball Power'].replace(',', '')),
+                    ball_horiz_angle = int(event_data['Pitch']['Contact']['Vert Angle'].replace(',', '')),
+                    ball_vert_angle = int(event_data['Pitch']['Contact']['Horiz Angle'].replace(',', '')),
+                    contact_absolute = event_data['Pitch']['Contact']['Contact Absolute'],
+                    contact_quality = event_data['Pitch']['Contact']['Contact Quality'],
+                    rng1 = int(event_data['Pitch']['Contact']['RNG1'].replace(',', '')),
+                    rng2 = int(event_data['Pitch']['Contact']['RNG2'].replace(',', '')),
+                    rng3 = int(event_data['Pitch']['Contact']['RNG3'].replace(',', '')),
                     ball_x_velocity = event_data['Pitch']['Contact']['Ball Velocity - X'],
                     ball_y_velocity = event_data['Pitch']['Contact']['Ball Velocity - Y'],
                     ball_z_velocity = event_data['Pitch']['Contact']['Ball Velocity - Z'],
-                    ball_x_pos = event_data['Pitch']['Contact']['Ball Landing Position - X'],
-                    ball_y_pos = event_data['Pitch']['Contact']['Ball Landing Position - Y'],
-                    ball_z_pos = event_data['Pitch']['Contact']['Ball Landing Position - Z'],
+                    ball_x_contact_pos = event_data['Pitch']['Contact']['Ball Contact Pos - X'],
+                    ball_z_contact_pos = event_data['Pitch']['Contact']['Ball Contact Pos - Z'],
+                    ball_x_landing_pos = event_data['Pitch']['Contact']['Ball Landing Position - X'],
+                    ball_y_landing_pos = event_data['Pitch']['Contact']['Ball Landing Position - Y'],
+                    ball_z_landing_pos = event_data['Pitch']['Contact']['Ball Landing Position - Z'],
                     ball_max_height = event_data['Pitch']['Contact']['Ball Max Height'],
-                    multi_out = event_data['Pitch']['Contact']['Multi-out'],
+                    ball_hang_time = int(event_data['Pitch']['Contact']['Ball Hang Time'].replace(',', '')),                    
                     primary_result = event_data['Pitch']['Contact']['Contact Result - Primary'],
                     secondary_result = event_data['Pitch']['Contact']['Contact Result - Secondary']
                 )
@@ -360,8 +431,14 @@ def populate_db2():
                 if 'First Fielder' in event_data['Pitch']['Contact']:
                     fielder_data = event_data['Pitch']['Contact']['First Fielder']
 
+                    fielder_character_game_summary_id = int()
+                    if event_data['Half Inning'] == 0:
+                        fielder_character_game_summary_id = teams['Home'][fielder_data['Fielder Roster Location']].id
+                    else:
+                        fielder_character_game_summary_id = teams['Away'][fielder_data['Fielder Roster Location']].id
+
                     fielding_summary = FieldingSummary(
-                        fielder_character_game_summary_id = teams['Home'][fielder_data['Fielder Roster Location']].id if event_data['Half Inning'] == 0 else teams['Away'][fielder_data['Fielder Roster Location']].id,
+                        fielder_character_game_summary_id = fielder_character_game_summary_id,
                         position = fielder_data['Fielder Position'],
                         action = fielder_data['Fielder Action'],
                         jump = fielder_data['Fielder Jump'],
@@ -455,3 +532,227 @@ def populate_db2():
         db.session.commit()
 
     return 'Completed...'
+
+
+@app.route('/submit_game/', methods=['POST'])
+def submit_game_history(in_game_id=None, in_tag_set_id=None,
+                        in_winner_username=None, in_winner_score=None, 
+                        in_loser_username=None, in_loser_score=None):
+    game_id = in_game_id
+    winner_username = in_winner_username if (in_winner_username != None) else request.json['Winner Username']
+    winner_score = in_winner_score if (in_winner_score != None) else request.json['Winner Score']
+    loser_username = in_loser_username if (in_loser_username != None) else request.json['Loser Username']
+    loser_score = in_loser_score if (in_loser_score != None) else request.json['Loser Score']
+    tag_set_id = None
+    if in_tag_set_id == None: # Called by endpoint
+        # Lookup tagset id
+        tag_set = TagSet.query.filter_by(name_lowercase=(request.json['TagSet']).lower()).first()
+        if tag_set == None:
+            return abort(409, description='No TagSet found with provided name')
+        tag_set_id = tag_set.id
+    else:
+        tag_set_id = in_tag_set_id
+
+    # Get CommID from TagSet
+    tag_set = TagSet.query.filter_by(id=tag_set_id).first()
+    if tag_set == None:
+        return abort(411, description='No TagSet found')
+    comm_id = tag_set.community_id
+
+    #Get users and community users
+    winner_user = RioUser.query.filter_by(username_lowercase=winner_username.lower()).first()
+    loser_user = RioUser.query.filter_by(username_lowercase=loser_username.lower()).first()
+
+    if winner_user == None or loser_user == None:
+        print('No users')
+        return abort(409, description='No RioUser found for at least one of the provided usernames')
+
+    if not winner_user.verified or not loser_user.verified:
+        return abort(410, description='RioUser(s) are not verified')
+
+    winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user.id, community_id=comm_id).first()
+    loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user.id, community_id=comm_id).first()
+
+    if winner_comm_user == None or loser_comm_user == None:
+        print('No comm users')
+        return abort(409, description='No CommunityUser found for at least one of the RioUsers')
+
+    #Get TagSet. If season, update/track ELO. Else just add the GameHistory row
+    winner_elo = None
+    loser_elo = None
+
+    # Only maintain Ladder for seasons
+    if (tag_set.type == 'Season'):
+        #Get ELOs
+        winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id).first()
+        loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id).first()
+
+        #Create elos for new players if needed
+        if winner_ladder == None:
+            new_glicko_player = Player()
+            winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+            db.session.add(winner_ladder)
+            db.session.commit()
+        if loser_ladder == None:
+            new_glicko_player = Player()
+            loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+            db.session.add(loser_ladder)
+            db.session.commit()
+
+        winner_elo = winner_ladder.rating
+        loser_elo = loser_ladder.rating
+    
+    #Acceptance
+    winner_accept = False
+    loser_accept = False
+    admin_accept = False
+
+    #Get submitters key, if it matches set accept for them
+    if (game_id == None):
+        submitter_key_provided = request.is_json and 'Submitter Rio Key' in request.json
+        if submitter_key_provided:
+            submitter_rio_key = request.json['Submitter Rio Key']
+            submitter = db.session.query(
+                CommunityUser
+            ).join(
+                RioUser
+            ).filter(
+                (RioUser.rio_key == submitter_rio_key)
+              & (CommunityUser.community_id == winner_comm_user.community_id)
+            ).first()
+
+            if submitter == None:
+                print('No submitter found')
+                return abort(409, description=f"Submitter not part of provided community")
+            if (submitter.id != winner_comm_user.id and submitter.id != loser_comm_user.id and not submitter.admin):
+                print('Submitter not player nor admin')
+                print('Submitter ID:', submitter.id)
+                return abort(409, description=f"Submitter is not a player or admin")
+            winner_accept = submitter.id == winner_comm_user.id
+            loser_accept = submitter.id == loser_comm_user.id
+            admin_accept = submitter.admin and (not winner_accept and not loser_accept)
+            if admin_accept:
+                calc_elo(tag_set_id, winner_comm_user.rio_user.id, loser_comm_user.rio_user.id)
+        else: 
+            return abort(413, description=f"Submitter key not provided")
+    else:
+        winner_accept = True
+        loser_accept = True
+
+    #Finally ready to write the row
+    new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
+                                   winner_score, loser_score, 
+                                   winner_elo, loser_elo, 
+                                   winner_accept, loser_accept, admin_accept)
+    db.session.add(new_game_history)
+    db.session.commit()
+
+    if (in_game_id == None):
+        return {'GameID': new_game_history.id}
+    else:
+        return {'GameID': new_game_history.game_id}
+
+
+@app.route('/update_game_status/', methods=['POST'])
+def update_game_status():
+    game_history = None
+    game_id_provided =  request.is_json and 'GameID' in request.json
+    gamehistory_id_provided =  request.is_json and 'GameHistoryID' in request.json
+
+    if (game_id_provided == gamehistory_id_provided):
+        return abort(409, description="Exactly one ID must be provided")
+    elif game_id_provided:
+        game_history = GameHistory.query.filter_by(game_id=request.json.get('GameID')).first()
+    elif gamehistory_id_provided:
+        game_history = GameHistory.query.filter_by(id=request.json.get('GameHistoryID')).first()
+    
+    if game_history == None:
+        return abort(410, description="Could not find GameHistory for given ID")
+    if ((game_history.winner_accept == True and game_history.loser_accept == True) or game_history.admin_accept):
+        return abort(411, description="Already accepted by both players or admin")
+
+    # print(game_history.winner_accept,game_history.winner_accept,game_history.winner_accept)
+
+    confirmer_rio_key = request.json.get('Rio Key')
+    confirmer_accept = request.json.get('Accept') == 1
+
+    #Get comm users
+    winner_comm_user = CommunityUser.query.filter_by(id=game_history.winner_comm_user_id).first()
+    loser_comm_user = CommunityUser.query.filter_by(id=game_history.loser_comm_user_id).first()
+
+    comm_id = winner_comm_user.community_id
+
+    if (confirmer_rio_key == winner_comm_user.rio_user.rio_key):
+        game_history.winner_accept = confirmer_accept
+    if (confirmer_rio_key == loser_comm_user.rio_user.rio_key):
+        game_history.loser_accept = confirmer_accept
+
+    # Check for admin verification
+    admin = db.session.query(
+            CommunityUser
+        ).join(
+            RioUser
+        ).filter(
+            (RioUser.rio_key == confirmer_rio_key)
+          & (CommunityUser.id == comm_id)
+        ).first()
+    
+    if admin != None:
+        game_history.admin_accept = confirmer_accept
+
+    # Commit changes to GameHistory
+    db.session.commit()
+
+    # Update ELO if tag_set is a season
+    tag_set = TagSet.query.filter_by(id=game_history.tag_set_id).first()
+
+    if (tag_set == None):
+        return abort(409, description='Somehow tagset is invalid')
+
+    if (tag_set.type == 'Season' and
+       ((game_history.winner_accept == True and game_history.loser_accept == True) or game_history.admin_accept)):
+        calc_elo(game_history.tag_set_id, winner_comm_user.rio_user.id, loser_comm_user.rio_user.id)
+    
+    return 'Success', 200
+
+def calc_elo(tag_set_id, winner_user_id, loser_user_id):
+    winner_ladder = db.session.query(
+            Ladder
+        ).join(
+            CommunityUser
+        ).filter(
+            (Ladder.tag_set_id == tag_set_id) &
+            (CommunityUser.user_id == winner_user_id)
+        ).first()
+    loser_ladder = db.session.query(
+            Ladder
+        ).join(
+            CommunityUser
+        ).filter(
+            (Ladder.tag_set_id == tag_set_id) &
+            (CommunityUser.user_id == loser_user_id)
+        ).first()
+
+    if winner_ladder == None:
+        return abort(409, description="No winner ladder entry")
+    if loser_ladder == None:
+        return abort(409, description="No loser ladder entry")
+
+    winner_player = Player(winner_ladder.rating, winner_ladder.rd, winner_ladder.vol)
+    loser_player = Player(loser_ladder.rating, loser_ladder.rd, loser_ladder.vol)
+
+    winner_player.update_player([loser_ladder.rating], [loser_ladder.rd], [1])
+    loser_player.update_player([winner_ladder.rating], [winner_ladder.rd], [0])
+
+    #Todo function in Ladder
+    winner_ladder.rating = winner_player.rating
+    winner_ladder.rd = winner_ladder.rd
+    winner_ladder.vol = winner_ladder.vol
+
+    loser_ladder.rating = loser_player.rating
+    loser_ladder.rd = loser_player.rd
+    loser_ladder.vol = loser_player.vol
+
+    db.session.commit()
+
+    return

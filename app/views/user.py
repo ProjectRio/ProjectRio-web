@@ -1,11 +1,17 @@
-from flask import request, jsonify, abort
+from flask import render_template, request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, GameTag
-from ..email import send_email
+from app.utils.send_email import send_email
+from app.views.community import add_user_to_all_comms
+
+# === User Registration Front End ===
+@app.route('/signup/')
+def display_signup_page():
+    return render_template('signup.html')
 
 # === User registration endpoints ===
 @app.route('/register/', methods=['POST'])
@@ -22,27 +28,39 @@ def register():
         return abort(409, description='Username or Email has already been taken')
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
+    elif '@' not in in_email:
+        return abort(406, description='Not a valid email')
     else:
         # === Create User row ===
-        new_user = RioUser(in_username, username_lowercase, in_email, in_password)
+        new_user = RioUser(in_username, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
 
         subject = 'Verify your Project Rio Account'
-
         html_content = (
             f'''
-            <h1>Welcome to Rio Web, {in_username}!</h1>
-            <p>Please click the following link to verify your email address and get your Rio Key.</p>
-            <a href={'https://projectrio-api-1.api.projectrio.app/verify_email/' + new_user.active_url}>Verfiy Me!</a>
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
+                <h1>Welcome to Rio Web, {in_username}!</h1>
+                <p>Please click the following link to verify your email address and get your Rio Key.</p>
+                <a href={'https://projectrio-api-1.api.projectrio.app/verify_email/' + new_user.active_url}>Verfiy Me!</a>
+                <br/>
+                <p>Happy Hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Welcome to Rio Web, {in_username}!\n
+                Please click the following link to verify your email address and get your Rio Key.\n
+                https://projectrio-api-1.api.projectrio.app/verify_email/{new_user.active_url}\n
+                \n
+                \n
+                Happy hitting!\n
+                Project Rio Web Team
             '''
         )
 
         try:
-            send_email(in_email, subject, html_content)
+            send_email(new_user.email, subject, html_content, text_content)
         except:
             return abort(502, 'Failed to send email')
         
@@ -58,34 +76,54 @@ def verify_email(active_url):
         user.active_url = None
         
         subject = 'Your Rio Key'
-
         html_content = (
             f'''
-            <h1>Welcome to Rio Web, {user.username}!</h1>
-            <p>Your account has been verified!</p> 
-            <br/>
-            <h3>Here is your Rio Key: {user.rio_key}</h3>
-            <h3>Directions</h3>
-            <ol>
-                <li>From the main Rio screen click Local Players and create a new player</li>
-                <li>Enter your username and Rio Key</li>
-                <li>Have fun!</li>
-            </ol>
-            <p>If you already have a Local Player saved with the same name...</p>
-            <ol>
-                <li>Navigate to Documents\ProjectRio\Config\LocalPlayers.ini</li>
-                <li>Open LocalPlayers.ini</li>
-                <li>Delete your old username</li>
-            </ol>
+                <h1>Welcome to Rio Web, {user.username}!</h1>
+                <p>Your account has been verified!</p> 
+                <br/>
+                <h3>Here is your Rio Key: {user.rio_key}</h3>
+                <h3>Directions</h3>
+                <ol>
+                    <li>From the main Rio screen click "Local Play" then "Add Player"</li>
+                    <li>Enter your username and Rio Key</li>
+                    <li>Have fun!</li>
+                </ol>
+                <p>If you already have a Local Player saved with the same name...</p>
+                <ol>
+                    <li>Click the Local Play tab in the client</li>
+                    <li>Remove your original local player name</li>
+                    <li>Click "Add Player" and enter your new username and rio key</li>
+                </ol>
 
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
+                <br/>
+                <p>Happy hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Welcome to Rio Web, {user.username}!\n
+                Your account has been verified!\n
+                Here is your Rio Key: {user.rio_key}\n
+                Directions\n
+                - From the main Rio screen click "Local Play" then "Add Player"\n
+                - Enter your username and Rio Key\n
+                - Have fun!\n
+                If you already have a Local Player saved with the same name...\n
+                - Click the Local Play tab in the client\n
+                - Remove your original local player name\n
+                - Click "Add Player" and enter your new username and rio key\n
+                \n
+                Happy hitting!\n
+                Project Rio Web Team
             '''
         )
 
+        # === Add users to Official community ===
+        add_user_to_all_comms(user.id, 'Official')
+
         try:
-            send_email(user.email, subject, html_content)
+            send_email(user.email, subject, html_content, text_content)
         except:
             return abort(502, 'Failed to send email')
 
@@ -95,7 +133,7 @@ def verify_email(active_url):
             'Rio Key': user.rio_key,
         }, 200
     except:
-        return abort(422, 'Invalid Key')
+        return abort(422, 'Invalid url')
 
 
 # === Password change endpoints ===
@@ -120,20 +158,33 @@ def request_password_change():
     db.session.commit()
 
     subject = 'Project Rio Password Reset Request'
-
     html_content =  (
-        f'Dear {user.email},\n'
-        '\n'
-        'We received a password reset request for your account. If you did not make this request, please ignore this email.\n'
-        'Otherwise, follow this link to reset your password:\n'
-        f'{user.active_url}\n'
-        '\n'
-        'Happy hitting!\n'
-        'Project Rio Web Team'
+        f'''
+            Dear {user.email},\n
+            \n
+            We received a password reset request for your account. If you did not make this request, please ignore this email.\n
+            Otherwise, follow this link to reset your password:\n
+            {user.active_url}\n
+            \n
+            Happy hitting!\n
+            Project Rio Web Team     
+        '''
+    )
+    text_content = (
+        f'''
+            Dear {user.email},\n
+            We received a password reset request for your account. If you did not make this request, please ignore this email.\n
+            Otherwise, follow this link to reset your password:\n
+            {user.active_url}\n
+            \n
+            Happy hitting!\n
+            Project Rio Web Team     
+
+        '''
     )
     
     try:
-        send_email(user.email, subject, html_content)
+        send_email(user.email, subject, html_content, text_content)
     except:
         abort(502, 'Failed to send email')
 
@@ -228,23 +279,47 @@ def refresh_expiring_jwts(response):
 
 
 # === Get/Set user settings ===
-#GET retreives user key, POST with empty JSON will generate new rio key and return it
-@app.route('/key/', methods=['GET', 'POST'])
-@jwt_required()
-def update_rio_key():
-    current_user_username = get_jwt_identity()
-    current_user = RioUser.query.filter_by(username=current_user_username).first()
+#Generates a new Rio Key and sends it in an email.
+@app.route('/request_new_rio_key/', methods=['GET'])
+def update_rio_key():    
+    email_lowercase = request.args.get("email").lower()
+    user = RioUser.query.filter_by(email=email_lowercase).first()
 
-    if request.method == 'GET':
-        return jsonify({
-            "riokey": current_user.rio_key
-        })
-    elif request.method == 'POST':
-        current_user.rio_key = secrets.token_urlsafe(32)
-        db.session.commit()
-        return jsonify({
-            "riokey": current_user.rio_key
-        })
+    if not user:
+        return "Invalid email provided."
+
+    user.rio_key = secrets.token_urlsafe(32)
+    db.session.commit()
+
+    subject = 'Your New Rio Key'
+    html_content = (
+        f'''
+            <h1>Hey, {user.username}!</h1>
+            <p>Here's the new rio key you requested:</p>
+            <p>{user.rio_key}</p>
+            <br/>
+            <p>Happy Hitting!</p>
+            <p>Rio Team</p>
+        '''
+    )
+    text_content = (
+        f'''
+            Hey, {user.username}!\n
+            Here's the new rio key you requested:\n
+            {user.rio_key}\n
+            \n
+            \n
+            Happy hitting!\n
+            Rio Team
+        '''
+    )
+
+    try:
+        send_email(user.email, subject, html_content, text_content)
+    except:
+        abort(502, 'Failed to send email')
+
+    return "Your new rio key has been sent to your email address!"
 
 #GET retreives user privacy, POST with empty JSON will swap privacy setting and return it
 @app.route('/set_privacy/', methods = ['GET', 'POST'])
@@ -275,6 +350,9 @@ def set_privacy():
 '''
 @app.route('/user/tags/', methods = ['GET'])
 def get_users_tags():
+    if (app.config['rio_env'] == "production"):
+        return abort(404, description='Endpoint not ready for production')
+    
     in_username_lowercase = request.args.get("username")
     user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 
@@ -320,8 +398,21 @@ def get_users_tags():
         "available_tags": tags
     }, 200
 
+
+'''
+@ Description: Returns list of communities a user is a member of
+@ Params:
+    - username: username to get communities for. 
+@ Output:
+    - List of communities
+@ Example URL: http://127.0.0.1:5000/user/communities/?username=GenericHomeUser&username=GenericAwayUser
+'''
+
 @app.route('/user/communities/', methods = ['GET'])
 def get_users_communities():
+    if (app.config['rio_env'] == "production"):
+        return abort(404, description='Endpoint not ready for production')
+
     in_username_lowercase = request.json['username'].lower()
     user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 

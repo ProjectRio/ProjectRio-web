@@ -1,22 +1,50 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, Character, ChemistryTable, Tag, GameTag
+from ..models import *
+from ..consts import *
 import json
 import os
 
 # === Initalize Character Tables And Ranked/Superstar Tags ===
-@app.route('/reset_db/', methods=['POST'])
-def reset_db():
+@app.route('/init_db/', methods=['POST'])
+def init_db():
     if os.getenv('RESET_DB') == request.json['RESET_DB']:
         try:
-            db.drop_all()
+            engine = db.get_engine()
+            Event.__table__.drop(engine)
+            Runner.__table__.drop(engine)
+            PitchSummary.__table__.drop(engine)
+            ContactSummary.__table__.drop(engine)
+            FieldingSummary.__table__.drop(engine)
+            CharacterGameSummary.__table__.drop(engine)
+            CharacterPositionSummary.__table__.drop(engine)
+            GameTag.__table__.drop(engine)        
+            Game.__table__.drop(engine)
             db.create_all()
             create_character_tables()
-            create_default_tags()
+            #create_default_tags()
+            create_default_groups()
+            create_official_infrastructure()
+            return 'DB Init'
         except:
-            abort(400)  
+            abort(400, "Error dropping or creating tables.")  
     else:
-        return 'Invalid password'
+        abort(400, 'Invalid password')
+    return 'Success...'
+
+# **DANGER**
+# Completely wipe the DB
+@app.route('/wipe_db/', methods=['POST'])
+def wipe_db():
+    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+        db.drop_all()
+        db.create_all()
+        create_character_tables()
+        create_default_groups()
+        create_official_infrastructure()
+        return 'DB Wiped'
+    else:
+        abort(401, 'Invalid password')
     return 'Success...'
 
 def create_character_tables():
@@ -124,39 +152,45 @@ def create_character_tables():
 
 def create_default_tags():
     ranked = Tag(
-        name = "Ranked",
-        name_lowercase = "ranked",
-        desc = "Tag for Ranked games"
+        in_tag_name = "Ranked",
+        in_desc = "Tag for Ranked games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     unranked = Tag(
-        name = "Unranked",
-        name_lowercase = "unranked",
-        desc = "Tag for Unranked games"
+        in_tag_name = "Unranked",
+        in_desc = "Tag for Unranked games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     superstar = Tag(
-        name = "Superstar",
-        name_lowercase = "superstar",
-        desc = "Tag for Stars On"
+        in_tag_name = "Superstar",
+        in_desc = "Tag for Stars On",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     normal = Tag(
-        name = "Normal",
-        name_lowercase = "normal",
-        desc = "Tag for Normal games"
+        in_tag_name = "Normal",
+        in_desc = "Tag for Normal games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     netplay = Tag(
-        name = "Netplay",
-        name_lowercase = "netplay",
-        desc = "Tag for Netplay games"
+        in_tag_name = "Netplay",
+        in_desc = "Tag for Netplay games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     local = Tag(
-        name = "Local",
-        name_lowercase = "local",
-        desc = "Tag for Local games"
+        in_tag_name = "Local",
+        in_desc = "Tag for Local games",
+        in_tag_type = "Global",
+        in_comm_id = None
     )
 
     db.session.add(ranked)
@@ -168,3 +202,91 @@ def create_default_tags():
     db.session.commit()
 
     return 'Tags created... \n'
+
+def create_default_groups():
+    admin = UserGroup(in_group_name='Admin')
+    developer = UserGroup(in_group_name='Developer')
+    patron_fan = UserGroup(in_group_name='Patron: Fan')
+    patron_rookie = UserGroup(in_group_name='Patron: Rookie')
+    patron_mvp = UserGroup(in_group_name='Patron: MVP')
+    patron_hof = UserGroup(in_group_name='Patron: Hall of Famer')
+    general = UserGroup(in_group_name='General')
+
+    # Limits for Patron perks - TODO possibly make more robust
+    # Will have an endpoint to adjust
+    admin.sponsor_limit = 999
+    developer.sponsor_limit = 999
+    patron_fan.sponsor_limit = 0
+    patron_rookie.sponsor_limit = 1
+    patron_mvp.sponsor_limit = 5
+    patron_hof.sponsor_limit = 10
+    general.sponsor_limit = 0
+
+    db.session.add(admin)
+    db.session.add(developer)
+    db.session.add(patron_fan)
+    db.session.add(patron_rookie)
+    db.session.add(patron_mvp)
+    db.session.add(patron_hof)
+    db.session.add(general)
+    db.session.commit()
+
+
+def create_official_infrastructure():
+    admin_user = create_admin_users()
+    create_official_comms(admin_user)
+
+def create_admin_users():
+    admin_user = RioUser('ProjectRio', 'projectrio.dev@gmail.com', secrets.token_urlsafe(32))
+    admin_user.verified = True
+    admin_user.active_url = None
+    db.session.add(admin_user)
+    db.session.commit()
+
+    #Get admin group
+    user_group = UserGroup.query.filter_by(name_lowercase='admin').first()
+
+    #Add admin user to group
+    new_user_group_user = UserGroupUser(
+        user_id=admin_user.id,
+        user_group_id=user_group.id
+    )
+    db.session.add(new_user_group_user)
+    db.session.commit()
+
+    return admin_user
+
+def create_official_comms(admin_user):
+    new_comm = Community('OfficialRanked', admin_user.id, 'Official', False, cACTIVE_TAGSET_LIMIT, True, 'Official community of ProjectRio')
+    db.session.add(new_comm)
+    db.session.commit()
+
+    # === Create CommunityUser (admin)
+    new_comm_user = CommunityUser(admin_user.id, new_comm.id, True, False, True)
+    db.session.add(new_comm_user)
+    db.session.commit()
+
+    # === Create Community Tag ===
+    new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", f"Community tag for {new_comm.name}")
+    db.session.add(new_comm_tag)
+    db.session.commit()
+
+@app.route('/restore_users/', methods=['GET'])
+def restore_users():
+    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+        try:
+            f = open('./json/rio_user.json')
+            rio_users = json.load(f)
+            for user in rio_users:
+                new_user = RioUser(user['username'], user['username_lowercase'], user['email'], "temp")
+                new_user.password = user['password']
+                new_user.verified = user['verified']
+                new_user.rio_key = user['rio_key']
+                new_user.active_url = user['active_url']
+                db.session.add(new_user)
+            db.session.commit()
+        except:
+            abort(400, "Error restoring users.")  
+    else:
+        abort(400, 'Invalid password')
+    return 'Success...'

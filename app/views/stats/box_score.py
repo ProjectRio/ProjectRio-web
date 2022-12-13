@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from ...models import db, RioUser, Game
-from ...helper_functions import calculate_era
+from ...util import calculate_era
 
 '''
 @ Description: Returns box score data
@@ -19,7 +19,7 @@ from ...helper_functions import calculate_era
 @app.route('/box_score/', methods = ['GET'])
 def box_score():
     #Not ready for production
-    if (app.env == "production"):
+    if (app.config['rio_env'] == "production"):
         return abort(404, description='Endpoint not ready for production')
 
     if request.args.get('game_id') is not None:

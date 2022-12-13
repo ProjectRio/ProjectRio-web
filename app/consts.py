@@ -1,5 +1,5 @@
 #Rio Web Version
-cRIO_WEB_VERSION = "0.2.b"
+cRIO_WEB_VERSION = "0.3.0"
 
 # Dicts to interpret result of play
 cPLAY_RESULT_INVLD = {0: 'Strike/Foul'}
@@ -32,6 +32,28 @@ cTYPE_OF_SWING = {
     3: "Star",
     4: "Bunt"
 }
+
+cTAG_TYPES = {
+    0: "Component",
+    1: "Competition",
+    3: "Community"
+}
+
+cTAG_SET_TYPES = {
+    0: "Season",
+    1: "League",
+    3: "Tournament",
+    4: "Custom"
+}
+
+cCOMM_TYPES = {
+    0: "Official",
+    1: "Unofficial",
+}
+
+cPATREON_TIERS = ['Patron: Fan', 'Patron: Rookie', 'Patron: MVP', 'Patron: Hall of Famer']
+
+cACTIVE_TAGSET_LIMIT = 5
 
 cCHAR_ALIASES = {
     "Mario": 0,
