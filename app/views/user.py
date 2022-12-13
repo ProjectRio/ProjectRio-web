@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, set_access_cookies, jwt_requ
 import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
-from ..models import db, RioUser, GameTag
+from ..models import db, RioUser, UserGroup, UserGroupUser
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
 
@@ -74,6 +74,14 @@ def verify_email(active_url):
         user = RioUser.query.filter_by(active_url=active_url).first()
         user.verified = True
         user.active_url = None
+
+        user_group = UserGroup.query.filter_by(name="General").first()
+        print(user_group.name)
+        new_user_group_user = UserGroupUser(
+            user_id=user.id,
+            user_group_id=user_group.id
+        )
+        db.session.add(new_user_group_user)
         
         subject = 'Your Rio Key'
         html_content = (
