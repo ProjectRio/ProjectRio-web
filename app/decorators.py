@@ -1,5 +1,6 @@
 from flask import abort, request
 from .models import db, RioUser, UserGroupUser, UserGroup, ApiKey
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from functools import wraps
 import time
 
@@ -10,19 +11,27 @@ def api_key_check(acceptable_user_groups):
     def decorator(func):
         @wraps(func)
         def decorated_function(*args, **kwargs):
-            print(acceptable_user_groups)
+            # Declare user var
+            rio_user = None
             # Check if api_key is provided
             in_api_key = request.args.get('api_key')
-            if not in_api_key:
-                abort(409, 'No api_key provided')
-
-            # Check if valid Api Key
-            api_key = ApiKey.query.filter_by(api_key=in_api_key).first()
-            if not api_key:
-                abort(409, "Invalid api_key")
-            
-            # Check if valid RioUser connected to this ApiKey
-            rio_user = RioUser.query.filter_by(api_key_id=api_key.id).first()
+            if not in_api_key: # Try JWT or RioKey
+                current_user_username = get_jwt_identity()
+                if current_user_username:
+                    rio_user = RioUser.query.filter_by(username=current_user_username).first()
+                else:
+                    try:
+                        rio_user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+                    except:
+                        return abort(409, description="No Rio Key or JWT Provided")
+            else:
+                # Check if valid Api Key
+                api_key = ApiKey.query.filter_by(api_key=in_api_key).first()
+                if not api_key:
+                    abort(409, "Invalid api_key")
+                
+                # Check if valid RioUser connected to this ApiKey
+                rio_user = RioUser.query.filter_by(api_key_id=api_key.id).first()
             if not rio_user:
                 abort(409, 'No matching user')
 

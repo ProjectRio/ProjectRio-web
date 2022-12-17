@@ -2,6 +2,7 @@ import random
 import string
 import requests
 import time
+import os
 
 from connection import Connection
 
@@ -60,7 +61,7 @@ class User:
         return (response.status_code == 200)
 
     def add_to_group(self, group_name):
-        json = {'username': self.username, 'group_name': group_name}
+        json = {'username': self.username, 'group_name': group_name, 'RESET_DB': os.getenv('RESET_DB')}
         response = requests.post(f"http://127.0.0.1:5000/user_group/add_user", json=json)
         success = (response.status_code == 200)
 
