@@ -194,7 +194,6 @@ def wipe_patrons():
 @app.route('/patreon/refresh/', methods=['GET'])
 @api_key_check(['Admin'])
 def refresh_patrons():
-    print('refresh_patrons()')
     wipe_patrons()
 
     campaign_api_url = 'https://www.patreon.com/api/oauth2/api/current_user/campaigns'

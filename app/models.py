@@ -481,9 +481,9 @@ class GameHistory(db.Model):
     winner_elo = db.Column(db.Integer, nullable=False)
     loser_elo = db.Column(db.Integer, nullable=False)
     winner_accept = db.Column(db.Boolean)
-    loser_accept = db.Column(db.Boolean)
-    admin_accept = db.Column(db.Boolean)
-    date_created = db.Column(db.Integer)
+    loser_accept = db.Column(db.Boolean, nullable=True)
+    admin_accept = db.Column(db.Boolean, nullable=True)
+    date_created = db.Column(db.Integer, nullable=True)
 
     def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
         self.game_id = in_game_id
@@ -494,9 +494,11 @@ class GameHistory(db.Model):
         self.loser_score = in_loser_score
         self.winner_elo = in_winner_elo
         self.loser_elo = in_loser_elo
-        self.winner_accept = in_winner_accept
-        self.loser_accept = in_loser_accept
-        self.admin_accept = in_admin_accept
+
+        # Initializing a GameHistory to false is really saying this user hasn't accpeted or rejected yet. So we'll set that to NULL
+        self.winner_accept = in_winner_accept if (in_winner_accept == True) else None
+        self.loser_accept = in_loser_accept if (in_loser_accept == True) else None
+        self.admin_accept = in_admin_accept if (in_admin_accept == True) else None
         self.date_created = int( time.time() )
 
 
