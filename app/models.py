@@ -408,6 +408,25 @@ class Tag(db.Model):
             'date_created': self.date_created
         }
 
+class CodeTag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('tag.id'), nullable=False)
+    code_desc = db.Column(db.Text)
+    code = db.Column(db.Text)
+
+    tag = db.relationship('Tag', backref='tag')
+
+    def __init__(self, in_tag_id, in_code_desc, in_code):
+        self.tag_id = in_tag_id
+        self.code_desc = in_code_desc
+        self.code = in_code
+    
+    def to_dict(self):
+        return {
+            'tag_id': self.tag_id,
+            'code_desc': self.code_desc,
+            'code': self.code
+        }
 
 # Join table for tags and tag set
 tagsettag = db.Table('tag_set_tag',
@@ -418,8 +437,8 @@ tagsettag = db.Table('tag_set_tag',
 class TagSet(db.Model):
     id = db.Column(db.Integer, primary_key=True)    
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
-    name = db.Column(db.String(120))
-    name_lowercase = db.Column(db.String(120))
+    name = db.Column(db.String(120), unique=True)
+    name_lowercase = db.Column(db.String(120), unique=True)
     type = db.Column(db.String(120)) #Season, league, tournament.
     start_date = db.Column(db.Integer)
     end_date = db.Column(db.Integer)
@@ -546,8 +565,8 @@ class UserGroup(db.Model):
     daily_limit = db.Column(db.Integer)
     weekly_limit = db.Column(db.Integer)
     sponsor_limit = db.Column(db.Integer)
-    name = db.Column(db.String(32))
-    name_lowercase = db.Column(db.String(32))
+    name = db.Column(db.String(32), unique=True)
+    name_lowercase = db.Column(db.String(32), unique=True)
     desc = db.Column(db.String(128))
     
     user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')

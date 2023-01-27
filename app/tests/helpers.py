@@ -380,13 +380,14 @@ class Community:
 
 class Tag:
     # Tag type will always be component if a test is creating it
-    def __init__(self, admin_comm_user, community, tag_details=None):
+    def __init__(self, admin_comm_user, community, type="Component", tag_details=None):
         if tag_details == None:
             tag_details = dict()
             length = random.randint(3,20)
             tag_details['Tag Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tag_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
         tag_details['Community Name'] = community.name
+        tag_details['Tag Type'] = type
         tag_details['Rio Key'] = admin_comm_user.user.rk
 
         self.init_dict = tag_details

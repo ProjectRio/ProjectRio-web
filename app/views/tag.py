@@ -14,12 +14,28 @@ def tag_create():
     in_tag_name = request.json['Tag Name']
     in_tag_desc = request.json['Description']
     in_tag_comm_name = request.json['Community Name']
+    in_tag_type = request.json['Tag Type']
+
+    #Fields for gecko codes only
+    code_desc_provided = request.is_json and 'Code Desc' in request.json
+    code_desc = request.json.get('Code Desc') if code_desc_provided else None
+
+    code_provided = request.is_json and 'Code' in request.json
+    code = request.json.get('Code') if code_provided else None
 
     comm_name_lower = in_tag_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
+    creating_gecko_code = (in_tag_type == "Code" and (not code_desc_provided or not code_provided))
+
     if comm == None:
         return abort(409, description="No community found with name={in_tag_comm_name}")
+    if in_tag_type not in cTAG_TYPES.values() or in_tag_type == "Competition" or in_tag_type == "Community":
+        return abort(410, description="Invalid tag type '{in_tag_type}'")
+    if ((in_tag_type == "Code" or in_tag_type == "Client Code") and not comm.official):
+        return abort(411, description="Type is gecko code but code details not provided")
+    if (in_tag_type == "Code" and (not code_desc_provided or not code_provided)):
+        return abort(412, description="Type is gecko code but code details not provided")
 
     # Get user making the new community
     #Get user via JWT or RioKey
@@ -43,16 +59,22 @@ def tag_create():
         return abort(409, description='User not a part of community or not an admin')
 
     # === Tag Creation ===
-    new_tag = Tag( in_comm_id=comm.id, in_tag_name=in_tag_name, in_tag_type="Component", in_desc=in_tag_desc)
+    new_tag = Tag( in_comm_id=comm.id, in_tag_name=in_tag_name, in_tag_type=in_tag_type, in_desc=in_tag_desc)
     db.session.add(new_tag)
     db.session.commit()
 
-    #TODO this might not work, but its late and I gotta end this
-    #"this" meaning the coding session
+    # === Code Tag Creation ===
+    if (creating_gecko_code):
+        new_code_tag = CodeTag(in_tag_id=new_tag.id, in_code_desc=code_desc, in_code=code)
+        db.session.add(new_code_tag)
+        db.session.commit()
+    
     return jsonify(new_tag.name)
 
 @app.route('/tag/list', methods=['GET'])
 def tag_list():
+    client = request.is_json and 'Client' in request.json
+
     types_provided = request.is_json and 'Types' in request.json
     types_list = request.json.get('Types') if types_provided else list()
 
@@ -69,15 +91,31 @@ def tag_list():
     elif not types_provided and communities_provided:
         result = Tag.query.join(Community, Tag.community_id == Community.id)\
             .filter(Community.id.in_(community_id_list))
-    elif not types_provided and communities_provided:
+    elif types_provided and communities_provided:
         result = Tag.query.join(Community, Tag.community_id == Community.id)\
             .filter((Community.id.in_(community_id_list)) & (Tag.tag_type.in_(types_list)))
     else:
         result = Tag.query.all()
 
+    #IF CALLED BY CLIENT THE FOLLOWING COMMENT APPLIES
+    #The return type of this function is a list of tag dicts. The tag dicts contain additional
+    #fields from the CodeTag table even if the Tag does not have an associated CodeTag. In that
+    #case the two CodeTag values are empty strings. This is to make life easier for the client c++
+    #code to parse
     tags = list()
     for tag in result:
-        tags.append(tag.to_dict())
+        final_tag_dict = tag.to_dict()
+        result = CodeTag.query.filter_by(tag_id=tag.id).first()
+        if (result != None):
+            code_dict = result.to_dict()
+        elif client:
+            code_dict = {
+                "code_desc": "",
+                "code": ""
+            }
+        else:
+            code_dict = dict()
+        tags.append(final_tag_dict.update(code_dict))
     return { 'Tags': tags }
 
 #TODO support duration along with end data so eiither can be supplied
@@ -192,7 +230,7 @@ def tagset_list():
     communities_provided = request.is_json and 'Communities' in request.json
     community_id_list = request.json.get('Communities') if communities_provided else list()
 
-    if (communities_provided and len(community_id_list) > 0):
+    if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
     
     rio_key_provided = request.is_json and 'Rio Key' in request.json

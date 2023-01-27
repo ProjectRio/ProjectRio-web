@@ -36,7 +36,9 @@ cTYPE_OF_SWING = {
 cTAG_TYPES = {
     0: "Component",
     1: "Competition",
-    3: "Community"
+    3: "Community",
+    4: "Client Code",
+    5: "Code"
 }
 
 cTAG_SET_TYPES = {

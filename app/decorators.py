@@ -23,7 +23,7 @@ def api_key_check(acceptable_user_groups):
                     try:
                         rio_user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
                     except:
-                        return abort(409, description="No Rio Key or JWT Provided")
+                        return abort(409, description="No API Key, Rio Key or JWT Provided")
             else:
                 # Check if valid Api Key
                 api_key = ApiKey.query.filter_by(api_key=in_api_key).first()
