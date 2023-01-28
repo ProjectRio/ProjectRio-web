@@ -115,7 +115,6 @@ def tag_list():
             }
         else:
             code_dict = dict()
-        print(final_tag_dict | code_dict)
         tags.append(final_tag_dict | code_dict)
     return { 'Tags': tags }
 
@@ -160,7 +159,6 @@ def tagset_create():
     results = db.session.execute(query).first()
     if results != None:
         result_dict = results._asdict()
-        print(result_dict)
         if result_dict['active_tag_sets'] >= result_dict['tag_set_limit']:
             return abort(413, description='Community has reached active tag_set_limit')
 
