@@ -525,3 +525,72 @@ def test_community_create_patreon_limit():
 
     community = Community(sponsor, official=False, private=False, link=False)
     assert community.success == False
+
+def test_community_gecko_tags():
+    wipe_db()
+
+    sponsor = User()
+    sponsor.register()
+    assert sponsor.success == True
+
+    sponsor.verify_user()
+    assert sponsor.add_to_group('admin') == True
+
+    # Assert community IS created, sponsor is admin
+    community = Community(sponsor, True, False, False)
+    assert community.success == True
+    
+    # Should just have community tag
+    assert len(community.tags) == 1
+
+    code_dict = {'Code Desc': 'Code A desc', 'Code': 'DEADBEEF DEADBEEF'}
+
+    # Add tag with admin
+    tag = Tag(community.founder, community, 'Code', code_dict)
+    tag.create()
+
+    assert tag.active
+    assert tag.type == 'Code'
+    assert len(community.tags) == 2
+
+    #==== Test getting Gecko Code back as client ====
+
+    response = requests.post("http://127.0.0.1:5000/tag/list", json={'Client': True})
+    assert (response.status_code == 200)
+
+    tag_dict = json.loads(response.text)
+
+    print(tag_dict)
+
+    for tag in tag_dict['Tags']:
+        assert 'code' in tag.keys()
+
+    #==== Test getting Gecko Code back as client [Only Code/competition] ====
+
+    response = requests.post("http://127.0.0.1:5000/tag/list", json={'Client': True, 
+                                                                     'Types': ['Competition', 'Code']})
+    assert (response.status_code == 200)
+
+    tag_dict = json.loads(response.text)
+
+    print(tag_dict)
+
+    for tag in tag_dict['Tags']:
+        assert 'code' in tag.keys()
+
+    assert len(tag_dict['Tags']) == 1
+
+    #==== Test getting Gecko Code back as frontend (not client) ====
+
+    response = requests.post("http://127.0.0.1:5000/tag/list")
+    assert (response.status_code == 200)
+
+    tag_dict = json.loads(response.text)
+
+    print(tag_dict)
+
+    for tag in tag_dict['Tags']:
+        if tag['type'] == 'Code':
+            assert 'code' in tag.keys()
+        else:
+            assert 'code' not in tag.keys()

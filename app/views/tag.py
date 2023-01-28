@@ -26,13 +26,13 @@ def tag_create():
     comm_name_lower = in_tag_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
-    creating_gecko_code = (in_tag_type == "Code" and (not code_desc_provided or not code_provided))
+    creating_gecko_code = (in_tag_type == "Code" and code_desc_provided and code_provided)
 
     if comm == None:
         return abort(409, description="No community found with name={in_tag_comm_name}")
     if in_tag_type not in cTAG_TYPES.values() or in_tag_type == "Competition" or in_tag_type == "Community":
         return abort(410, description="Invalid tag type '{in_tag_type}'")
-    if ((in_tag_type == "Code" or in_tag_type == "Client Code") and not comm.official):
+    if ((in_tag_type == "Code" or in_tag_type == "Client Code") and not comm.comm_type == 'Official'):
         return abort(411, description="Type is gecko code but code details not provided")
     if (in_tag_type == "Code" and (not code_desc_provided or not code_provided)):
         return abort(412, description="Type is gecko code but code details not provided")
@@ -71,7 +71,7 @@ def tag_create():
     
     return jsonify(new_tag.name)
 
-@app.route('/tag/list', methods=['GET'])
+@app.route('/tag/list', methods=['POST'])
 def tag_list():
     client = request.is_json and 'Client' in request.json
 
@@ -115,7 +115,8 @@ def tag_list():
             }
         else:
             code_dict = dict()
-        tags.append(final_tag_dict.update(code_dict))
+        print(final_tag_dict | code_dict)
+        tags.append(final_tag_dict | code_dict)
     return { 'Tags': tags }
 
 #TODO support duration along with end data so eiither can be supplied

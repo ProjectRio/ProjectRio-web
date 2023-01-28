@@ -383,8 +383,11 @@ class Tag:
     def __init__(self, admin_comm_user, community, type="Component", tag_details=None):
         if tag_details == None:
             tag_details = dict()
+        if 'Tag Name' not in tag_details.keys():
             length = random.randint(3,20)
             tag_details['Tag Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
+        if 'Description' not in tag_details.keys():
+            length = random.randint(3,20)
             tag_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
         tag_details['Community Name'] = community.name
         tag_details['Tag Type'] = type
