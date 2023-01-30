@@ -543,19 +543,19 @@ def test_community_gecko_tags():
     # Should just have community tag
     assert len(community.tags) == 1
 
-    code_dict = {'Code Desc': 'Code A desc', 'Code': 'DEADBEEF DEADBEEF'}
+    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF'}
 
     # Add tag with admin
-    tag = Tag(community.founder, community, 'Code', code_dict)
+    tag = Tag(community.founder, community, 'Gecko Code', code_dict)
     tag.create()
 
     assert tag.active
-    assert tag.type == 'Code'
+    assert tag.type == 'Gecko Code'
     assert len(community.tags) == 2
 
     #==== Test getting Gecko Code back as client ====
 
-    response = requests.post("http://127.0.0.1:5000/tag/list", json={'Client': True})
+    response = requests.post("http://127.0.0.1:5000/tag/list", json={'Client': 'true'})
     assert (response.status_code == 200)
 
     tag_dict = json.loads(response.text)
@@ -563,12 +563,12 @@ def test_community_gecko_tags():
     print(tag_dict)
 
     for tag in tag_dict['Tags']:
-        assert 'code' in tag.keys()
+        assert 'gecko_code' in tag.keys()
 
     #==== Test getting Gecko Code back as client [Only Code/competition] ====
 
-    response = requests.post("http://127.0.0.1:5000/tag/list", json={'Client': True, 
-                                                                     'Types': ['Competition', 'Code']})
+    response = requests.post("http://127.0.0.1:5000/tag/list", json={'Client': 'true', 
+                                                                     'Types': ['Competition', 'Gecko Code']})
     assert (response.status_code == 200)
 
     tag_dict = json.loads(response.text)
@@ -576,7 +576,7 @@ def test_community_gecko_tags():
     print(tag_dict)
 
     for tag in tag_dict['Tags']:
-        assert 'code' in tag.keys()
+        assert 'gecko_code' in tag.keys()
 
     assert len(tag_dict['Tags']) == 1
 
@@ -590,7 +590,7 @@ def test_community_gecko_tags():
     print(tag_dict)
 
     for tag in tag_dict['Tags']:
-        if tag['type'] == 'Code':
-            assert 'code' in tag.keys()
+        if tag['type'] == 'Gecko Code':
+            assert 'gecko_code' in tag.keys()
         else:
-            assert 'code' not in tag.keys()
+            assert 'gecko_code' not in tag.keys()

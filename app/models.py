@@ -408,24 +408,23 @@ class Tag(db.Model):
             'date_created': self.date_created
         }
 
-class CodeTag(db.Model):
+class GeckoCodeTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tag_id = db.Column(db.Integer, db.ForeignKey('tag.id'), nullable=False)
-    code_desc = db.Column(db.Text)
-    code = db.Column(db.Text)
+    gecko_code_desc = db.Column(db.Text)
+    gecko_code = db.Column(db.Text)
 
     tag = db.relationship('Tag', backref='tag')
 
-    def __init__(self, in_tag_id, in_code_desc, in_code):
+    def __init__(self, in_tag_id, in_gecko_code_desc, in_gecko_code):
         self.tag_id = in_tag_id
-        self.code_desc = in_code_desc
-        self.code = in_code
+        self.gecko_code_desc = in_gecko_code_desc
+        self.code = in_gecko_code
     
     def to_dict(self):
         return {
-            'tag_id': self.tag_id,
-            'code_desc': self.code_desc,
-            'code': self.code
+            'gecko_code_desc': self.gecko_code_desc,
+            'gecko_code': self.gecko_code
         }
 
 # Join table for tags and tag set
@@ -455,16 +454,18 @@ class TagSet(db.Model):
         self.start_date = in_start
         self.end_date = in_end
     
-    def to_dict(self):
-        return {
+    def to_dict(self, include_tags=True):
+        ret_dict = {
             'id': self.id,
             'comm_id': self.community_id,
             'name': self.name,
             'type': self.type,
             'start_date': self.start_date,
             'end_date': self.end_date,
-            'tags': self.expand_tag_list()
         }
+        if (include_tags):
+            ret_dict['tags'] = self.expand_tag_list()
+        return ret_dict
 
     def expand_tag_list(self):
         tag_list = list()

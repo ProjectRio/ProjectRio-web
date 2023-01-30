@@ -17,24 +17,24 @@ def tag_create():
     in_tag_type = request.json['Tag Type']
 
     #Fields for gecko codes only
-    code_desc_provided = request.is_json and 'Code Desc' in request.json
-    code_desc = request.json.get('Code Desc') if code_desc_provided else None
+    gecko_code_desc_provided = request.is_json and 'Gecko Code Desc' in request.json
+    gecko_code_desc = request.json.get('Gecko Code Desc') if gecko_code_desc_provided else None
 
-    code_provided = request.is_json and 'Code' in request.json
-    code = request.json.get('Code') if code_provided else None
+    gecko_code_provided = request.is_json and 'Gecko Code' in request.json
+    gecko_code = request.json.get('Gecko Code') if gecko_code_provided else None
 
     comm_name_lower = in_tag_comm_name.lower()
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
-    creating_gecko_code = (in_tag_type == "Code" and code_desc_provided and code_provided)
+    creating_gecko_code = (in_tag_type == "Gecko Code" and gecko_code_desc_provided and gecko_code_provided)
 
     if comm == None:
         return abort(409, description="No community found with name={in_tag_comm_name}")
     if in_tag_type not in cTAG_TYPES.values() or in_tag_type == "Competition" or in_tag_type == "Community":
         return abort(410, description="Invalid tag type '{in_tag_type}'")
-    if ((in_tag_type == "Code" or in_tag_type == "Client Code") and not comm.comm_type == 'Official'):
+    if ((in_tag_type == "Gecko Code" or in_tag_type == "Client Code") and not comm.comm_type == 'Official'):
         return abort(411, description="Type is gecko code but code details not provided")
-    if (in_tag_type == "Code" and (not code_desc_provided or not code_provided)):
+    if (in_tag_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
         return abort(412, description="Type is gecko code but code details not provided")
 
     # Get user making the new community
@@ -65,7 +65,7 @@ def tag_create():
 
     # === Code Tag Creation ===
     if (creating_gecko_code):
-        new_code_tag = CodeTag(in_tag_id=new_tag.id, in_code_desc=code_desc, in_code=code)
+        new_code_tag = GeckoCodeTag(in_tag_id=new_tag.id, in_gecko_code_desc=gecko_code_desc, in_gecko_code=gecko_code)
         db.session.add(new_code_tag)
         db.session.commit()
     
@@ -73,7 +73,7 @@ def tag_create():
 
 @app.route('/tag/list', methods=['POST'])
 def tag_list():
-    client = request.is_json and 'Client' in request.json
+    client = request.is_json and 'Client' in request.json and request.json['Client'].lower() in ['yes', 'y', 'true', 't']
 
     types_provided = request.is_json and 'Types' in request.json
     types_list = request.json.get('Types') if types_provided else list()
@@ -98,24 +98,19 @@ def tag_list():
         result = Tag.query.all()
 
     #IF CALLED BY CLIENT THE FOLLOWING COMMENT APPLIES
-    #The return type of this function is a list of tag dicts. The tag dicts contain additional
-    #fields from the CodeTag table even if the Tag does not have an associated CodeTag. In that
-    #case the two CodeTag values are empty strings. This is to make life easier for the client c++
-    #code to parse
+    #The return type of this function is a list of tag dicts. When called from the client, the tag dicts contain additional
+    #fields from the GeckoCodeTag table even if the Tag does not have an associated GeckoCodeTag. In that case the two 
+    # GeckoCodeTag values are empty strings. This is to make life easier for the client c++ code to parse
     tags = list()
     for tag in result:
-        final_tag_dict = tag.to_dict()
-        result = CodeTag.query.filter_by(tag_id=tag.id).first()
-        if (result != None):
-            code_dict = result.to_dict()
+        tag_dict = tag.to_dict()
+        if (tag.tag_type == 'Gecko Code'):
+            result = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
+            if (result != None):
+                tag_dict = tag_dict | result.to_dict()
         elif client:
-            code_dict = {
-                "code_desc": "",
-                "code": ""
-            }
-        else:
-            code_dict = dict()
-        tags.append(final_tag_dict | code_dict)
+            tag_dict = tag_dict | {"gecko_code_desc": "", "gecko_code": ""}
+        tags.append(tag_dict)
     return { 'Tags': tags }
 
 #TODO support duration along with end data so eiither can be supplied
@@ -222,9 +217,11 @@ def tagset_create():
 #   Get all active TagSets for rio_key
 #   Get all active and inactive TagSets for rio_key
 #   Get all active/inactive TagSets for provided communities per RioKey
+# TODO: Should this work without providing a rio key and get all tagsets?
 @app.route('/tag_set/list', methods=['POST'])
 def tagset_list():    
     current_unix_time = int( time.time() )
+    client = request.is_json and 'Client' in request.json and request.json['Client'].lower() in ['yes', 'y', 'true', 't']
     active_only = request.is_json and 'Active' in request.json and request.json['Active'].lower() in ['yes', 'y', 'true', 't']
     communities_provided = request.is_json and 'Communities' in request.json
     community_id_list = request.json.get('Communities') if communities_provided else list()
@@ -232,6 +229,7 @@ def tagset_list():
     if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
     
+    tag_sets = None
     rio_key_provided = request.is_json and 'Rio Key' in request.json
     if rio_key_provided:
         rio_key = request.json.get('Rio Key')
@@ -246,21 +244,40 @@ def tagset_list():
         ).filter(
             RioUser.rio_key == rio_key
         ).all()
-
-        tag_set_list = list()
-        for tag_set in tag_sets:
-            # Skip this tag set if current time is not within start/end time
-            if (active_only and (current_unix_time < tag_set.start_date or current_unix_time > tag_set.end_date)):
-                continue
-            # Skip this tag set if community_id is not from a requested community
-            if (communities_provided and tag_set.community_id not in community_id_list):
-                continue
-
-            # Append passing tag set information
-            tag_set_list.append(tag_set.to_dict())
     else:
-        abort(409, "No Rio Key provided")
+        tag_sets = TagSet.query.all()
+    
+    #The rio key was bad or there are no tag sets to return
+    if tag_sets is None or len(TagSet) == 0:
+        abort(409, "No/Invalid Rio Key provided or something else went wrong and no TagSets were created")
 
+    tag_set_list = list()
+    for tag_set in tag_sets:
+        # Skip this tag set if current time is not within start/end time
+        if (active_only and (current_unix_time < tag_set.start_date or current_unix_time > tag_set.end_date)):
+            continue
+        # Skip this tag set if community_id is not from a requested community
+        if (communities_provided and tag_set.community_id not in community_id_list):
+            continue
+
+        #IF CALLED BY CLIENT THE FOLLOWING COMMENT APPLIES
+        #The return type of this function is a list of tag_set dicts. When called from the client, the tag dicts contain additional
+        #fields from the GeckoCodeTag table even if the Tag does not have an associated GeckoCodeTag. In that case the two 
+        # GeckoCodeTag values are empty strings. This is to make life easier for the client c++ code to parse
+        tag_set_dict = tag_set.to_dict(False)
+        tag_set_dict['tags'] = list()
+        for tag in tag_set.tags:
+            tag_dict = tag.to_dict()
+            if (tag.tag_type == 'Gecko Code'):
+                result = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
+                if (result != None):
+                    tag_dict = tag_dict | result.to_dict()
+            elif client:
+                tag_dict = tag_dict | {"gecko_code_desc": "", "gecko_code": ""}
+            tag_set_dict['tags'].append(tag_dict)
+
+        # Append passing tag set information
+        tag_set_list.append(tag_set_dict)
     return {"Tag Sets": tag_set_list}
 
 @app.route('/tag_set/<tag_set_id>', methods=['GET'])
