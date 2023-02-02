@@ -1,5 +1,5 @@
 #Rio Web Version
-cRIO_WEB_VERSION = "0.3.0"
+cRIO_WEB_VERSION = "1.0.0"
 
 # Dicts to interpret result of play
 cPLAY_RESULT_INVLD = {0: 'Strike/Foul'}
