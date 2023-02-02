@@ -1,5 +1,5 @@
 #Rio Web Version
-cRIO_WEB_VERSION = "0.3.0"
+cRIO_WEB_VERSION = "1.0.0"
 
 # Dicts to interpret result of play
 cPLAY_RESULT_INVLD = {0: 'Strike/Foul'}
@@ -36,7 +36,9 @@ cTYPE_OF_SWING = {
 cTAG_TYPES = {
     0: "Component",
     1: "Competition",
-    3: "Community"
+    3: "Community",
+    4: "Client Code",
+    5: "Gecko Code"
 }
 
 cTAG_SET_TYPES = {

@@ -2,6 +2,7 @@ import random
 import string
 import requests
 import time
+import os
 
 from connection import Connection
 
@@ -60,7 +61,7 @@ class User:
         return (response.status_code == 200)
 
     def add_to_group(self, group_name):
-        json = {'username': self.username, 'group_name': group_name}
+        json = {'username': self.username, 'group_name': group_name, 'RESET_DB': os.getenv('RESET_DB')}
         response = requests.post(f"http://127.0.0.1:5000/user_group/add_user", json=json)
         success = (response.status_code == 200)
 
@@ -379,13 +380,17 @@ class Community:
 
 class Tag:
     # Tag type will always be component if a test is creating it
-    def __init__(self, admin_comm_user, community, tag_details=None):
+    def __init__(self, admin_comm_user, community, type="Component", tag_details=None):
         if tag_details == None:
             tag_details = dict()
+        if 'Tag Name' not in tag_details.keys():
             length = random.randint(3,20)
             tag_details['Tag Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
+        if 'Description' not in tag_details.keys():
+            length = random.randint(3,20)
             tag_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
         tag_details['Community Name'] = community.name
+        tag_details['Tag Type'] = type
         tag_details['Rio Key'] = admin_comm_user.user.rk
 
         self.init_dict = tag_details

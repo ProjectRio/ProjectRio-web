@@ -671,21 +671,18 @@ def update_game_status():
     if ((game_history.winner_accept == True and game_history.loser_accept == True) or game_history.admin_accept):
         return abort(411, description="Already accepted by both players or admin")
 
-    # print(game_history.winner_accept,game_history.winner_accept,game_history.winner_accept)
+    # Update ELO if tag_set is a season
+    tag_set = TagSet.query.filter_by(id=game_history.tag_set_id).first()
+    comm_id = tag_set.community_id
 
+    # Did this game previously count for ELO
+    elo_already_calced = ((game_history.winner_accept == True and game_history.loser_accept == True and game_history.admin_accept == None) or game_history.admin_accept)
+    # Has the admin already confirmed or rejected the game
+    admin_already_decided = game_history.admin_accept != None
+
+    #Get confirmer info
     confirmer_rio_key = request.json.get('Rio Key')
     confirmer_accept = request.json.get('Accept') == 1
-
-    #Get comm users
-    winner_comm_user = CommunityUser.query.filter_by(id=game_history.winner_comm_user_id).first()
-    loser_comm_user = CommunityUser.query.filter_by(id=game_history.loser_comm_user_id).first()
-
-    comm_id = winner_comm_user.community_id
-
-    if (confirmer_rio_key == winner_comm_user.rio_user.rio_key):
-        game_history.winner_accept = confirmer_accept
-    if (confirmer_rio_key == loser_comm_user.rio_user.rio_key):
-        game_history.loser_accept = confirmer_accept
 
     # Check for admin verification
     admin = db.session.query(
@@ -697,21 +694,39 @@ def update_game_status():
           & (CommunityUser.id == comm_id)
         ).first()
     
-    if admin != None:
+    admin_accept = None
+    # If admin has already decided allow them to override. If confirmer is not admin return, users cannot override admin once they have decided
+    if admin != None: #Admin is confirmer
+        if (confirmer_accept == game_history.admin_accept):
+            return abort(200, description="Admin has updated with the same value, no elo recalc needed")
         game_history.admin_accept = confirmer_accept
+    elif (admin_already_decided):
+        return abort(412, description="Admin has already decided. Users cannot change the status")
+    else:
+        #Get comm users
+        winner_comm_user = CommunityUser.query.filter_by(id=game_history.winner_comm_user_id).first()
+        loser_comm_user = CommunityUser.query.filter_by(id=game_history.loser_comm_user_id).first()
+
+        if (confirmer_rio_key == winner_comm_user.rio_user.rio_key):
+            game_history.winner_accept = confirmer_accept
+        if (confirmer_rio_key == loser_comm_user.rio_user.rio_key):
+            game_history.loser_accept = confirmer_accept
 
     # Commit changes to GameHistory
     db.session.commit()
 
-    # Update ELO if tag_set is a season
-    tag_set = TagSet.query.filter_by(id=game_history.tag_set_id).first()
+    # See if we need to adjust the elo to ignore this game
+    recalc_needed = ((game_history.winner_accept == False and game_history.loser_accept == False and game_history.admin_accept == None) or game_history.admin_accept == False)
+    if (elo_already_calced and recalc_needed):
+        pass
+    else:
+        if (tag_set == None):
+            return abort(409, description='Somehow tagset is invalid')
 
-    if (tag_set == None):
-        return abort(409, description='Somehow tagset is invalid')
-
-    if (tag_set.type == 'Season' and
-       ((game_history.winner_accept == True and game_history.loser_accept == True) or game_history.admin_accept)):
-        calc_elo(game_history.tag_set_id, winner_comm_user.rio_user.id, loser_comm_user.rio_user.id)
+        if ((game_history.winner_accept == True and game_history.loser_accept == True and game_history.admin_accept == None) or game_history.admin_accept):
+            winner_rio_user_id = CommunityUser.query.filter_by(id=game_history.winner_comm_user_id).first().user_id
+            loser_rio_user_id = CommunityUser.query.filter_by(id=game_history.loser_comm_user_id).first().user_id
+            calc_elo(game_history.tag_set_id, winner_rio_user_id, loser_rio_user_id)
     
     return 'Success', 200
 
@@ -756,3 +771,53 @@ def calc_elo(tag_set_id, winner_user_id, loser_user_id):
     db.session.commit()
 
     return
+
+@app.route('/recalc_elo/', methods=['POST'])
+def recalc_elo(in_tag_set_id=None):
+    tag_set_id = in_tag_set_id if in_tag_set_id != None else request.json['TagSetID']
+
+    tag_set = TagSet.query.filter_by(id=tag_set_id).first()
+    if (tag_set == None):
+        return abort(409, description="TagSet does not exist")
+
+    # Delete all ladder rows for tag_set
+    Ladder.query.filter_by(tag_set_id=tag_set_id).delete()
+
+    # Loop through all games and recalc the elo from the start
+    all_games = GameHistory.query.filter(tag_set_id==tag_set_id).order_by(GameHistory.date_created.asc())
+    for game in all_games:
+        # If game counts (users or admin have accepted)
+        if ((game.winner_accept == True and game.loser_accept == True and game.admin_accept == None) 
+             or game.admin_accept == True):
+            winner_ladder = db.session.query(
+                Ladder
+            ).join(
+                CommunityUser
+            ).filter(
+                (Ladder.tag_set_id == tag_set_id) &
+                (CommunityUser.user_id == game.winner_comm_user_id)
+            ).first()
+            loser_ladder = db.session.query(
+                    Ladder
+                ).join(
+                    CommunityUser
+                ).filter(
+                    (Ladder.tag_set_id == tag_set_id) &
+                    (CommunityUser.user_id == game.loser_comm_user_id)
+                ).first()
+                
+            #Create elos for new players if needed
+            if winner_ladder == None:
+                new_glicko_player = Player()
+                winner_ladder = Ladder(tag_set_id, game.winner_comm_user, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
+                db.session.add(winner_ladder)
+                db.session.commit()
+            if loser_ladder == None:
+                new_glicko_player = Player()
+                loser_ladder = Ladder(tag_set_id, game.loser_comm_user_id, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
+                db.session.add(loser_ladder)
+                db.session.commit()
+
+            winner_rio_user_id = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first().user_id
+            loser_rio_user_id = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first().user_id
+            calc_elo(tag_set_id, winner_rio_user_id, loser_rio_user_id)

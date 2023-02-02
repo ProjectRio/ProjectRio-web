@@ -408,6 +408,24 @@ class Tag(db.Model):
             'date_created': self.date_created
         }
 
+class GeckoCodeTag(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    tag_id = db.Column(db.Integer, db.ForeignKey('tag.id'), nullable=False)
+    gecko_code_desc = db.Column(db.Text)
+    gecko_code = db.Column(db.Text)
+
+    tag = db.relationship('Tag', backref='tag')
+
+    def __init__(self, in_tag_id, in_gecko_code_desc, in_gecko_code):
+        self.tag_id = in_tag_id
+        self.gecko_code_desc = in_gecko_code_desc
+        self.code = in_gecko_code
+    
+    def to_dict(self):
+        return {
+            'gecko_code_desc': self.gecko_code_desc,
+            'gecko_code': self.gecko_code
+        }
 
 # Join table for tags and tag set
 tagsettag = db.Table('tag_set_tag',
@@ -418,8 +436,8 @@ tagsettag = db.Table('tag_set_tag',
 class TagSet(db.Model):
     id = db.Column(db.Integer, primary_key=True)    
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
-    name = db.Column(db.String(120))
-    name_lowercase = db.Column(db.String(120))
+    name = db.Column(db.String(120), unique=True)
+    name_lowercase = db.Column(db.String(120), unique=True)
     type = db.Column(db.String(120)) #Season, league, tournament.
     start_date = db.Column(db.Integer)
     end_date = db.Column(db.Integer)
@@ -436,16 +454,18 @@ class TagSet(db.Model):
         self.start_date = in_start
         self.end_date = in_end
     
-    def to_dict(self):
-        return {
+    def to_dict(self, include_tags=True):
+        ret_dict = {
             'id': self.id,
             'comm_id': self.community_id,
             'name': self.name,
             'type': self.type,
             'start_date': self.start_date,
             'end_date': self.end_date,
-            'tags': self.expand_tag_list()
         }
+        if (include_tags):
+            ret_dict['tags'] = self.expand_tag_list()
+        return ret_dict
 
     def expand_tag_list(self):
         tag_list = list()
@@ -481,9 +501,9 @@ class GameHistory(db.Model):
     winner_elo = db.Column(db.Integer, nullable=False)
     loser_elo = db.Column(db.Integer, nullable=False)
     winner_accept = db.Column(db.Boolean)
-    loser_accept = db.Column(db.Boolean)
-    admin_accept = db.Column(db.Boolean)
-    date_created = db.Column(db.Integer)
+    loser_accept = db.Column(db.Boolean, nullable=True)
+    admin_accept = db.Column(db.Boolean, nullable=True)
+    date_created = db.Column(db.Integer, nullable=True)
 
     def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
         self.game_id = in_game_id
@@ -494,9 +514,11 @@ class GameHistory(db.Model):
         self.loser_score = in_loser_score
         self.winner_elo = in_winner_elo
         self.loser_elo = in_loser_elo
-        self.winner_accept = in_winner_accept
-        self.loser_accept = in_loser_accept
-        self.admin_accept = in_admin_accept
+
+        # Initializing a GameHistory to false is really saying this user hasn't accpeted or rejected yet. So we'll set that to NULL
+        self.winner_accept = in_winner_accept if (in_winner_accept == True) else None
+        self.loser_accept = in_loser_accept if (in_loser_accept == True) else None
+        self.admin_accept = in_admin_accept if (in_admin_accept == True) else None
         self.date_created = int( time.time() )
 
 
@@ -544,8 +566,8 @@ class UserGroup(db.Model):
     daily_limit = db.Column(db.Integer)
     weekly_limit = db.Column(db.Integer)
     sponsor_limit = db.Column(db.Integer)
-    name = db.Column(db.String(32))
-    name_lowercase = db.Column(db.String(32))
+    name = db.Column(db.String(32), unique=True)
+    name_lowercase = db.Column(db.String(32), unique=True)
     desc = db.Column(db.String(128))
     
     user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')

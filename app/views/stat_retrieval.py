@@ -118,6 +118,8 @@ def endpoint_games(called_internally=False):
         # using list comprehension
         list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
         tuple_user_ids = tuple(list_of_user_id)
+        if len(usernames) != len(list_of_user_id_tuples):
+            abort(400)
 
         #Get user ids from list of users
         vs_usernames = request.args.getlist('vs_username')
@@ -366,7 +368,6 @@ def endpoint_games(called_internally=False):
     - balls:           [0-3],   balls
     - strikes:         [0-2],   strikes
     - outs:            [0-2],   outs
-    - multi_out        [0-1],   bool for double plays
     - star_chance      [0-1],   bool for star chance
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
@@ -501,8 +502,6 @@ def endpoint_event(called_internally=False):
     if list_of_results == None:
         return abort(400, description = error)
 
-    #this might be riduculous but I want everything in a list for the next function
-    multi_out_flag   = [1] if (request.args.get('multi_out') == '1') else []
     star_chance_flag = [1] if (request.args.get('star_chance') == '1') else []
 
     #list of args, the attribute to select from, null value
@@ -523,7 +522,6 @@ def endpoint_event(called_internally=False):
         (list_of_balls, 'event.balls', None),
         (list_of_strikes, 'event.strikes', None),
         (list_of_outs, 'event.outs', None),
-        (multi_out_flag, 'contact.multi_out', None),
         (star_chance_flag, 'event.star_chance', None),
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
@@ -1010,7 +1008,6 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 8 THEN 1 ELSE NULL END) AS doubles, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 9 THEN 1 ELSE NULL END) AS triples, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
-        'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
         'COUNT(CASE WHEN event.result_of_ab = 1 THEN 1 ELSE NULL END) AS strikeouts, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
@@ -1096,32 +1093,31 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
        f"{group_by_statement}"
     )
 
-    # pitch_breakdown_query = (
-    #     'SELECT '
-    #     f"{select_user}"
-    #     f"{select_char}"
-    #     'COUNT(CASE WHEN (pitch_summary.in_strikezone = 0) THEN 1 ELSE NULL END) AS outside_pitches, \n'
-    #     'COUNT(CASE WHEN ('
-    #         '(pitch_summary.in_strikezone = 1 AND pitch_summary.contact_summary_id = NULL) OR'
-    #         '(pitch_summary.in_strikezone = 0 AND type_of_swing > 0) OR'
-    #         '(contact_summary)'
-    #         ') THEN 1 ELSE NULL END) AS strikes \n'
-    #     'FROM character_game_summary \n'
-    #     'JOIN character ON character_game_summary.char_id = character.char_id \n'
-    #     'JOIN event ON character_game_summary.id = event.pitcher_id \n'
-    #     'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-    #     'JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
-    #     'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-    #    f"{where_statement}"
-    #    f"{group_by_statement}"
-    # )
+    pitch_breakdown_query = (
+        'SELECT '
+        f"{select_user}"
+        f"{select_char}"
+        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
+        'COUNT(CASE WHEN ('
+            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id = NULL) OR'
+            '(pitch_summary.in_strikezone = false AND type_of_swing > 0)'
+            ') THEN 1 ELSE NULL END) AS strikes \n'
+        'FROM character_game_summary \n'
+        'JOIN character ON character_game_summary.char_id = character.char_id \n'
+        'JOIN event ON character_game_summary.id = event.pitcher_id \n'
+        'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
+        'JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
+        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
+       f"{where_statement}"
+       f"{group_by_statement}"
+    )
 
     pitching_summary_results = db.session.execute(pitching_summary_query).all()
-    # pitch_breakdown_results = db.session.execute(pitch_breakdown_query).all()
+    pitch_breakdown_results = db.session.execute(pitch_breakdown_query).all()
     for result_row in pitching_summary_results:
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
-    # for result_row in pitch_breakdown_results:
-    #     update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
+    for result_row in pitch_breakdown_results:
+        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
     return
 
 def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):

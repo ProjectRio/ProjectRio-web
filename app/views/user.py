@@ -76,7 +76,6 @@ def verify_email(active_url):
         user.active_url = None
 
         user_group = UserGroup.query.filter_by(name="General").first()
-        print(user_group.name)
         new_user_group_user = UserGroupUser(
             user_id=user.id,
             user_group_id=user_group.id

@@ -41,7 +41,17 @@ def create_user_group():
 @app.route('/user_group/add_user', methods=['POST'])
 #@api_key_check(['Admin'])
 def add_user_to_user_group(in_username = None, in_group_name = None):
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    # If called by project
+    internal_use = (in_username != None and in_group_name != None)
+
+    # If called by endpoint
+    valid_credential = False
+    try:
+        valid_credential = request.json['RESET_DB'] == os.getenv('RESET_DB')
+    except:
+        valid_credential = False
+
+    if (valid_credential or internal_use):
         in_username = in_username if in_username != None else request.json['username']
         in_username_lower = in_username.lower()
         in_group_name = in_group_name if in_group_name != None else request.json['group_name']
@@ -184,7 +194,6 @@ def wipe_patrons():
 @app.route('/patreon/refresh/', methods=['GET'])
 @api_key_check(['Admin'])
 def refresh_patrons():
-    print('refresh_patrons()')
     wipe_patrons()
 
     campaign_api_url = 'https://www.patreon.com/api/oauth2/api/current_user/campaigns'
@@ -224,8 +233,6 @@ def refresh_patrons():
                 # print('\n')
         
         for entry in data['data']:
-            # print('LINK:')
-            # pprint(entry)
 
             patron_id = int(entry['relationships']['patron']['data']['id'])
             if not entry['relationships'].get('reward'):
