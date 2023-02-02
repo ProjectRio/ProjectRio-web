@@ -43,11 +43,18 @@ def test_populate_db():
 
     # Read dummy game
     data = dict()
+    tag_list = list()
+
+    #Get the tag id of the tagset tag
+    for tag in tagset.tags.values():
+        if tag.name == tagset.name:
+            tag_list.append(tag.pk)
+
     with open('app/tests/data/game_785756763.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
-        data['Tags'] = list(community.tags.keys())
+        data['Tags'] = tag_list
 
     # Submit game, nonverified users
     response = requests.post("http://127.0.0.1:5000/populate_db/", json=data)
