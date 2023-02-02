@@ -368,7 +368,6 @@ def endpoint_games(called_internally=False):
     - balls:           [0-3],   balls
     - strikes:         [0-2],   strikes
     - outs:            [0-2],   outs
-    - multi_out        [0-1],   bool for double plays
     - star_chance      [0-1],   bool for star chance
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
@@ -503,8 +502,6 @@ def endpoint_event(called_internally=False):
     if list_of_results == None:
         return abort(400, description = error)
 
-    #this might be riduculous but I want everything in a list for the next function
-    multi_out_flag   = [1] if (request.args.get('multi_out') == '1') else []
     star_chance_flag = [1] if (request.args.get('star_chance') == '1') else []
 
     #list of args, the attribute to select from, null value
@@ -525,7 +522,6 @@ def endpoint_event(called_internally=False):
         (list_of_balls, 'event.balls', None),
         (list_of_strikes, 'event.strikes', None),
         (list_of_outs, 'event.outs', None),
-        (multi_out_flag, 'contact.multi_out', None),
         (star_chance_flag, 'event.star_chance', None),
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
@@ -1012,7 +1008,6 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
         'COUNT(CASE WHEN contact_summary.secondary_result = 8 THEN 1 ELSE NULL END) AS doubles, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 9 THEN 1 ELSE NULL END) AS triples, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
-        'COUNT(CASE WHEN contact_summary.multi_out = 1 THEN 1 ELSE NULL END) AS multi_out, \n'
         'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
         'COUNT(CASE WHEN event.result_of_ab = 1 THEN 1 ELSE NULL END) AS strikeouts, \n'
         'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
