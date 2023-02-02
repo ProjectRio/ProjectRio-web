@@ -118,6 +118,8 @@ def endpoint_games(called_internally=False):
         # using list comprehension
         list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
         tuple_user_ids = tuple(list_of_user_id)
+        if len(usernames) != len(list_of_user_id_tuples):
+            abort(400)
 
         #Get user ids from list of users
         vs_usernames = request.args.getlist('vs_username')
