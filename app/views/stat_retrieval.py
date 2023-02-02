@@ -1097,10 +1097,10 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'SELECT '
         f"{select_user}"
         f"{select_char}"
-        'COUNT(CASE WHEN (pitch_summary.in_strikezone = 0 AND type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
+        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
         'COUNT(CASE WHEN ('
-            '(pitch_summary.in_strikezone = 1 AND pitch_summary.contact_summary_id = NULL) OR'
-            '(pitch_summary.in_strikezone = 0 AND type_of_swing > 0) OR'
+            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id = NULL) OR'
+            '(pitch_summary.in_strikezone = false AND type_of_swing > 0) OR'
             '(contact_summary)'
             ') THEN 1 ELSE NULL END) AS strikes \n'
         'FROM character_game_summary \n'
