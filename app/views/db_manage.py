@@ -9,7 +9,7 @@ import sqlite_utils
 
 @app.route('/db_to_sqlite/', methods=['POST'])
 def endpoint_db_to_sqlite():
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
         run_db_to_sqlite()
         return jsonify({'Success':200})
     return abort(409, description='Invalid passcode')

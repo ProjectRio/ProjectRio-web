@@ -8,7 +8,7 @@ import os
 # === Initalize Character Tables And Ranked/Superstar Tags ===
 @app.route('/init_db/', methods=['POST'])
 def init_db():
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
         try:
             engine = db.get_engine()
             Event.__table__.drop(engine)
@@ -35,7 +35,7 @@ def init_db():
 # Completely wipe the DB
 @app.route('/wipe_db/', methods=['POST'])
 def wipe_db():
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
         db.drop_all()
         db.create_all()
         create_character_tables()
@@ -272,7 +272,7 @@ def create_official_comms(admin_user):
 
 @app.route('/restore_users/', methods=['GET'])
 def restore_users():
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
         try:
             f = open('./json/rio_user.json')
             rio_users = json.load(f)
