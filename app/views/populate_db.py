@@ -627,6 +627,15 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     #Does full game exist in database
     game_exists = Game.query.filter_by(game_id=game_id).first()
 
+    # Delete ongoing game row once game is submitted (if game crashed)
+    OngoingGame.query.filter_by(game_id=game_id).delete()
+
+    #Now that we've deleted the game we can set game id to None if game does not exist
+    #We need to do this because GameHistory.game_id is a FK and if it doesn't exist we must set
+    #that column to null
+    if (not game_exists):
+        game_id = None
+
     # Get CommID from TagSet
     tag_set = TagSet.query.filter_by(id=tag_set_id).first()
     if tag_set == None:
@@ -717,11 +726,8 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     db.session.add(new_game_history)
     db.session.commit()
 
-    # Delete ongoing game row once game is submitted (if game crashed)
-    OngoingGame.query.filter_by(game_id=game_id).delete()
-
-    if (in_game_id == None):
-        return {'GameID': new_game_history.id}
+    if (new_game_history.game_id == None):
+        return {'GameHistoryID': new_game_history.id}
     else:
         return {'GameID': new_game_history.game_id}
 
