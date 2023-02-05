@@ -5,6 +5,73 @@ from ..consts import *
 from ..glicko2 import Player
 from random import random
 
+@app.route('/populate_db/ongoing_game/', methods=['POST', 'GET'])
+def update_ongoing_game():
+    if request.method == 'POST':
+        game_id = int(request.json['GameID'].replace(',', ''), 16)
+        game = OngoingGame.query.filter_by(game_id=game_id).first()
+
+        completed_game = Game.query.filter_by(game_id=game_id).first()
+        if completed_game != None:
+            return abort(409, 'Already completed game with this ID')
+
+        if game == None:
+            home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
+            away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
+
+            if home_player is None or away_player is None:
+                return abort(410, 'Invalid Rio User')
+            if home_player.verified is False or away_player.verified is False:
+                return abort(411, "Both users must be verified to submit games.")
+
+            game = OngoingGame(
+                game_id = game_id,
+                away_player_id = away_player.id,
+                home_player_id = home_player.id,
+                tag_set_id = request.json['TagSetID'],
+                away_captain = request.json['Away Captain'],
+                home_captain = request.json['Home Captain'],
+                date_time_start = request.json['Date - Start'],
+                stadium_id = request.json['StadiumID'],
+                current_inning = request.json['Inning'],
+                current_half_inning = request.json['Half Inning'],
+                current_away_score = request.json['Away Score'],
+                current_home_score = request.json['Home Score'],
+                current_away_stars = request.json['Away Stars'],
+                current_home_stars = request.json['Home Stars'],
+                current_outs = request.json['Outs'],
+                current_runner_1b = request.json['Runner 1B'],
+                current_runner_2b = request.json['Runner 2B'],
+                current_runner_3b = request.json['Runner 3B'],
+                leadoff_batter_roster_loc = request.json['Leadoff Batter'],
+                pitcher_roster_loc = request.json['Pitcher']
+            )
+        else:
+            game.current_inning = request.json['Inning']
+            game.current_half_inning = request.json['Half Inning']
+            game.current_away_score = request.json['Away Score']
+            game.current_home_score = request.json['Home Score']
+            game.current_away_stars = request.json['Away Stars']
+            game.current_home_stars = request.json['Home Stars']
+            game.current_outs = request.json['Outs']
+            game.current_runner_1b = request.json['Runner 1B']
+            game.current_runner_2b = request.json['Runner 2B']
+            game.current_runner_3b = request.json['Runner 3B']
+            game.leadoff_batter_roster_loc = request.json['Leadoff Batter']
+            game.pitcher_roster_loc = request.json['Pitcher']
+        
+        db.session.add(game)
+        db.session.commit()
+
+        return game.to_dict()
+    if request.method == 'GET':
+        ongoing_games = OngoingGame.query.all()
+
+        games_list = list()
+        for game in ongoing_games:
+            games_list.append(game.to_dict())
+        return {'ongoing_games': games_list}
+
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
     version_split = request.json['Version'].split('.')
@@ -107,7 +174,8 @@ def populate_db2():
         db.session.commit()
     tag_ids.append(new_rio_web_version_tag.id)
 
-    #Reroll game id until unique one is found
+    #TODO Look into removing this step. GameID SHOULD be guaranteed by checking in ongoing_games now
+    # Reroll game id until unique one is found
     unique_id = False
     game_id = int(request.json['GameID'].replace(',', ''), 16)
     while not unique_id:
@@ -116,6 +184,9 @@ def populate_db2():
             unique_id = True
         else:
             game_id = random.getrandbits(32)
+
+    # Delete ongoing game row once game is submitted
+    OngoingGame.query.filter_by(game_id=game_id).delete()
 
     game = Game(
         game_id = game_id,
@@ -538,7 +609,7 @@ def populate_db2():
 def submit_game_history(in_game_id=None, in_tag_set_id=None,
                         in_winner_username=None, in_winner_score=None, 
                         in_loser_username=None, in_loser_score=None):
-    game_id = in_game_id
+    game_id = in_game_id if ('GameID' not in request.json) else int(request.json['GameID'].replace(',', ''), 16)
     winner_username = in_winner_username if (in_winner_username != None) else request.json['Winner Username']
     winner_score = in_winner_score if (in_winner_score != None) else request.json['Winner Score']
     loser_username = in_loser_username if (in_loser_username != None) else request.json['Loser Username']
@@ -552,6 +623,9 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
         tag_set_id = tag_set.id
     else:
         tag_set_id = in_tag_set_id
+
+    #Does full game exist in database
+    game_exists = Game.query.filter_by(game_id=game_id).first()
 
     # Get CommID from TagSet
     tag_set = TagSet.query.filter_by(id=tag_set_id).first()
@@ -581,34 +655,33 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     winner_elo = None
     loser_elo = None
 
-    # Only maintain Ladder for seasons
-    if (tag_set.type == 'Season'):
-        #Get ELOs
-        winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id).first()
-        loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id).first()
+    #Get ELOs
+    winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id).first()
+    loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id).first()
 
-        #Create elos for new players if needed
-        if winner_ladder == None:
-            new_glicko_player = Player()
-            winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
-            db.session.add(winner_ladder)
-            db.session.commit()
-        if loser_ladder == None:
-            new_glicko_player = Player()
-            loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
-            db.session.add(loser_ladder)
-            db.session.commit()
+    #Create elos for new players if needed
+    if winner_ladder == None:
+        new_glicko_player = Player()
+        winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+        db.session.add(winner_ladder)
+        db.session.commit()
+    if loser_ladder == None:
+        new_glicko_player = Player()
+        loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+        db.session.add(loser_ladder)
+        db.session.commit()
 
-        winner_elo = winner_ladder.rating
-        loser_elo = loser_ladder.rating
+    winner_elo = winner_ladder.rating
+    loser_elo = loser_ladder.rating
     
     #Acceptance
-    winner_accept = False
-    loser_accept = False
-    admin_accept = False
+    #If full game is recorded (auto submitted, everyone accepts)
+    winner_accept = True if game_exists else False
+    loser_accept = True if game_exists else False
+    admin_accept = True if game_exists else False
 
     #Get submitters key, if it matches set accept for them
-    if (game_id == None):
+    if (not game_exists):
         submitter_key_provided = request.is_json and 'Submitter Rio Key' in request.json
         if submitter_key_provided:
             submitter_rio_key = request.json['Submitter Rio Key']
@@ -635,9 +708,6 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
                 calc_elo(tag_set_id, winner_comm_user.rio_user.id, loser_comm_user.rio_user.id)
         else: 
             return abort(413, description=f"Submitter key not provided")
-    else:
-        winner_accept = True
-        loser_accept = True
 
     #Finally ready to write the row
     new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
@@ -646,6 +716,9 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
                                    winner_accept, loser_accept, admin_accept)
     db.session.add(new_game_history)
     db.session.commit()
+
+    # Delete ongoing game row once game is submitted (if game crashed)
+    OngoingGame.query.filter_by(game_id=game_id).delete()
 
     if (in_game_id == None):
         return {'GameID': new_game_history.id}
