@@ -15,7 +15,7 @@ from ..consts import *
 @app.route('/user_group/create', methods=['GET'])
 @api_key_check(['Admin'])
 def create_user_group():
-    # if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    # if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
     if True:
         in_group_name = request.json['group_name']
         in_group_name_lower = in_group_name.lower()
@@ -47,7 +47,7 @@ def add_user_to_user_group(in_username = None, in_group_name = None):
     # If called by endpoint
     valid_credential = False
     try:
-        valid_credential = request.json['RESET_DB'] == os.getenv('RESET_DB')
+        valid_credential = request.json['ADMIN_KEY'] == os.getenv('ADMIN_KEY')
     except:
         valid_credential = False
 
