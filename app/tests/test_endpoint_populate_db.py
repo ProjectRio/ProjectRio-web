@@ -105,9 +105,9 @@ def test_populate_db():
     assert data[player_home.username]['rating'] == home_user_rating
 
     # Confirm/Reject the games
-    game1_winner_confirm = {'GameHistoryID': game1_response.json()['GameID'], 'Rio Key': player_away.rk, 'Accept': 1}
-    game1_loser_reject   = {'GameHistoryID': game1_response.json()['GameID'], 'Rio Key': player_home.rk, 'Accept': 0}
-    game1_loser_confirm  = {'GameHistoryID': game1_response.json()['GameID'], 'Rio Key': player_home.rk, 'Accept': 1}
+    game1_winner_confirm = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_away.rk, 'Accept': 1}
+    game1_loser_reject   = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 0}
+    game1_loser_confirm  = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 1}
 
     # Winner confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game1_winner_confirm)
@@ -140,8 +140,8 @@ def test_populate_db():
 
     # ============================================================
     # Game 2
-    game2_winner_confirm = {'GameHistoryID': game2_response.json()['GameID'], 'Rio Key': player_away.rk, 'Accept': 1}
-    game2_loser_confirm  = {'GameHistoryID': game2_response.json()['GameID'], 'Rio Key': player_home.rk, 'Accept': 1}
+    game2_winner_confirm = {'GameHistoryID': game2_response.json()['GameHistoryID'], 'Rio Key': player_away.rk, 'Accept': 1}
+    game2_loser_confirm  = {'GameHistoryID': game2_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 1}
 
     # Winner confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game2_winner_confirm)
@@ -205,7 +205,7 @@ def test_populate_db():
     assert data[player_home.username]['rating'] == home_user_rating
 
     # Game 4 - admin confirm
-    game4_admin_confirm = {'GameHistoryID': game4_response.json()['GameID'], 'Rio Key': sponsor.rk, 'Accept': 1}
+    game4_admin_confirm = {'GameHistoryID': game4_response.json()['GameHistoryID'], 'Rio Key': sponsor.rk, 'Accept': 1}
 
     # Admin confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game4_admin_confirm)
@@ -356,6 +356,121 @@ def test_ongoing_game():
     assert response.status_code == 200
     assert len(response.json()['ongoing_games']) == 0
 
+def test_ongoing_game_with_man_submit():
+    wipe_db()
+
+    # === SETUP ===
+    # Make official community
+    sponsor = User()
+    sponsor.register()
+    sponsor.verify_user()
+    assert sponsor.success == True
+    assert sponsor.add_to_group('admin') == True
+
+    # Assert community IS created, sponsor is admin
+    community = Community(sponsor, True, False, False)
+    assert community.success == True
+
+    # Make Tag
+    tag = Tag(community.founder, community)
+    tag.create()
+
+    # Make TagSet
+    tagset = TagSet(community.founder, community, [tag], 'Season')
+    tagset.create()
+
+    # Refresh to get tags
+    community.refresh()
+
+    # Two players
+    player_away = User()
+    player_away.register()
+
+    player_home = User()
+    player_home.register()
+
+    #Get the tag id of the tagset tag
+    tag_list = list()
+    for tag in tagset.tags.values():
+        if tag.name == tagset.name:
+            tag_list.append(tag.pk)
+    # === END SETUP ===
+
+    #Send a game
+    game = {
+        'GameID': '785756763',
+        'Away Player': player_away.rk,
+        'Home Player': player_home.rk,
+        'TagSetID': tagset.pk,
+        'Away Captain': 0,
+        'Home Captain': 2,
+        'Date - Start': 1121904000,
+        'StadiumID': 0,
+        'Inning': 0,
+        'Half Inning': 0,
+        'Away Score': 0,
+        'Home Score': 0,
+        'Away Stars': 5,
+        'Home Stars': 4,
+        'Outs': 0,
+        'Runner 1B': False,
+        'Runner 2B': False,
+        'Runner 3B': False,
+        'Leadoff Batter': 0, 
+        'Pitcher': 0
+    }
+
+    # Start Game, uverified users
+    response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game)
+    assert response.status_code == 411
+
+    player_away.verify_user()
+    player_home.verify_user()
+
+    # Start Game, verified users
+    response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game)
+    assert response.status_code == 200
+
+
+    #Make sure game is there
+    response = requests.get("http://127.0.0.1:5000/populate_db/ongoing_game/")
+    assert response.status_code == 200
+    assert len(response.json()['ongoing_games']) == 1
+
+    #Update game
+    game_update = {
+        'GameID': '785756763',
+        'Inning': 1,
+        'Half Inning': 0,
+        'Away Score': 2,
+        'Home Score': 3,
+        'Away Stars': 1,
+        'Home Stars': 2,
+        'Outs': 1,
+        'Runner 1B': True,
+        'Runner 2B': False,
+        'Runner 3B': True,
+        'Leadoff Batter': 2, 
+        'Pitcher': 5
+    }
+    response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game_update)
+    assert response.status_code == 200
+
+    
+    # ============================================================
+    # Now manual submit
+    # Give the away player from the file 2 wins. Elo should be higher than home
+    man_game = {'Winner Username': player_away.username, 'Winner Score': 10, 
+             'Loser Username': player_home.username, 'Loser Score': 0}
+    man_game['TagSet'] = tagset.name
+    man_game['GameID'] = '785756763'
+    man_game['Submitter Rio Key'] = player_away.rk
+
+    man_game_response = requests.post("http://127.0.0.1:5000/submit_game/", json=man_game)
+    assert response.status_code == 200
+    response = requests.get("http://127.0.0.1:5000/populate_db/ongoing_game/")
+    assert response.status_code == 200
+    assert len(response.json()['ongoing_games']) == 0
 
 
 '''
