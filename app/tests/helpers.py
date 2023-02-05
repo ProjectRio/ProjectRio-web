@@ -61,7 +61,7 @@ class User:
         return (response.status_code == 200)
 
     def add_to_group(self, group_name):
-        json = {'username': self.username, 'group_name': group_name, 'RESET_DB': os.getenv('RESET_DB')}
+        json = {'username': self.username, 'group_name': group_name, 'ADMIN_KEY': os.getenv('ADMIN_KEY')}
         response = requests.post(f"http://127.0.0.1:5000/user_group/add_user", json=json)
         success = (response.status_code == 200)
 
@@ -500,11 +500,11 @@ class TagSet:
             self.tags[tag.pk] = tag
 
 def wipe_db():
-    response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"RESET_DB": "NUKE"})
+    response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"ADMIN_KEY": "NUKE"})
     return response.status_code == 200
 
 def reset_db():
-    response = requests.post("http://127.0.0.1:5000/init_db/", json={"RESET_DB": "NUKE"})
+    response = requests.post("http://127.0.0.1:5000/init_db/", json={"ADMIN_KEY": "NUKE"})
     return response.status_code == 200
 
 def get_community_members(community_name, user):

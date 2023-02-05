@@ -238,6 +238,126 @@ def test_populate_db():
     assert data[player_away.username]['rating'] == away_user_rating
     assert data[player_home.username]['rating'] == home_user_rating
 
+def test_ongoing_game():
+    wipe_db()
+
+    # === SETUP ===
+    # Make official community
+    sponsor = User()
+    sponsor.register()
+    sponsor.verify_user()
+    assert sponsor.success == True
+    assert sponsor.add_to_group('admin') == True
+
+    # Assert community IS created, sponsor is admin
+    community = Community(sponsor, True, False, False)
+    assert community.success == True
+
+    # Make Tag
+    tag = Tag(community.founder, community)
+    tag.create()
+
+    # Make TagSet
+    tagset = TagSet(community.founder, community, [tag], 'Season')
+    tagset.create()
+
+    # Refresh to get tags
+    community.refresh()
+
+    # Two players
+    player_away = User()
+    player_away.register()
+
+    player_home = User()
+    player_home.register()
+
+    #Get the tag id of the tagset tag
+    tag_list = list()
+    for tag in tagset.tags.values():
+        if tag.name == tagset.name:
+            tag_list.append(tag.pk)
+    # === END SETUP ===
+
+    #Send a game
+    game = {
+        'GameID': '785756763',
+        'Away Player': player_away.rk,
+        'Home Player': player_home.rk,
+        'TagSetID': tagset.pk,
+        'Away Captain': 0,
+        'Home Captain': 2,
+        'Date - Start': 1121904000,
+        'StadiumID': 0,
+        'Inning': 0,
+        'Half Inning': 0,
+        'Away Score': 0,
+        'Home Score': 0,
+        'Away Stars': 5,
+        'Home Stars': 4,
+        'Outs': 0,
+        'Runner 1B': False,
+        'Runner 2B': False,
+        'Runner 3B': False,
+        'Leadoff Batter': 0, 
+        'Pitcher': 0
+    }
+
+    # Start Game, uverified users
+    response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game)
+    assert response.status_code == 411
+
+    player_away.verify_user()
+    player_home.verify_user()
+
+    # Start Game, verified users
+    response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game)
+    assert response.status_code == 200
+
+
+    #Make sure game is there
+    response = requests.get("http://127.0.0.1:5000/populate_db/ongoing_game/")
+    assert response.status_code == 200
+    assert len(response.json()['ongoing_games']) == 1
+
+    #Update game
+    game_update = {
+        'GameID': '785756763',
+        'Inning': 1,
+        'Half Inning': 0,
+        'Away Score': 2,
+        'Home Score': 3,
+        'Away Stars': 1,
+        'Home Stars': 2,
+        'Outs': 1,
+        'Runner 1B': True,
+        'Runner 2B': False,
+        'Runner 3B': True,
+        'Leadoff Batter': 2, 
+        'Pitcher': 5
+    }
+    response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game_update)
+    assert response.status_code == 200
+
+    #Make sure game is there
+    response = requests.get("http://127.0.0.1:5000/populate_db/ongoing_game/")
+    assert response.status_code == 200
+    assert response.json()['ongoing_games'][0]['inning'] == 1
+
+    with open('app/tests/data/game_785756763.json') as file:
+        data = json.load(file)
+        data['Away Player'] = player_away.rk
+        data['Home Player'] = player_home.rk
+        data['Tags'] = tag_list
+    
+    # Submit game, make sure ongoing game was cleared
+    response = requests.post("http://127.0.0.1:5000/populate_db/", json=data)
+    assert response.status_code == 200
+    response = requests.get("http://127.0.0.1:5000/populate_db/ongoing_game/")
+    assert response.status_code == 200
+    assert len(response.json()['ongoing_games']) == 0
+
+
+
 '''
 def test_populate_db():
     wipe_db()
