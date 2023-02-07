@@ -4,6 +4,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, GameTag
+from ..util import *
 from app.utils.send_email import send_email
 
 @app.route("/reverification/")
@@ -14,7 +15,7 @@ def reverify_email():
 def submit_reverify_email():
     # Get Username, Email, Rio Key, and Password from json
     username = request.json['Username']
-    username_lowercase = username.lower()
+    username_lowercase = lower_and_remove_nonalphanumeric(username)
     password = request.json['Password']
     email = request.json['Email'].lower()
     rio_key = request.json['Rio Key']

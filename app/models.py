@@ -1,5 +1,6 @@
 from . import db, bc
 from flask_login import UserMixin
+from .util import *
 import time
 import secrets
 
@@ -150,7 +151,7 @@ class RioUser(db.Model, UserMixin):
 
     def __init__(self, in_username, in_email, in_password):
         self.username = in_username
-        self.username_lowercase = in_username.lower()
+        self.username_lowercase = lower_and_remove_nonalphanumeric(in_username)
         self.email    = in_email
         self.password = bc.generate_password_hash(in_password)
         self.rio_key  = secrets.token_urlsafe(32)
@@ -181,7 +182,7 @@ class UserGroup(db.Model):
 
     def __init__(self, in_group_name):
         self.name = in_group_name,
-        self.name_lowercase = in_group_name.lower()
+        self.name_lowercase = lower_and_remove_nonalphanumeric(in_group_name)
 
 class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -200,7 +201,7 @@ class Community(db.Model):
 
     def __init__(self, in_name, in_sponsor_id, in_type, in_private, in_active_tag_set_limit, in_gloabl_link, in_description):
         self.name = in_name
-        self.name_lowercase = in_name.lower()
+        self.name_lowercase = lower_and_remove_nonalphanumeric(in_name)
         self.sponsor_id = in_sponsor_id
         self.comm_type = in_type
         self.private = in_private
@@ -554,7 +555,7 @@ class Tag(db.Model):
     def __init__(self, in_comm_id, in_tag_name, in_tag_type, in_desc):
         self.community_id = in_comm_id
         self.name = in_tag_name
-        self.name_lowercase = in_tag_name.lower()
+        self.name_lowercase = lower_and_remove_nonalphanumeric(in_tag_name)
         self.tag_type = in_tag_type
         self.desc = in_desc
         self.active = True
@@ -612,7 +613,7 @@ class TagSet(db.Model):
     def __init__(self, in_comm_id, in_name, in_type, in_start, in_end):
         self.community_id = in_comm_id
         self.name = in_name
-        self.name_lowercase = in_name.lower()
+        self.name_lowercase = lower_and_remove_nonalphanumeric(in_name)
         self.type = in_type
         self.start_date = in_start
         self.end_date = in_end

@@ -38,3 +38,6 @@ def sanatize_ints(str):
       final_arr.append(int(val))
 
   return final_arr
+
+def lower_and_remove_nonalphanumeric(in_str):
+  return (''.join([i for i in in_str if i.isalnum()])).lower()

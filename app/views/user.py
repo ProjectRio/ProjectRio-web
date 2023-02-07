@@ -5,6 +5,7 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
 from ..models import db, RioUser, UserGroup, UserGroupUser
+from ..util import *
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
 
@@ -17,7 +18,7 @@ def display_signup_page():
 @app.route('/register/', methods=['POST'])
 def register():
     in_username = request.json['Username']
-    username_lowercase = in_username.lower()
+    username_lowercase = lower_and_remove_nonalphanumeric(in_username)
     in_password = request.json['Password']
     in_email    = request.json['Email'].lower()
 
@@ -150,7 +151,7 @@ def request_password_change():
         email_lowercase = request.json['username or email'].lower()
         user = RioUser.query.filter_by(email=email_lowercase).first()
     else:
-        username_lower = request.json['username or email'].lower()
+        username_lower = lower_and_remove_nonalphanumeric(request.json['username or email'])
         user = RioUser.query.filter_by(username_lowercase=username_lower).first()
 
     if not user:
@@ -227,7 +228,7 @@ def change_password():
 # === JWT endpoints ===
 @app.route('/login/', methods=['POST'])
 def login():
-    in_username = request.json['Username'].lower()
+    in_username = lower_and_remove_nonalphanumeric(request.json['Username'])
     in_password = request.json['Password']
     in_email    = request.json['Email'].lower()
 
@@ -420,7 +421,7 @@ def get_users_communities():
     if (app.config['rio_env'] == "production"):
         return abort(404, description='Endpoint not ready for production')
 
-    in_username_lowercase = request.json['username'].lower()
+    in_username_lowercase = lower_and_remove_nonalphanumeric(request.json['username'])
     user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 
     if not user:

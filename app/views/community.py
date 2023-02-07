@@ -3,8 +3,9 @@ from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 from app.utils.send_email import send_email
-from ..models import db, RioUser, CommunityUser, Community, Tag
+from ..models import db, RioUser, CommunityUser, Community, Tag, TagSet
 from ..consts import *
+from ..util import *
 from app.views.user_groups import *
 import time
 
@@ -30,7 +31,7 @@ def community_create():
             return abort(409, description="No Rio Key or JWT Provided")
 
 
-    comm = Community.query.filter_by(name=in_comm_name).first()
+    comm = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
     if comm != None:
         return abort(409, description='Community name already in use')
     if user == None:
@@ -43,6 +44,13 @@ def community_create():
         return abort(411, description='Non admin user cannot create official community')
     if not is_user_in_groups(user.id, cPATREON_TIERS) and not is_user_in_groups(user.id, ['Admin']):
         return abort(412, description='Creator is not a patron')
+
+    #Make sure that community does not use the same name as a tag
+    tag = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
+    tagset = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
+
+    if tag != None or tagset != None:
+        return abort(413, description='Name already in use (Tag or TagSet)')
 
     # Check that patron can sponsor a new community
     communities_sponsored = Community.query.filter(Community.sponsor_id==user.id).count()
@@ -136,7 +144,7 @@ def community_join(in_comm_name = None, in_active_url = None):
 
     if in_comm_name == None:
         in_comm_name = request.json['Community Name']
-    comm_name_lower = in_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey 
@@ -231,7 +239,7 @@ def community_join(in_comm_name = None, in_active_url = None):
 def community_invite():
 
     in_comm_name = request.json['Community Name']
-    comm_name_lower = in_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey
@@ -263,13 +271,13 @@ def community_invite():
 
     #Check that all users exist before sending invites
     for username in list_of_users_to_invite:
-        invited_user = RioUser.query.filter_by(username_lowercase=username.lower()).first()
+        invited_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(username)).first()
         if invited_user == None:
             return abort(409, description='User does not exist. Username={user}')
 
     #Entire list has been validated, add users to table and send emails
     for user in list_of_users_to_invite:
-        invited_user = RioUser.query.filter_by(username_lowercase=user.lower()).first()
+        invited_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(user)).first()
 
         #Now see if user has already been invited, if so skip inviting a second time.
         comm_user = CommunityUser.query.filter_by(user_id=invited_user.id, community_id=comm.id).first()
@@ -328,7 +336,7 @@ def community_invite():
 @jwt_required(optional=True)
 def community_members():
     in_comm_name = request.json['Community Name']
-    comm_name_lower = in_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey 
@@ -369,7 +377,7 @@ def community_members():
 @jwt_required(optional=True)
 def community_tags():
     in_comm_name = request.json['Community Name']
-    comm_name_lower = in_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey
@@ -421,7 +429,7 @@ def community_tags():
 @jwt_required(optional=True)
 def community_manage():
     in_comm_name = request.json['Community Name']
-    comm_name_lower = in_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey 
@@ -447,7 +455,7 @@ def community_manage():
     list_of_users_to_manage = request.json['User List']
     #Check that all users exist before sending invites
     for user in list_of_users_to_manage:
-        invited_user = RioUser.query.filter_by(username_lowercase=user['Username'].lower()).first()
+        invited_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(user['Username'])).first()
         if invited_user == None:
             return abort(409, description=f"User does not exist. Username={user['Username']}")
         comm_user = CommunityUser.query.filter_by(user_id=invited_user.id, community_id=comm.id).first()
@@ -457,7 +465,7 @@ def community_manage():
     #Entire list has been validated, add users to table and send emails
     updated_comm_users_list = list()
     for user_actions in list_of_users_to_manage:
-        user = RioUser.query.filter_by(username_lowercase=user_actions['Username'].lower()).first()
+        user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(user_actions['Username'])).first()
 
         #Get user to update
         comm_user_to_update = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
@@ -504,7 +512,7 @@ def community_manage():
 @jwt_required(optional=True)
 def community_sponsor():
     in_comm_name = request.json['Community Name']
-    comm_name_lower = in_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
 

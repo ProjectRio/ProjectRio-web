@@ -2,6 +2,7 @@ from flask import request, abort
 from flask import current_app as app
 from ..models import *
 from ..consts import *
+from ..util import *
 from ..glicko2 import Player
 from random import random
 
@@ -617,7 +618,7 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     tag_set_id = None
     if in_tag_set_id == None: # Called by endpoint
         # Lookup tagset id
-        tag_set = TagSet.query.filter_by(name_lowercase=(request.json['TagSet']).lower()).first()
+        tag_set = TagSet.query.filter_by(name_lowercase=(lower_and_remove_nonalphanumeric(request.json['TagSet']))).first()
         if tag_set == None:
             return abort(409, description='No TagSet found with provided name')
         tag_set_id = tag_set.id
@@ -643,8 +644,8 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     comm_id = tag_set.community_id
 
     #Get users and community users
-    winner_user = RioUser.query.filter_by(username_lowercase=winner_username.lower()).first()
-    loser_user = RioUser.query.filter_by(username_lowercase=loser_username.lower()).first()
+    winner_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(winner_username)).first()
+    loser_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(loser_username)).first()
 
     if winner_user == None or loser_user == None:
         print('No users')

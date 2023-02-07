@@ -3,7 +3,7 @@ from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag, Event
 from ..consts import *
-from ..util import calculate_era, format_tuple_for_SQL, format_list_for_SQL
+from ..util import *
 import pprint
 import time
 import datetime
@@ -96,7 +96,7 @@ def endpoint_games(called_internally=False):
     try:
         # Check if tags are valid and get a list of corresponding ids
         tags = request.args.getlist('tag')
-        tags_lowercase = tuple([tag.lower() for tag in tags])
+        tags_lowercase = tuple([lower_and_remove_nonalphanumeric(tag) for tag in tags])
         tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(tags_lowercase)).all()
         tag_ids = tuple([str(tag.id) for tag in tag_rows])
         if len(tag_ids) != len(tags):
@@ -104,7 +104,7 @@ def endpoint_games(called_internally=False):
 
         # Check if exclude_tags are valid and get a list of corresponding ids
         exclude_tags = request.args.getlist('exclude_tag')
-        exclude_tags_lowercase = tuple([exclude_tag.lower() for exclude_tag in exclude_tags])
+        exclude_tags_lowercase = tuple([lower_and_remove_nonalphanumeric(exclude_tag) for exclude_tag in exclude_tags])
         exclude_tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(exclude_tags_lowercase)).all()
         exclude_tag_ids = tuple([str(exclude_tag.id) for exclude_tag in exclude_tag_rows])
         if len(exclude_tag_ids) != len(exclude_tags):
@@ -112,7 +112,7 @@ def endpoint_games(called_internally=False):
 
         #Get user ids from list of users
         usernames = request.args.getlist('username')
-        usernames_lowercase = tuple([username.lower() for username in usernames])
+        usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in usernames])
         #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
         list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
         # using list comprehension
@@ -123,7 +123,7 @@ def endpoint_games(called_internally=False):
 
         #Get user ids from list of users
         vs_usernames = request.args.getlist('vs_username')
-        vs_usernames_lowercase = tuple([username.lower() for username in vs_usernames])
+        vs_usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in vs_usernames])
         #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
         list_of_vs_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(vs_usernames_lowercase)).all()
         # using list comprehension
@@ -132,7 +132,7 @@ def endpoint_games(called_internally=False):
 
         #Get user ids from list of users
         exclude_usernames = request.args.getlist('exclude_username')
-        exclude_usernames_lowercase = tuple([username.lower() for username in exclude_usernames])
+        exclude_usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in exclude_usernames])
         #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
         list_of_exclude_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(exclude_usernames_lowercase)).all()
         # using list comprehension
@@ -400,7 +400,7 @@ def endpoint_event(called_internally=False):
     if ( request.args.getlist('username') != None or request.args.getlist('vs_username') != None ):
         #Get user ids from list of users
         vs_usernames = request.args.getlist('vs_username')
-        vs_usernames_lowercase = tuple([username.lower() for username in vs_usernames])
+        vs_usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in vs_usernames])
         #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
         list_of_vs_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(vs_usernames_lowercase)).all()
         # using list comprehension
@@ -412,7 +412,7 @@ def endpoint_event(called_internally=False):
 
         #Get user ids from list of users
         usernames = request.args.getlist('username')
-        usernames_lowercase = tuple([username.lower() for username in usernames])
+        usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in usernames])
         #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
         list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
         # using list comprehension
@@ -943,7 +943,7 @@ def endpoint_detailed_stats():
     exclude_fielding_stats = (request.args.get('exclude_fielding') == '1')
 
     usernames = request.args.getlist('username')
-    usernames_lowercase = tuple([username.lower() for username in usernames])
+    usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in usernames])
     #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
     list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
     # using list comprehension
