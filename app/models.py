@@ -243,13 +243,31 @@ class CommunityUser(db.Model):
 
 class OngoingGame(db.Model):
     game_id = db.Column(db.BigInteger, primary_key = True)
+    date_time_start = db.Column(db.Integer)
+    stadium_id = db.Column(db.Integer)
     away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False)
     home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False)
     tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
     away_captain = db.Column(db.Integer)
     home_captain = db.Column(db.Integer)
-    date_time_start = db.Column(db.Integer)
-    stadium_id = db.Column(db.Integer)
+    away_roster_0_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_1_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_2_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_3_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_4_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_5_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_6_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_7_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_roster_8_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_0_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_1_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_2_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_3_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_4_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_5_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_6_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_7_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    home_roster_8_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     current_inning = db.Column(db.Integer)
     current_half_inning = db.Column(db.Integer)
     current_away_score = db.Column(db.Integer)
@@ -260,7 +278,7 @@ class OngoingGame(db.Model):
     current_runner_1b = db.Column(db.Boolean)
     current_runner_2b = db.Column(db.Boolean)
     current_runner_3b = db.Column(db.Boolean)
-    leadoff_batter_roster_loc = db.Column(db.Integer)
+    batter_roster_loc = db.Column(db.Integer)
     pitcher_roster_loc = db.Column(db.Integer)
 
     away_user = db.relationship('RioUser', foreign_keys = [away_player_id], backref = 'ongoing_away_games')
@@ -280,13 +298,31 @@ class OngoingGame(db.Model):
             "half_inning": self.current_half_inning,
             "away_score": self.current_away_score,
             "home_score": self.current_home_score,
+            "away_roster_0_char": self.away_roster_0_char,
+            "away_roster_1_char": self.away_roster_1_char,
+            "away_roster_2_char": self.away_roster_2_char,
+            "away_roster_3_char": self.away_roster_3_char,
+            "away_roster_4_char": self.away_roster_4_char,
+            "away_roster_5_char": self.away_roster_5_char,
+            "away_roster_6_char": self.away_roster_6_char,
+            "away_roster_7_char": self.away_roster_7_char,
+            "away_roster_8_char": self.away_roster_8_char,
+            "home_roster_0_char": self.home_roster_0_char,
+            "home_roster_1_char": self.home_roster_1_char,
+            "home_roster_2_char": self.home_roster_2_char,
+            "home_roster_3_char": self.home_roster_3_char,
+            "home_roster_4_char": self.home_roster_4_char,
+            "home_roster_5_char": self.home_roster_5_char,
+            "home_roster_6_char": self.home_roster_6_char,
+            "home_roster_7_char": self.home_roster_7_char,
+            "home_roster_8_char": self.home_roster_8_char,
             "away_stars": self.current_away_stars,
             "home_stars": self.current_home_stars,
             "outs": self.current_outs,
             "runner_on_first": self.current_runner_1b,
             "runner_on_second": self.current_runner_2b,
             "runner_on_third": self.current_runner_3b,
-            "leadoff_batter": self.leadoff_batter_roster_loc,
+            "batter": self.batter_roster_loc,
             "pitcher": self.pitcher_roster_loc
         }
 

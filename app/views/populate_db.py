@@ -4,6 +4,7 @@ from ..models import *
 from ..consts import *
 from ..util import *
 from ..glicko2 import Player
+from pprint import pprint
 from random import random
 
 @app.route('/populate_db/ongoing_game/', methods=['POST', 'GET'])
@@ -15,6 +16,8 @@ def update_ongoing_game():
         completed_game = Game.query.filter_by(game_id=game_id).first()
         if completed_game != None:
             return abort(409, 'Already completed game with this ID')
+
+        pprint(request.json)
 
         if game == None:
             home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
@@ -34,17 +37,37 @@ def update_ongoing_game():
                 home_captain = request.json['Home Captain'],
                 date_time_start = request.json['Date - Start'],
                 stadium_id = request.json['StadiumID'],
-                current_inning = request.json['Inning'],
-                current_half_inning = request.json['Half Inning'],
-                current_away_score = request.json['Away Score'],
-                current_home_score = request.json['Home Score'],
+                current_inning = 1,
+                current_half_inning = 0,
+                current_away_score = 0,
+                current_home_score = 0,
+
+                away_roster_0_char = request.json["Away Roster 0 CharID"],
+                away_roster_1_char = request.json["Away Roster 1 CharID"],
+                away_roster_2_char = request.json["Away Roster 2 CharID"],
+                away_roster_3_char = request.json["Away Roster 3 CharID"],
+                away_roster_4_char = request.json["Away Roster 4 CharID"],
+                away_roster_5_char = request.json["Away Roster 5 CharID"],
+                away_roster_6_char = request.json["Away Roster 6 CharID"],
+                away_roster_7_char = request.json["Away Roster 7 CharID"],
+                away_roster_8_char = request.json["Away Roster 8 CharID"],
+                home_roster_0_char = request.json["Home Roster 0 CharID"],
+                home_roster_1_char = request.json["Home Roster 1 CharID"],
+                home_roster_2_char = request.json["Home Roster 2 CharID"],
+                home_roster_3_char = request.json["Home Roster 3 CharID"],
+                home_roster_4_char = request.json["Home Roster 4 CharID"],
+                home_roster_5_char = request.json["Home Roster 5 CharID"],
+                home_roster_6_char = request.json["Home Roster 6 CharID"],
+                home_roster_7_char = request.json["Home Roster 7 CharID"],
+                home_roster_8_char = request.json["Home Roster 8 CharID"],
+
                 current_away_stars = request.json['Away Stars'],
                 current_home_stars = request.json['Home Stars'],
-                current_outs = request.json['Outs'],
-                current_runner_1b = request.json['Runner 1B'],
-                current_runner_2b = request.json['Runner 2B'],
-                current_runner_3b = request.json['Runner 3B'],
-                leadoff_batter_roster_loc = request.json['Leadoff Batter'],
+                current_outs = 0,
+                current_runner_1b = False,
+                current_runner_2b = False,
+                current_runner_3b = False,
+                batter_roster_loc = 0,
                 pitcher_roster_loc = request.json['Pitcher']
             )
         else:
@@ -58,7 +81,7 @@ def update_ongoing_game():
             game.current_runner_1b = request.json['Runner 1B']
             game.current_runner_2b = request.json['Runner 2B']
             game.current_runner_3b = request.json['Runner 3B']
-            game.leadoff_batter_roster_loc = request.json['Leadoff Batter']
+            game.batter_roster_loc = request.json['Batter']
             game.pitcher_roster_loc = request.json['Pitcher']
         
         db.session.add(game)
@@ -102,52 +125,32 @@ def populate_db2():
     if innings_played < innings_selected and score_difference < 10:
         return abort(412, "Invalid Game: Innings Played < Innings Selected & Score Difference < 10")
     
-    # Verify Tags exist
-    tag_ids = list() # THIS ARRAY WILL BE FILLED WITH FOREIGN KEYS, DO NOT POPULATE IT UNLESS ADDING VALUES FROM SQL ROWS
-    json_tags = request.json['Tags']
-    tag_set_tag = None
-
-    tags = Tag.query.filter(Tag.id.in_(json_tags))
-
-    # Iterate through SQLAlchemy tags objects and find the TagSetTag.
-    # If there is more than 1 abort.
-    for tag in tags:
-        # All TagSet Tags have the type Competition
-        if tag.tag_type == "Competition":
-            if tag_set_tag != None:
-                abort(414, "Only one TagSet Tag can be submitted per game.")
-            tag_set_tag = tag
-
-    if tag_set_tag:   
-        # Get TagSet Id
-        tag_set_id = db.session.execute((
-            "SELECT \n"
-            "tagset_id \n"
-            "FROM tag_set_tag \n"
-            f"WHERE tag_set_tag.tag_id = {tag_set_tag.id}"
-        )).first()[0]
+    tag_set = TagSet.query.filter_by(id=request.json['TagSetID']).first()
+    tag_set_id = tag_set.id
+    if tag_set == None:
+        return abort(413, "Could not find TagSet")
         
-        # Get all Tags for TagSet
-        tag_ids_from_tag_set = db.session.execute((
-            "SELECT \n"
-            "tag_id \n"
-            "FROM tag_set_tag \n"
-            f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
-        )).all()
+    # Get all Tags for TagSet
+    tag_ids_from_tag_set = db.session.execute((
+        "SELECT \n"
+        "tag_id \n"
+        "FROM tag_set_tag \n"
+        f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
+    )).all()
 
-        # Add all tags from provided TagSet to tag_ids to be added to database
-        for tag_id in tag_ids_from_tag_set:
-            tag_ids.append(tag_id.tag_id)
+    tag_ids = list()
+    # Add all tags from provided TagSet to tag_ids to be added to database
+    for tag_id in tag_ids_from_tag_set:
+        tag_ids.append(tag_id.tag_id)
 
-        # Confirm that both users are community members for given TagSet
-        # Get TagSet obj to verify users
-        tag_set = TagSet.query.filter_by(id=tag_set_id).first()
+    # Confirm that both users are community members for given TagSet
+    # Get TagSet obj to verify users
 
-        home_comm_user = CommunityUser.query.filter_by(user_id=home_player.id, community_id=tag_set.community_id).first()
-        away_comm_user = CommunityUser.query.filter_by(user_id=away_player.id, community_id=tag_set.community_id).first()
+    home_comm_user = CommunityUser.query.filter_by(user_id=home_player.id, community_id=tag_set.community_id).first()
+    away_comm_user = CommunityUser.query.filter_by(user_id=away_player.id, community_id=tag_set.community_id).first()
 
-        if home_comm_user == None or away_comm_user == None:
-            abort(415, "One or both users are not part of the community for this TagSet.")
+    if home_comm_user == None or away_comm_user == None:
+        abort(415, "One or both users are not part of the community for this TagSet.")
 
     version = request.json['Version']
     rio_client_version_tag = Tag.query.filter_by(name=f'client_{version}').first()

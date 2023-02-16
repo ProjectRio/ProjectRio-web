@@ -8,6 +8,7 @@ from ..models import *
 from ..consts import *
 from ..util import *
 import time
+from pprint import pprint
 
 @app.route('/tag/create', methods=['POST'])
 @jwt_required(optional=True)
@@ -247,7 +248,7 @@ def tagset_list():
 
     if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
-    
+    pprint(request.json)
     tag_sets = None
     rio_key_provided = request.is_json and 'Rio Key' in request.json
     if rio_key_provided:
@@ -267,7 +268,7 @@ def tagset_list():
         tag_sets = TagSet.query.all()
     
     #The rio key was bad or there are no tag sets to return
-    if tag_sets is None or len(TagSet) == 0:
+    if tag_sets is None or len(tag_sets) == 0:
         abort(409, "No/Invalid Rio Key provided or something else went wrong and no TagSets were created")
 
     tag_set_list = list()
@@ -279,11 +280,16 @@ def tagset_list():
         if (communities_provided and tag_set.community_id not in community_id_list):
             continue
 
+        #Determine if community, and therefore TagSet, is Official
+        #TODO do this with SQLalchemy instead to eliminate extra query
+        comm = Community.query.filter_by(id=tag_set.community_id).first()
+
         #IF CALLED BY CLIENT THE FOLLOWING COMMENT APPLIES
         #The return type of this function is a list of tag_set dicts. When called from the client, the tag dicts contain additional
         #fields from the GeckoCodeTag table even if the Tag does not have an associated GeckoCodeTag. In that case the two 
         # GeckoCodeTag values are empty strings. This is to make life easier for the client c++ code to parse
         tag_set_dict = tag_set.to_dict(False)
+        tag_set_dict['comm_type'] = comm.comm_type
         tag_set_dict['tags'] = list()
         for tag in tag_set.tags:
             tag_dict = tag.to_dict()
@@ -297,6 +303,7 @@ def tagset_list():
 
         # Append passing tag set information
         tag_set_list.append(tag_set_dict)
+    pprint(tag_set_list)
     return {"Tag Sets": tag_set_list}
 
 @app.route('/tag_set/<tag_set_id>', methods=['GET'])
