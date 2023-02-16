@@ -45,16 +45,11 @@ def test_populate_db():
     data = dict()
     tag_list = list()
 
-    #Get the tag id of the tagset tag
-    for tag in tagset.tags.values():
-        if tag.name == tagset.name:
-            tag_list.append(tag.pk)
-
     with open('app/tests/data/game_785756763.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
-        data['Tags'] = tag_list
+        data['TagSetID'] = tagset.pk
 
     # Submit game, nonverified users
     response = requests.post("http://127.0.0.1:5000/populate_db/", json=data)
@@ -270,12 +265,6 @@ def test_ongoing_game():
 
     player_home = User()
     player_home.register()
-
-    #Get the tag id of the tagset tag
-    tag_list = list()
-    for tag in tagset.tags.values():
-        if tag.name == tagset.name:
-            tag_list.append(tag.pk)
     # === END SETUP ===
 
     #Send a game
@@ -292,13 +281,31 @@ def test_ongoing_game():
         'Half Inning': 0,
         'Away Score': 0,
         'Home Score': 0,
+        "Away Roster 0 CharID": 0,
+        "Away Roster 1 CharID": 0,
+        "Away Roster 2 CharID": 0,
+        "Away Roster 3 CharID": 0,
+        "Away Roster 4 CharID": 0,
+        "Away Roster 5 CharID": 0,
+        "Away Roster 6 CharID": 0,
+        "Away Roster 7 CharID": 0,
+        "Away Roster 8 CharID": 0,
+        "Home Roster 0 CharID": 0,
+        "Home Roster 1 CharID": 0,
+        "Home Roster 2 CharID": 0,
+        "Home Roster 3 CharID": 0,
+        "Home Roster 4 CharID": 0,
+        "Home Roster 5 CharID": 0,
+        "Home Roster 6 CharID": 0,
+        "Home Roster 7 CharID": 0,
+        "Home Roster 8 CharID": 0,
         'Away Stars': 5,
         'Home Stars': 4,
         'Outs': 0,
         'Runner 1B': False,
         'Runner 2B': False,
         'Runner 3B': False,
-        'Leadoff Batter': 0, 
+        'Batter': 0, 
         'Pitcher': 0
     }
 
@@ -332,7 +339,7 @@ def test_ongoing_game():
         'Runner 1B': True,
         'Runner 2B': False,
         'Runner 3B': True,
-        'Leadoff Batter': 2, 
+        'Batter': 2, 
         'Pitcher': 5
     }
     response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game_update)
@@ -347,7 +354,7 @@ def test_ongoing_game():
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
-        data['Tags'] = tag_list
+        data['TagSetID'] = tagset.pk
     
     # Submit game, make sure ongoing game was cleared
     response = requests.post("http://127.0.0.1:5000/populate_db/", json=data)
@@ -410,13 +417,31 @@ def test_ongoing_game_with_man_submit():
         'Half Inning': 0,
         'Away Score': 0,
         'Home Score': 0,
+        "Away Roster 0 CharID": 0,
+        "Away Roster 1 CharID": 0,
+        "Away Roster 2 CharID": 0,
+        "Away Roster 3 CharID": 0,
+        "Away Roster 4 CharID": 0,
+        "Away Roster 5 CharID": 0,
+        "Away Roster 6 CharID": 0,
+        "Away Roster 7 CharID": 0,
+        "Away Roster 8 CharID": 0,
+        "Home Roster 0 CharID": 0,
+        "Home Roster 1 CharID": 0,
+        "Home Roster 2 CharID": 0,
+        "Home Roster 3 CharID": 0,
+        "Home Roster 4 CharID": 0,
+        "Home Roster 5 CharID": 0,
+        "Home Roster 6 CharID": 0,
+        "Home Roster 7 CharID": 0,
+        "Home Roster 8 CharID": 0,
         'Away Stars': 5,
         'Home Stars': 4,
         'Outs': 0,
         'Runner 1B': False,
         'Runner 2B': False,
         'Runner 3B': False,
-        'Leadoff Batter': 0, 
+        'Batter': 0, 
         'Pitcher': 0
     }
 
@@ -450,7 +475,7 @@ def test_ongoing_game_with_man_submit():
         'Runner 1B': True,
         'Runner 2B': False,
         'Runner 3B': True,
-        'Leadoff Batter': 2, 
+        'Batter': 2, 
         'Pitcher': 5
     }
     response = requests.post("http://127.0.0.1:5000/populate_db/ongoing_game/", json=game_update)

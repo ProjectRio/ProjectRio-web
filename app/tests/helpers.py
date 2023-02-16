@@ -21,13 +21,10 @@ class User:
         # If user details are not specified, randomize user
         if in_user_dict == None:
             in_user_dict = dict()
-            length = random.randint(3,20)
-            in_user_dict['Username'] = ''.join(random.choices(string.ascii_letters, k=length))
-            in_user_dict['Email'] =  ''.join(random.choices(string.ascii_letters, k=length)) + "@email.com"
-            in_user_dict['Password'] =  ''.join(random.choices(string.ascii_letters + string.digits + string.punctuation , k=20))
-        self.username = in_user_dict['Username']
-        self.email = in_user_dict['Email']
-        self.password = in_user_dict['Password']
+        length = random.randint(3,20)
+        self.username = in_user_dict['Username'] if ('Username' in in_user_dict.keys()) else ''.join(random.choices(string.ascii_letters, k=length))
+        self.email = in_user_dict['Email'] if ('Email' in in_user_dict.keys()) else ''.join(random.choices(string.ascii_letters, k=length)) + "@email.com"
+        self.password = in_user_dict['Password'] if ('Password' in in_user_dict.keys()) else ''.join(random.choices(string.ascii_letters + string.digits + string.punctuation , k=20))
 
     def register(self):
         # Post new user
@@ -439,7 +436,7 @@ class TagSet:
             tagset_details['TagSet Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tagset_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tagset_details['Start'] = int( time.time() )
-            tagset_details['End'] = int( time.time() ) + random.randrange(60, 10000)
+            tagset_details['End'] = int( time.time() ) + random.randrange(100000, 1000000)
         tagset_details['Community Name'] = community.name
         tagset_details['Rio Key'] = admin_comm_user.user.rk
         tagset_details['Type'] = tag_type

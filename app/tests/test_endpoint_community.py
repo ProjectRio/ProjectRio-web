@@ -2,6 +2,7 @@ import json
 import requests
 from helpers import *
 from connection import Connection
+from pprint import pprint
 
 db = Connection()
 
@@ -355,6 +356,14 @@ def test_community_tagsets_limit():
     assert tagsetE.success
     assert not tagsetF.success
     assert len(community.tags) == 7
+
+    #Check that we get all TagSets back
+    response = requests.post("http://127.0.0.1:5000/tag_set/list", json={'Client': 'true', 'Active': 't'})
+    assert response.status_code == 200
+
+    data = response.json()
+    pprint(data)
+    assert len(data['Tag Sets']) == 5
 
 def test_endpoint_community_get_tags():
     wipe_db()
