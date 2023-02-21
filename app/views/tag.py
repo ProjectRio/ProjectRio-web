@@ -38,6 +38,8 @@ def tag_create():
         return abort(411, description="Type is gecko code but code details not provided")
     if (in_tag_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
         return abort(412, description="Type is gecko code but code details not provided")
+    if (in_tag_type == "Gecko Code" and not validate_gecko_code(gecko_code)):
+        return abort(415, description="Type is gecko code but code is not formatted correctly (<CODE> <CODE><\n>)")
 
 
     #Make sure that tag does not use the same name as an existing tag, comm, or tag_set

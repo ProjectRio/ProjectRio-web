@@ -3,7 +3,7 @@ from flask import render_template, request, jsonify, abort
 import secrets
 from datetime import datetime, timedelta, timezone
 from .. import bc
-from ..models import db, RioUser, GameTag
+from ..models import db, RioUser
 from ..util import *
 from app.utils.send_email import send_email
 

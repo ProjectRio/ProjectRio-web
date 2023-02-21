@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, GameTag, Event
+from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, Event
 from ..consts import *
 from ..util import *
 import pprint

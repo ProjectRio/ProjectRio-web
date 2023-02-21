@@ -41,3 +41,18 @@ def sanatize_ints(str):
 
 def lower_and_remove_nonalphanumeric(in_str):
   return (''.join([i for i in in_str if i.isalnum()])).lower()
+
+def validate_gecko_code(in_str):
+  idx = 0
+  for char in in_str:
+    if idx == 17:
+      if char not '\n':
+        return False
+      idx = 0
+    if idx == 8 and char not ' ':
+      return False
+    elif idx <= 16 and char not in string.hexdigits:
+      return False
+  #After the for loop 
+  if (idx != 0): #Loop ended in the middle of a line
+    return False

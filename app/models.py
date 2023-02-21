@@ -347,7 +347,6 @@ class Game(db.Model):
     version = db.Column(db.String(50))
 
     character_game_summary = db.relationship('CharacterGameSummary', backref='game')
-    game_tag = db.relationship('GameTag', backref='game')
     event = db.relationship('Event', backref='game')
     game_history = db.relationship("GameHistory", backref='game')
 
@@ -570,12 +569,6 @@ class Runner(db.Model):
     events_on_2 = db.relationship('Event', foreign_keys = 'Event.runner_on_2', backref = 'runner_2')
     events_on_3 = db.relationship('Event', foreign_keys = 'Event.runner_on_3', backref = 'runner_3')
 
-class GameTag(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
-    tag_id = db.Column(db.ForeignKey('tag.id'), nullable=False)
-    change_requested = db.Column(db.SmallInteger)
-
 class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
@@ -585,8 +578,6 @@ class Tag(db.Model):
     desc = db.Column(db.String(300))
     active = db.Column(db.Boolean)
     date_created = db.Column(db.Integer)
-
-    game_tag = db.relationship('GameTag', backref='tag')
 
     def __init__(self, in_comm_id, in_tag_name, in_tag_type, in_desc):
         self.community_id = in_comm_id
@@ -704,6 +695,8 @@ class GameHistory(db.Model):
     loser_accept = db.Column(db.Boolean, nullable=True)
     admin_accept = db.Column(db.Boolean, nullable=True)
     date_created = db.Column(db.Integer, nullable=True)
+
+    tag_set = db.relationship('TagSet', backref = 'tag_set')
 
     def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
         self.game_id = in_game_id

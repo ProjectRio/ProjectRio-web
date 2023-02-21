@@ -129,19 +129,6 @@ def populate_db2():
     tag_set_id = tag_set.id
     if tag_set == None:
         return abort(413, "Could not find TagSet")
-        
-    # Get all Tags for TagSet
-    tag_ids_from_tag_set = db.session.execute((
-        "SELECT \n"
-        "tag_id \n"
-        "FROM tag_set_tag \n"
-        f"WHERE tag_set_tag.tagset_id = {tag_set_id}"
-    )).all()
-
-    tag_ids = list()
-    # Add all tags from provided TagSet to tag_ids to be added to database
-    for tag_id in tag_ids_from_tag_set:
-        tag_ids.append(tag_id.tag_id)
 
     # Confirm that both users are community members for given TagSet
     # Get TagSet obj to verify users
@@ -151,32 +138,6 @@ def populate_db2():
 
     if home_comm_user == None or away_comm_user == None:
         abort(415, "One or both users are not part of the community for this TagSet.")
-
-    version = request.json['Version']
-    rio_client_version_tag = Tag.query.filter_by(name=f'client_{version}').first()
-    if rio_client_version_tag is None:
-        new_rio_client_version_tag = Tag(
-            in_tag_name = f'client_{version}',
-            in_desc = "Rio Client Version Tag",
-            in_tag_type = "Global",
-            in_comm_id = None
-        )
-        db.session.add(new_rio_client_version_tag)
-        db.session.commit()
-    tag_ids.append(new_rio_client_version_tag.id)
-
-    # add rio web version tag, create tag if it doesn't exist
-    rio_web_version_tag = Tag.query.filter_by(name=f'web_{cRIO_WEB_VERSION}').first()
-    if rio_web_version_tag is None:
-        new_rio_web_version_tag = Tag(
-            in_tag_name = f'web_{cRIO_WEB_VERSION}',
-            in_desc = "Rio Web Version Tag",
-            in_tag_type = "Global",
-            in_comm_id = None
-        )
-        db.session.add(new_rio_web_version_tag)
-        db.session.commit()
-    tag_ids.append(new_rio_web_version_tag.id)
 
     #TODO Look into removing this step. GameID SHOULD be guaranteed by checking in ongoing_games now
     # Reroll game id until unique one is found
@@ -198,7 +159,6 @@ def populate_db2():
         home_player_id = home_player.id,
         date_time_start = int(request.json['Date - Start']),
         date_time_end = int(request.json['Date - End']),
-        ranked = request.json['Ranked'],
         netplay = request.json['Netplay'],
         stadium_id = request.json['StadiumID'],
         away_score = request.json['Away Score'],
@@ -226,16 +186,6 @@ def populate_db2():
 
     # Add game row to database
     db.session.add(game)
-    db.session.commit()
-
-    # Populate GameTag table with matching tags
-    # tag_ids is a list of tag foreign keys
-    for tag_id in tag_ids:
-        game_tag = GameTag(
-            game_id = game.game_id,
-            tag_id = tag_id
-        )
-        db.session.add(game_tag)
     db.session.commit()
 
     # Create GameHistory row

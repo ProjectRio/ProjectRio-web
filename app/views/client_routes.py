@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, RioUser, Tag, GameTag
+from ..models import db, RioUser, Tag
 from ..util import *
 
 # Evaluate users provided to Client

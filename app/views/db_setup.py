@@ -19,7 +19,6 @@ def init_db():
             FieldingSummary.__table__.drop(engine)
             CharacterGameSummary.__table__.drop(engine)
             CharacterPositionSummary.__table__.drop(engine)
-            GameTag.__table__.drop(engine)        
             Game.__table__.drop(engine)
             db.create_all()
             create_character_tables()
@@ -257,7 +256,7 @@ def create_admin_users():
     return admin_user
 
 def create_official_comms(admin_user):
-    new_comm = Community('OfficialRanked', admin_user.id, 'Official', False, cACTIVE_TAGSET_LIMIT, True, 'Official community of ProjectRio')
+    new_comm = Community('ProjectRio', admin_user.id, 'Official', False, cACTIVE_TAGSET_LIMIT, True, 'Official community of ProjectRio')
     db.session.add(new_comm)
     db.session.commit()
 

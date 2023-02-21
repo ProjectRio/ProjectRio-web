@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary, GameTag
+from ..models import db, Game, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary
 
 @app.route('/delete_game/', methods = ['POST'])
 def delete_game():
@@ -69,9 +69,6 @@ def delete_game():
 
         # delete events
         db.session.delete(Event).where(Event.id.in_([event.id for event in events]))
-
-        # delete game_tag entries
-        db.session.delete(GameTag).where(GameTag.game_id == game_id)
 
         # Delete character_position_summaries 
         db.session.delete(CharacterPositionSummary).where(CharacterPositionSummary.id.in_([character_game_summary.character_position_summary_id for character_game_summary in character_game_summaries]))
