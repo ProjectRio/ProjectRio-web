@@ -552,7 +552,7 @@ def test_community_gecko_tags():
     # Should just have community tag
     assert len(community.tags) == 1
 
-    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF'}
+    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF\n'}
 
     # Add tag with admin
     tag = Tag(community.founder, community, 'Gecko Code', code_dict)

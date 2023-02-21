@@ -1,4 +1,5 @@
 from flask import abort
+import string
 
 def calculate_era(runs_allowed, outs_pitched):
     if outs_pitched == 0 and runs_allowed > 0:
@@ -45,14 +46,20 @@ def lower_and_remove_nonalphanumeric(in_str):
 def validate_gecko_code(in_str):
   idx = 0
   for char in in_str:
+    print('Idx:', idx, 'Char:', char)
     if idx == 17:
-      if char not '\n':
+      if char != '\n':
         return False
       idx = 0
-    if idx == 8 and char not ' ':
-      return False
-    elif idx <= 16 and char not in string.hexdigits:
-      return False
+    elif idx == 8:
+      if char != ' ':
+        return False  
+      idx+=1
+    elif idx <= 16:
+      if char not in string.hexdigits:
+        return False
+      idx+=1
   #After the for loop 
   if (idx != 0): #Loop ended in the middle of a line
     return False
+  return True
