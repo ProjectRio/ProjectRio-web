@@ -1,7 +1,7 @@
 from flask import request, abort
 from flask import current_app as app
 from ...models import db, RioUser
-from ...util import calculate_era
+from ...util import *
 
 # API Request URL example: /profile/stats/?recent=10&username=demouser1
 '''
@@ -22,7 +22,7 @@ from ...util import calculate_era
 def user_stats():
     # # Get User row
     username = request.args.get('username')
-    in_username_lowercase = username.lower()
+    in_username_lowercase = lower_and_remove_nonalphanumeric(username)
     user_to_query = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 
     # If user doesn't exist, abort

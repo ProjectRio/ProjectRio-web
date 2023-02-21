@@ -6,7 +6,9 @@ from app.utils.send_email import send_email
 import secrets
 from ..models import *
 from ..consts import *
+from ..util import *
 import time
+from pprint import pprint
 
 @app.route('/tag/create', methods=['POST'])
 @jwt_required(optional=True)
@@ -23,7 +25,7 @@ def tag_create():
     gecko_code_provided = request.is_json and 'Gecko Code' in request.json
     gecko_code = request.json.get('Gecko Code') if gecko_code_provided else None
 
-    comm_name_lower = in_tag_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_tag_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     creating_gecko_code = (in_tag_type == "Gecko Code" and gecko_code_desc_provided and gecko_code_provided)
@@ -36,6 +38,17 @@ def tag_create():
         return abort(411, description="Type is gecko code but code details not provided")
     if (in_tag_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
         return abort(412, description="Type is gecko code but code details not provided")
+    if (in_tag_type == "Gecko Code" and not validate_gecko_code(gecko_code)):
+        return abort(415, description="Type is gecko code but code is not formatted correctly (<CODE> <CODE><\n>)")
+
+
+    #Make sure that tag does not use the same name as an existing tag, comm, or tag_set
+    tag = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_name)).first()
+    comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_name)).first()
+    tag_set = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_name)).first()
+
+    if tag != None or comm_name_check != None or tag_set != None:
+        return abort(413, description='Name already in use (Tag, TagSet, or Community)')
 
     # Get user making the new community
     #Get user via JWT or RioKey
@@ -125,7 +138,7 @@ def tagset_create():
     in_tag_set_start_time = request.json['Start']
     in_tag_set_end_time = request.json['End']
 
-    comm_name_lower = in_tag_set_comm_name.lower()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_tag_set_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     if comm == None:
@@ -137,7 +150,16 @@ def tagset_create():
     if in_tag_set_end_time < in_tag_set_start_time:
         return abort(409, description='Invalid start/end times')
     if in_tag_set_type not in cTAG_SET_TYPES.values():
-        return abort(409, description='Invalid tag type')
+        return abort(410, description='Invalid tag type')
+
+    
+    #Make sure that tag_set does not use the same name as a tag, comm, or other tag_set
+    tag = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_set_name)).first()
+    comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_set_name)).first()
+    tag_set = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_set_name)).first()
+
+    if tag != None or comm_name_check != None or tag_set != None:
+        return abort(413, description='Name already in use (Tag, TagSet, or Community)')
 
     # Make sure community is under the limit of active tag types
     current_unix_time = int( time.time() )
@@ -228,7 +250,7 @@ def tagset_list():
 
     if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
-    
+    pprint(request.json)
     tag_sets = None
     rio_key_provided = request.is_json and 'Rio Key' in request.json
     if rio_key_provided:
@@ -248,7 +270,7 @@ def tagset_list():
         tag_sets = TagSet.query.all()
     
     #The rio key was bad or there are no tag sets to return
-    if tag_sets is None or len(TagSet) == 0:
+    if tag_sets is None or len(tag_sets) == 0:
         abort(409, "No/Invalid Rio Key provided or something else went wrong and no TagSets were created")
 
     tag_set_list = list()
@@ -260,11 +282,16 @@ def tagset_list():
         if (communities_provided and tag_set.community_id not in community_id_list):
             continue
 
+        #Determine if community, and therefore TagSet, is Official
+        #TODO do this with SQLalchemy instead to eliminate extra query
+        comm = Community.query.filter_by(id=tag_set.community_id).first()
+
         #IF CALLED BY CLIENT THE FOLLOWING COMMENT APPLIES
         #The return type of this function is a list of tag_set dicts. When called from the client, the tag dicts contain additional
         #fields from the GeckoCodeTag table even if the Tag does not have an associated GeckoCodeTag. In that case the two 
         # GeckoCodeTag values are empty strings. This is to make life easier for the client c++ code to parse
         tag_set_dict = tag_set.to_dict(False)
+        tag_set_dict['comm_type'] = comm.comm_type
         tag_set_dict['tags'] = list()
         for tag in tag_set.tags:
             tag_dict = tag.to_dict()
@@ -278,6 +305,7 @@ def tagset_list():
 
         # Append passing tag set information
         tag_set_list.append(tag_set_dict)
+    pprint(tag_set_list)
     return {"Tag Sets": tag_set_list}
 
 @app.route('/tag_set/<tag_set_id>', methods=['GET'])
@@ -298,7 +326,7 @@ def tagset_get_tags(tag_set_id):
 @jwt_required(optional=True)
 def get_ladder(in_tag_set=None):
     tag_set_name =  in_tag_set if in_tag_set != None else request.json['TagSet']
-    tag_set = TagSet.query.filter_by(name_lowercase=tag_set_name.lower()).first()
+    tag_set = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(tag_set_name)).first()
     if tag_set == None:
         return abort(409, description=f"Could not find TagSet with name={tag_set_name}")
 

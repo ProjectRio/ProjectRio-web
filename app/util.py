@@ -1,4 +1,5 @@
 from flask import abort
+import string
 
 def calculate_era(runs_allowed, outs_pitched):
     if outs_pitched == 0 and runs_allowed > 0:
@@ -38,3 +39,27 @@ def sanatize_ints(str):
       final_arr.append(int(val))
 
   return final_arr
+
+def lower_and_remove_nonalphanumeric(in_str):
+  return (''.join([i for i in in_str if i.isalnum()])).lower()
+
+def validate_gecko_code(in_str):
+  idx = 0
+  for char in in_str:
+    print('Idx:', idx, 'Char:', char)
+    if idx == 17:
+      if char != '\n':
+        return False
+      idx = 0
+    elif idx == 8:
+      if char != ' ':
+        return False  
+      idx+=1
+    elif idx <= 16:
+      if char not in string.hexdigits:
+        return False
+      idx+=1
+  #After the for loop 
+  if (idx != 0): #Loop ended in the middle of a line
+    return False
+  return True

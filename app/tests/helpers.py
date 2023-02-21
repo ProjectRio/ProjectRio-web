@@ -21,13 +21,10 @@ class User:
         # If user details are not specified, randomize user
         if in_user_dict == None:
             in_user_dict = dict()
-            length = random.randint(3,20)
-            in_user_dict['Username'] = ''.join(random.choices(string.ascii_letters, k=length))
-            in_user_dict['Email'] =  ''.join(random.choices(string.ascii_letters, k=length)) + "@email.com"
-            in_user_dict['Password'] =  ''.join(random.choices(string.ascii_letters + string.digits + string.punctuation , k=20))
-        self.username = in_user_dict['Username']
-        self.email = in_user_dict['Email']
-        self.password = in_user_dict['Password']
+        length = random.randint(3,20)
+        self.username = in_user_dict['Username'] if ('Username' in in_user_dict.keys()) else ''.join(random.choices(string.ascii_letters, k=length))
+        self.email = in_user_dict['Email'] if ('Email' in in_user_dict.keys()) else ''.join(random.choices(string.ascii_letters, k=length)) + "@email.com"
+        self.password = in_user_dict['Password'] if ('Password' in in_user_dict.keys()) else ''.join(random.choices(string.ascii_letters + string.digits + string.punctuation , k=20))
 
     def register(self):
         # Post new user
@@ -61,7 +58,7 @@ class User:
         return (response.status_code == 200)
 
     def add_to_group(self, group_name):
-        json = {'username': self.username, 'group_name': group_name, 'RESET_DB': os.getenv('RESET_DB')}
+        json = {'username': self.username, 'group_name': group_name, 'ADMIN_KEY': os.getenv('ADMIN_KEY')}
         response = requests.post(f"http://127.0.0.1:5000/user_group/add_user", json=json)
         success = (response.status_code == 200)
 
@@ -439,7 +436,7 @@ class TagSet:
             tagset_details['TagSet Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tagset_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tagset_details['Start'] = int( time.time() )
-            tagset_details['End'] = int( time.time() ) + random.randrange(60, 10000)
+            tagset_details['End'] = int( time.time() ) + random.randrange(100000, 1000000)
         tagset_details['Community Name'] = community.name
         tagset_details['Rio Key'] = admin_comm_user.user.rk
         tagset_details['Type'] = tag_type
@@ -500,11 +497,11 @@ class TagSet:
             self.tags[tag.pk] = tag
 
 def wipe_db():
-    response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"RESET_DB": "NUKE"})
+    response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"ADMIN_KEY": "NUKE"})
     return response.status_code == 200
 
 def reset_db():
-    response = requests.post("http://127.0.0.1:5000/init_db/", json={"RESET_DB": "NUKE"})
+    response = requests.post("http://127.0.0.1:5000/init_db/", json={"ADMIN_KEY": "NUKE"})
     return response.status_code == 200
 
 def get_community_members(community_name, user):

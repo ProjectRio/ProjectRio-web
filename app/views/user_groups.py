@@ -7,6 +7,7 @@ import os
 import requests as req
 from pprint import pprint
 from ..consts import *
+from ..util import *
 
 # Switch to ApiKey -- Usergroup id
 
@@ -15,10 +16,10 @@ from ..consts import *
 @app.route('/user_group/create', methods=['GET'])
 @api_key_check(['Admin'])
 def create_user_group():
-    # if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    # if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
     if True:
         in_group_name = request.json['group_name']
-        in_group_name_lower = in_group_name.lower()
+        in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
 
         # Verify Group Name is alphanumeric
         if in_group_name.isalnum() == False:
@@ -47,15 +48,15 @@ def add_user_to_user_group(in_username = None, in_group_name = None):
     # If called by endpoint
     valid_credential = False
     try:
-        valid_credential = request.json['RESET_DB'] == os.getenv('RESET_DB')
+        valid_credential = request.json['ADMIN_KEY'] == os.getenv('ADMIN_KEY')
     except:
         valid_credential = False
 
     if (valid_credential or internal_use):
         in_username = in_username if in_username != None else request.json['username']
-        in_username_lower = in_username.lower()
+        in_username_lower = lower_and_remove_nonalphanumeric(in_username)
         in_group_name = in_group_name if in_group_name != None else request.json['group_name']
-        in_group_name_lower = in_group_name.lower()
+        in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
 
         # Verify User exists
         user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
@@ -95,9 +96,9 @@ def add_user_to_user_group(in_username = None, in_group_name = None):
 @app.route('/user_group/check_for_member', methods=['GET'])
 def check_if_user_in_user_group():
     in_username = request.args.get('username')
-    in_username_lower = in_username.lower()
+    in_username_lower = lower_and_remove_nonalphanumeric(in_username)
     in_group_name = request.args.get('group_name')
-    in_group_name_lower = in_group_name.lower()
+    in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
 
     # Get RioUser
     user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
@@ -124,7 +125,7 @@ def check_if_user_in_user_group():
 @app.route('/user_group/members', methods=['GET'])
 def get_group_member():
     in_group_name = request.args.get('group_name')
-    in_group_name_lower = in_group_name.lower()
+    in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
 
     # Get UserGroup
     user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
@@ -160,7 +161,7 @@ def remove_user_from_group():
     return '200'
 
 def is_user_in_groups(user_id, group_list, all=False):
-    group_list = [group.lower() for group in group_list]
+    group_list = [lower_and_remove_nonalphanumeric(group) for group in group_list]
         
     user_groups = UserGroup.query.filter(UserGroup.name_lowercase.in_(group_list))
     group_id_list = []
@@ -315,7 +316,7 @@ def add_all_users_to_group(in_group_name = None):
     in_group_name = in_group_name if in_group_name != None else request.json['group_name']
 
     # Verify Group exists
-    user_group = UserGroup.query.filter_by(name_lowercase=in_group_name.lower()).first()
+    user_group = UserGroup.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_group_name)).first()
     if not user_group:
         return abort(409, description='UserGroup does not exist.')
 

@@ -2,12 +2,13 @@ from flask import request, abort
 from flask import current_app as app
 import secrets
 from ..models import db, ApiKey, RioUser
+from ..util import *
 from app.utils.send_email import send_email
 
 @app.route('/api_key/register/', methods=['POST'])
 def request_apikey():
     # Get RioUser
-    in_username_lowercase = request.json['Username'].lower()
+    in_username_lowercase = lower_and_remove_nonalphanumeric(request.json['Username'])
 
     # Check if email is related to RioUser
     rio_user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()

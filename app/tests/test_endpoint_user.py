@@ -17,7 +17,7 @@ cINVLD_USER_DUP_USERNAME = {"Username": "validuser1", "Password": "123password",
 '''
 def test_external_endpoint_register():
     #Wipe db
-    response = requests.post("http://127.0.0.1:5000/reset_db", json={"RESET_DB": "NUKE"})
+    response = requests.post("http://127.0.0.1:5000/reset_db", json={"ADMIN_KEY": "NUKE"})
 
     # Test invalid username
     response = requests.post("http://127.0.0.1:5000/register", json=cINVLD_USER_USERNAME)

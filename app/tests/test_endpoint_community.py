@@ -2,6 +2,7 @@ import json
 import requests
 from helpers import *
 from connection import Connection
+from pprint import pprint
 
 db = Connection()
 
@@ -356,6 +357,14 @@ def test_community_tagsets_limit():
     assert not tagsetF.success
     assert len(community.tags) == 7
 
+    #Check that we get all TagSets back
+    response = requests.post("http://127.0.0.1:5000/tag_set/list", json={'Client': 'true', 'Active': 't'})
+    assert response.status_code == 200
+
+    data = response.json()
+    pprint(data)
+    assert len(data['Tag Sets']) == 5
+
 def test_endpoint_community_get_tags():
     wipe_db()
 
@@ -543,7 +552,7 @@ def test_community_gecko_tags():
     # Should just have community tag
     assert len(community.tags) == 1
 
-    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF'}
+    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF\n'}
 
     # Add tag with admin
     tag = Tag(community.founder, community, 'Gecko Code', code_dict)

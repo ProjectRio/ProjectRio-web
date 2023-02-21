@@ -2,13 +2,14 @@ from flask import request, abort
 from flask import current_app as app
 from ..models import *
 from ..consts import *
+from ..util import *
 import json
 import os
 
 # === Initalize Character Tables And Ranked/Superstar Tags ===
 @app.route('/init_db/', methods=['POST'])
 def init_db():
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
         try:
             engine = db.get_engine()
             Event.__table__.drop(engine)
@@ -18,7 +19,6 @@ def init_db():
             FieldingSummary.__table__.drop(engine)
             CharacterGameSummary.__table__.drop(engine)
             CharacterPositionSummary.__table__.drop(engine)
-            GameTag.__table__.drop(engine)        
             Game.__table__.drop(engine)
             db.create_all()
             create_character_tables()
@@ -35,7 +35,7 @@ def init_db():
 # Completely wipe the DB
 @app.route('/wipe_db/', methods=['POST'])
 def wipe_db():
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
         db.drop_all()
         db.create_all()
         create_character_tables()
@@ -256,7 +256,7 @@ def create_admin_users():
     return admin_user
 
 def create_official_comms(admin_user):
-    new_comm = Community('OfficialRanked', admin_user.id, 'Official', False, cACTIVE_TAGSET_LIMIT, True, 'Official community of ProjectRio')
+    new_comm = Community('ProjectRio', admin_user.id, 'Official', False, cACTIVE_TAGSET_LIMIT, True, 'Official community of ProjectRio')
     db.session.add(new_comm)
     db.session.commit()
 
@@ -272,17 +272,38 @@ def create_official_comms(admin_user):
 
 @app.route('/restore_users/', methods=['GET'])
 def restore_users():
-    if os.getenv('RESET_DB') == request.json['RESET_DB']:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
+        # Get general user group
+        general_user_group = UserGroup.query.filter_by(name_lowercase='general').first()
+        official_community = Community.query.filter_by(name_lowercase='projectrio').first()
+
         try:
             f = open('./json/rio_user.json')
             rio_users = json.load(f)
             for user in rio_users:
-                new_user = RioUser(user['username'], user['username_lowercase'], user['email'], "temp")
+                new_user = RioUser(
+                    user['username'], 
+                    user['username_lowercase'], 
+                    user['email'], 
+                    "temp_password"
+                )
                 new_user.password = user['password']
                 new_user.verified = user['verified']
                 new_user.rio_key = user['rio_key']
                 new_user.active_url = user['active_url']
+                new_user.api_key_id = user['api_key_id']
+                new_user.id = user['id']
                 db.session.add(new_user)
+
+                new_user_group_user = UserGroupUser(
+                    user_id=new_user.id,
+                    user_group_id=general_user_group.id
+                )
+                db.session.add(new_user_group_user)
+
+                new_comm_user = CommunityUser(new_user.id, official_community.id, False, False, True)
+                db.session.add(new_comm_user)
+
             db.session.commit()
         except:
             abort(400, "Error restoring users.")  
