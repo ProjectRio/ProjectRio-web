@@ -84,31 +84,36 @@ def tag_create():
     
     return jsonify(new_tag.name)
 
-@app.route('/tag/list', methods=['POST'])
+@app.route('/tag/list', methods=['GET', 'POST'])
 def tag_list():
-    client = request.is_json and 'Client' in request.json and request.json['Client'].lower() in ['yes', 'y', 'true', 't']
+    result = None
+    client = False
+    if request.method == "GET":
+        result = Tag.query.filter(Tag.tag_type.in_(["Gecko Code", "Client Code", "Component"]))
+    elif request.method == "POST":
+        client = request.is_json and 'Client' in request.json and request.json['Client'].lower() in ['yes', 'y', 'true', 't']
 
-    types_provided = request.is_json and 'Types' in request.json
-    types_list = request.json.get('Types') if types_provided else list()
+        types_provided = request.is_json and 'Types' in request.json
+        types_list = request.json.get('Types') if types_provided else list()
 
-    # Abort if any of the provided types are not valid
-    if (types_provided and not any(x in types_list for x in cTAG_TYPES.values())):
-        return abort(409, description=f"Illegal type name provided. Valid types {cTAG_TYPES.values()}")
+        # Abort if any of the provided types are not valid
+        if (types_provided and not any(x in types_list for x in cTAG_TYPES.values())):
+            return abort(409, description=f"Illegal type name provided. Valid types {cTAG_TYPES.values()}")
 
-    communities_provided = request.is_json and 'Communities' in request.json
-    community_id_list = request.json.get('Communities') if communities_provided else list() 
+        communities_provided = request.is_json and 'Communities' in request.json
+        community_id_list = request.json.get('Communities') if communities_provided else list() 
 
-    result = list()
-    if types_provided and not communities_provided:
-        result = Tag.query.filter(Tag.tag_type.in_(types_list))
-    elif not types_provided and communities_provided:
-        result = Tag.query.join(Community, Tag.community_id == Community.id)\
-            .filter(Community.id.in_(community_id_list))
-    elif types_provided and communities_provided:
-        result = Tag.query.join(Community, Tag.community_id == Community.id)\
-            .filter((Community.id.in_(community_id_list)) & (Tag.tag_type.in_(types_list)))
-    else:
-        result = Tag.query.all()
+        result = list()
+        if types_provided and not communities_provided:
+            result = Tag.query.filter(Tag.tag_type.in_(types_list))
+        elif not types_provided and communities_provided:
+            result = Tag.query.join(Community, Tag.community_id == Community.id)\
+                .filter(Community.id.in_(community_id_list))
+        elif types_provided and communities_provided:
+            result = Tag.query.join(Community, Tag.community_id == Community.id)\
+                .filter((Community.id.in_(community_id_list)) & (Tag.tag_type.in_(types_list)))
+        else:
+            result = Tag.query.all()
 
     #IF CALLED BY CLIENT THE FOLLOWING COMMENT APPLIES
     #The return type of this function is a list of tag dicts. When called from the client, the tag dicts contain additional
