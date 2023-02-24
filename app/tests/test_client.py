@@ -22,11 +22,17 @@ def test_ongoing_game():
     assert community.success == True
 
     # Make Tag
-    tag = Tag(community.founder, community)
-    tag.create()
+    tagA = Tag(community.founder, community)
+    tagA.create()
+
+    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF\n12345678 BEEFBEEF\n'}
+
+    # Add tag with admin
+    tagB = Tag(community.founder, community, 'Gecko Code', code_dict)
+    tagB.create()
 
     # Make TagSet
-    tagset = TagSet(community.founder, community, [tag], 'Season')
+    tagset = TagSet(community.founder, community, [tagA, tagB], 'Season')
     tagset.create()
 
     # Refresh to get tags
