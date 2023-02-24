@@ -7,6 +7,7 @@ import secrets
 from ..models import *
 from ..consts import *
 from ..util import *
+from app.views.user_groups import *
 import time
 from pprint import pprint
 
@@ -35,7 +36,7 @@ def tag_create():
     if in_tag_type not in cTAG_TYPES.values() or in_tag_type == "Competition" or in_tag_type == "Community":
         return abort(410, description="Invalid tag type '{in_tag_type}'")
     if ((in_tag_type == "Gecko Code" or in_tag_type == "Client Code") and not comm.comm_type == 'Official'):
-        return abort(411, description="Type is gecko code but code details not provided")
+        return abort(411, description="Gecko codes must be added to official community")
     if (in_tag_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
         return abort(412, description="Type is gecko code but code details not provided")
     if (in_tag_type == "Gecko Code" and not validate_gecko_code(gecko_code)):
@@ -68,7 +69,7 @@ def tag_create():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if (comm_user == None or comm_user.admin == False):
+    if ((comm_user == None or comm_user.admin == False) and not (user.id, ['Admin'])):
         return abort(409, description='User not a part of community or not an admin')
 
     # === Tag Creation ===
