@@ -232,8 +232,6 @@ def community_join(in_comm_name = None, in_active_url = None):
                 'active': comm_user.active
             })
 
-
-
 @app.route('/community/invite', methods=['POST'])
 @jwt_required(optional=True)
 def community_invite():

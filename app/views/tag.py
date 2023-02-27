@@ -69,7 +69,7 @@ def tag_create():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if ((comm_user == None or comm_user.admin == False) and not (user.id, ['Admin'])):
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
         return abort(409, description='User not a part of community or not an admin')
 
     # === Tag Creation ===
@@ -83,7 +83,11 @@ def tag_create():
         db.session.add(new_code_tag)
         db.session.commit()
     
-    return jsonify(new_tag.name)
+    tag_dict = new_tag.to_dict()
+    if (new_tag.tag_type == 'Gecko Code'):
+        tag_dict["gecko_code_desc"] = gecko_code_desc
+        tag_dict["gecko_code"] = gecko_code
+    return jsonify(tag_dict)
 
 @app.route('/tag/list', methods=['POST'])
 def tag_list():
