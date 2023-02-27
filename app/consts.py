@@ -38,7 +38,8 @@ cTAG_TYPES = {
     1: "Competition",
     3: "Community",
     4: "Client Code",
-    5: "Gecko Code"
+    5: "Gecko Code",
+    6: "Test"
 }
 
 cTAG_SET_TYPES = {
