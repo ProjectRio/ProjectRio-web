@@ -610,7 +610,7 @@ class GeckoCodeTag(db.Model):
     def __init__(self, in_tag_id, in_gecko_code_desc, in_gecko_code):
         self.tag_id = in_tag_id
         self.gecko_code_desc = in_gecko_code_desc
-        self.code = in_gecko_code
+        self.gecko_code = in_gecko_code
     
     def to_dict(self):
         return {

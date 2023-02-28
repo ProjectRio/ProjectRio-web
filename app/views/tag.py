@@ -7,6 +7,7 @@ import secrets
 from ..models import *
 from ..consts import *
 from ..util import *
+from app.views.user_groups import *
 import time
 from pprint import pprint
 
@@ -35,7 +36,7 @@ def tag_create():
     if in_tag_type not in cTAG_TYPES.values() or in_tag_type == "Competition" or in_tag_type == "Community":
         return abort(410, description="Invalid tag type '{in_tag_type}'")
     if ((in_tag_type == "Gecko Code" or in_tag_type == "Client Code") and not comm.comm_type == 'Official'):
-        return abort(411, description="Type is gecko code but code details not provided")
+        return abort(411, description="Gecko codes must be added to official community")
     if (in_tag_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
         return abort(412, description="Type is gecko code but code details not provided")
     if (in_tag_type == "Gecko Code" and not validate_gecko_code(gecko_code)):
@@ -68,7 +69,7 @@ def tag_create():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if (comm_user == None or comm_user.admin == False):
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
         return abort(409, description='User not a part of community or not an admin')
 
     # === Tag Creation ===
@@ -82,33 +83,42 @@ def tag_create():
         db.session.add(new_code_tag)
         db.session.commit()
     
-    return jsonify(new_tag.name)
+    tag_dict = new_tag.to_dict()
+    if (new_tag.tag_type == 'Gecko Code'):
+        tag_dict["gecko_code_desc"] = gecko_code_desc
+        tag_dict["gecko_code"] = gecko_code
+    return jsonify(tag_dict)
 
-@app.route('/tag/list', methods=['POST'])
+@app.route('/tag/list', methods=['GET', 'POST'])
 def tag_list():
-    client = request.is_json and 'Client' in request.json and request.json['Client'].lower() in ['yes', 'y', 'true', 't']
+    result = None
+    client = False
+    if request.method == "GET":
+        result = Tag.query.filter(Tag.tag_type.in_(["Gecko Code", "Client Code", "Component"]))
+    elif request.method == "POST":
+        client = request.is_json and 'Client' in request.json and request.json['Client'].lower() in ['yes', 'y', 'true', 't']
 
-    types_provided = request.is_json and 'Types' in request.json
-    types_list = request.json.get('Types') if types_provided else list()
+        types_provided = request.is_json and 'Types' in request.json
+        types_list = request.json.get('Types') if types_provided else list()
 
-    # Abort if any of the provided types are not valid
-    if (types_provided and not any(x in types_list for x in cTAG_TYPES.values())):
-        return abort(409, description=f"Illegal type name provided. Valid types {cTAG_TYPES.values()}")
+        # Abort if any of the provided types are not valid
+        if (types_provided and not any(x in types_list for x in cTAG_TYPES.values())):
+            return abort(409, description=f"Illegal type name provided. Valid types {cTAG_TYPES.values()}")
 
-    communities_provided = request.is_json and 'Communities' in request.json
-    community_id_list = request.json.get('Communities') if communities_provided else list() 
+        communities_provided = request.is_json and 'Communities' in request.json
+        community_id_list = request.json.get('Communities') if communities_provided else list() 
 
-    result = list()
-    if types_provided and not communities_provided:
-        result = Tag.query.filter(Tag.tag_type.in_(types_list))
-    elif not types_provided and communities_provided:
-        result = Tag.query.join(Community, Tag.community_id == Community.id)\
-            .filter(Community.id.in_(community_id_list))
-    elif types_provided and communities_provided:
-        result = Tag.query.join(Community, Tag.community_id == Community.id)\
-            .filter((Community.id.in_(community_id_list)) & (Tag.tag_type.in_(types_list)))
-    else:
-        result = Tag.query.all()
+        result = list()
+        if types_provided and not communities_provided:
+            result = Tag.query.filter(Tag.tag_type.in_(types_list))
+        elif not types_provided and communities_provided:
+            result = Tag.query.join(Community, Tag.community_id == Community.id)\
+                .filter(Community.id.in_(community_id_list))
+        elif types_provided and communities_provided:
+            result = Tag.query.join(Community, Tag.community_id == Community.id)\
+                .filter((Community.id.in_(community_id_list)) & (Tag.tag_type.in_(types_list)))
+        else:
+            result = Tag.query.all()
 
     #IF CALLED BY CLIENT THE FOLLOWING COMMENT APPLIES
     #The return type of this function is a list of tag dicts. When called from the client, the tag dicts contain additional
@@ -146,11 +156,11 @@ def tagset_create():
     if comm.sponsor_id == None:
         return abort(410, description=f"Community is not sponsored")
     if in_tag_set_name.isalnum() == False:
-        return abort(406, description='Provided tag set name is not alphanumeric. Community not created')
+        return abort(411, description='Provided tag set name is not alphanumeric. Community not created')
     if in_tag_set_end_time < in_tag_set_start_time:
-        return abort(409, description='Invalid start/end times')
+        return abort(412, description='Invalid start/end times')
     if in_tag_set_type not in cTAG_SET_TYPES.values():
-        return abort(410, description='Invalid tag type')
+        return abort(413, description='Invalid tag type')
 
     
     #Make sure that tag_set does not use the same name as a tag, comm, or other tag_set
@@ -159,7 +169,7 @@ def tagset_create():
     tag_set = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_set_name)).first()
 
     if tag != None or comm_name_check != None or tag_set != None:
-        return abort(413, description='Name already in use (Tag, TagSet, or Community)')
+        return abort(414, description='Name already in use (Tag, TagSet, or Community)')
 
     # Make sure community is under the limit of active tag types
     current_unix_time = int( time.time() )
@@ -177,7 +187,7 @@ def tagset_create():
     if results != None:
         result_dict = results._asdict()
         if result_dict['active_tag_sets'] >= result_dict['tag_set_limit']:
-            return abort(413, description='Community has reached active tag_set_limit')
+            return abort(415, description='Community has reached active tag_set_limit')
 
     # Get user making the new community
     #Get user via JWT or RioKey
@@ -189,25 +199,25 @@ def tagset_create():
         try:
             user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
         except:
-            return abort(409, description="No Rio Key or JWT Provided")
+            return abort(416, description="No Rio Key or JWT Provided")
 
     if user == None:
-        return abort(409, description='Username associated with JWT not found.')
+        return abort(417, description='Username associated with JWT not found.')
     
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
     if (comm_user == None or comm_user.admin == False):
-        return abort(409, description='User not apart of community or not an admin')
+        return abort(418, description='User not apart of community or not an admin')
 
     # Validate all tag ids, add to list
     tags = list()
     for id in in_tag_ids:
         tag = Tag.query.filter_by(id=id).first()
         if tag == None:
-            return abort(409, f'Tag with ID={id} not found')
-        if tag.tag_type != "Component":
-            return abort(409, f'Tag with ID={id} not a component tag')
+            return abort(419, f'Tag with ID={id} not found')
+        if tag.tag_type != "Component" and tag.tag_type != "Gecko Code" and tag.tag_type != "Client Code":
+            return abort(420, f'Tag with ID={id} not a valid type tag')
         tags.append(tag)
 
     # === Tag Set Creation ===
