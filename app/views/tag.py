@@ -308,9 +308,11 @@ def tagset_list():
             if (tag.tag_type == 'Gecko Code'):
                 result = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
                 if (result != None):
-                    tag_dict = tag_dict | result.to_dict()
+                    tag_dict["gecko_code_desc"] = result.to_dict()["gecko_code_desc"]
+                    tag_dict["gecko_code"] = result.to_dict()["gecko_code"]
             elif client:
-                tag_dict = tag_dict | {"gecko_code_desc": "", "gecko_code": ""}
+                tag_dict["gecko_code_desc"] = ""
+                tag_dict["gecko_code"] = ""
             tag_set_dict['tags'].append(tag_dict)
 
         # Append passing tag set information
