@@ -216,7 +216,7 @@ def tagset_create():
         tag = Tag.query.filter_by(id=id).first()
         if tag == None:
             return abort(419, f'Tag with ID={id} not found')
-        if tag.tag_type != "Component" and tag.tag_type != "Gecko Code" and tag.tag_type != "Client Code":
+        if tag.tag_type == "Community" or tag.tag_type == "Competition":
             return abort(420, f'Tag with ID={id} not a valid type tag')
         tags.append(tag)
 
