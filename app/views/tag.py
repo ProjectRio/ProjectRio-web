@@ -207,7 +207,7 @@ def tagset_create():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if (comm_user == None or comm_user.admin == False):
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
         return abort(418, description='User not apart of community or not an admin')
 
     # Validate all tag ids, add to list
