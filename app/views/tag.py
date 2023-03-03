@@ -292,6 +292,12 @@ def tagset_list():
         if (communities_provided and tag_set.community_id not in community_id_list):
             continue
 
+        if (rio_key_provided):
+            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+            #If user is not in the Beta Tester group do not return Test TagSets
+            if (tag_set.type == "Test" and not is_user_in_groups(user.id, ['Admin', 'Developer', 'BetaTester'])):
+                continue
+
         #Determine if community, and therefore TagSet, is Official
         #TODO do this with SQLalchemy instead to eliminate extra query
         comm = Community.query.filter_by(id=tag_set.community_id).first()

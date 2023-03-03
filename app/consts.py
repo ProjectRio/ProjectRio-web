@@ -46,7 +46,8 @@ cTAG_SET_TYPES = {
     0: "Season",
     1: "League",
     3: "Tournament",
-    4: "Custom"
+    4: "Custom",
+    5: "Test"
 }
 
 cCOMM_TYPES = {
