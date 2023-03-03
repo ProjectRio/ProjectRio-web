@@ -16,8 +16,7 @@ from ..util import *
 @app.route('/user_group/create', methods=['GET'])
 @api_key_check(['Admin'])
 def create_user_group():
-    # if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
-    if True:
+    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
         in_group_name = request.json['group_name']
         in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
 
