@@ -13,29 +13,31 @@ from ..util import *
 
 
 # Create UserGroup
-@app.route('/user_group/create', methods=['GET'])
+@app.route('/user_group/create', methods=['POST'])
 @api_key_check(['Admin'])
 def create_user_group():
-    if os.getenv('ADMIN_KEY') == request.json['ADMIN_KEY']:
-        in_group_name = request.json['group_name']
-        in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
+    in_group_name = request.json['group_name']
+    in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
+    in_daily_limit = request.json['daily_limit']
+    in_weekly_limit = request.json['weekly_limit']
+    in_sponsor_limit = request.json['sponsor_limit']
 
-        # Verify Group Name is alphanumeric
-        if in_group_name.isalnum() == False:
-            return abort(406, description='Provided username is not alphanumeric')        
+    # Verify Group Name is alphanumeric
+    if in_group_name.isalnum() == False:
+        return abort(406, description='Provided username is not alphanumeric')        
 
-        # Check if a Group with that name already exists
-        group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
-        if not group:
-            return abort(409, description='User Group name already taken.')
+    # Check if a Group with that name already exists
+    group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
+    if group == None:
+        return abort(409, description='User Group name already taken.')
 
-        try:
-            new_group = UserGroup(name = in_group_name)
-            db.session.add(new_group)
-            db.session.commit()
-            return 'User Group created.'
-        except:
-            return abort(400, description='Error creating User Group')
+    try:
+        new_group = UserGroup(in_group_name, in_daily_limit, in_weekly_limit, in_sponsor_limit)
+        db.session.add(new_group)
+        db.session.commit()
+        return 'User Group created.'
+    except:
+        return abort(400, description='Error creating User Group')
 
 # Add RioUser to UserGroup using RioKey
 @app.route('/user_group/add_user', methods=['POST'])

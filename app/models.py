@@ -180,9 +180,12 @@ class UserGroup(db.Model):
     
     user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')
 
-    def __init__(self, in_group_name):
+    def __init__(self, in_group_name, in_daily_limit, in_weekly_limit, in_sponsor_limit):
         self.name = in_group_name,
         self.name_lowercase = lower_and_remove_nonalphanumeric(in_group_name)
+        self.daily_limit = in_daily_limit
+        self.weekly_limit = in_weekly_limit
+        self.sponsor_limit = in_sponsor_limit
 
 class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
