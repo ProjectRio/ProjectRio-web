@@ -28,7 +28,7 @@ def create_user_group():
 
     # Check if a Group with that name already exists
     group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
-    if group == None:
+    if group != None:
         return abort(409, description='User Group name already taken.')
 
     try:
