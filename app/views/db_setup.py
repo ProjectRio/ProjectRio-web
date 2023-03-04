@@ -203,23 +203,13 @@ def create_default_tags():
     return 'Tags created... \n'
 
 def create_default_groups():
-    admin = UserGroup(in_group_name='Admin')
-    developer = UserGroup(in_group_name='Developer')
-    patron_fan = UserGroup(in_group_name='Patron: Fan')
-    patron_rookie = UserGroup(in_group_name='Patron: Rookie')
-    patron_mvp = UserGroup(in_group_name='Patron: MVP')
-    patron_hof = UserGroup(in_group_name='Patron: Hall of Famer')
-    general = UserGroup(in_group_name='General')
-
-    # Limits for Patron perks - TODO possibly make more robust
-    # Will have an endpoint to adjust
-    admin.sponsor_limit = 999
-    developer.sponsor_limit = 999
-    patron_fan.sponsor_limit = 0
-    patron_rookie.sponsor_limit = 1
-    patron_mvp.sponsor_limit = 5
-    patron_hof.sponsor_limit = 10
-    general.sponsor_limit = 0
+    admin = UserGroup('Admin', 0, 0, 999)
+    developer = UserGroup('Developer', 0, 0, 999)
+    patron_fan = UserGroup('Patron: Fan', 0, 0, 0)
+    patron_rookie = UserGroup('Patron: Rookie', 0, 0, 1)
+    patron_mvp = UserGroup('Patron: MVP', 0, 0, 5)
+    patron_hof = UserGroup('Patron: Hall of Famer', 0, 0, 10)
+    general = UserGroup('General', 0, 0, 0)
 
     db.session.add(admin)
     db.session.add(developer)
