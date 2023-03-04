@@ -46,7 +46,6 @@ def lower_and_remove_nonalphanumeric(in_str):
 def validate_gecko_code(in_str):
   idx = 0
   for char in in_str:
-    print('Idx:', idx, 'Char:', char)
     if idx == 17:
       if char != '\n':
         return False
