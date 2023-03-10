@@ -619,8 +619,8 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     loser_elo = None
 
     #Get ELOs
-    winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id).first()
-    loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id).first()
+    winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id, tag_set_id=tag_set_id).first()
+    loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id, tag_set_id=tag_set_id).first()
 
     #Create elos for new players if needed
     if winner_ladder == None:
