@@ -36,8 +36,6 @@ def community_create():
         return abort(409, description='Community name already in use')
     if user == None:
         return abort(409, description='Username associated with JWT not found. Community not created')
-    if in_comm_name.isalnum() == False:
-        return abort(406, description='Provided community name is not alphanumeric. Community not created')
     if in_comm_type not in cCOMM_TYPES.values():
         return abort(410, description='Invalid community type')
     if in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
