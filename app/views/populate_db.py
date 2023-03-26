@@ -247,7 +247,7 @@ def populate_db2():
             game_id = game.game_id,
             team_id = int(character['Team']),
             char_id = character['CharID'],
-            user_id = home_player.id if character['Team'] == '0' else away_player.id,
+            user_id = home_player.id if character['Team'] == '1' else away_player.id,
             character_position_summary_id = character_position_summary.id,
             roster_loc = character['RosterID'],
             captain = character['Captain'],
