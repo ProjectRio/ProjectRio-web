@@ -45,7 +45,7 @@ def test_populate_db():
     data = dict()
     tag_list = list()
 
-    with open('app/tests/data/game_785756763.json') as file:
+    with open('app/tests/data/20230315T212151_MaybeJon-Vs-PeacockSlayer_1867546158.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
@@ -269,7 +269,7 @@ def test_ongoing_game():
 
     #Send a game
     game = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Away Player': player_away.rk,
         'Home Player': player_home.rk,
         'TagSetID': tagset.pk,
@@ -328,7 +328,7 @@ def test_ongoing_game():
 
     #Update game
     game_update = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Inning': 1,
         'Half Inning': 0,
         'Away Score': 2,
@@ -350,7 +350,7 @@ def test_ongoing_game():
     assert response.status_code == 200
     assert response.json()['ongoing_games'][0]['inning'] == 1
 
-    with open('app/tests/data/game_785756763.json') as file:
+    with open('app/tests/data/20230315T212151_MaybeJon-Vs-PeacockSlayer_1867546158.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
@@ -405,7 +405,7 @@ def test_ongoing_game_with_man_submit():
 
     #Send a game
     game = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Away Player': player_away.rk,
         'Home Player': player_home.rk,
         'TagSetID': tagset.pk,
@@ -464,7 +464,7 @@ def test_ongoing_game_with_man_submit():
 
     #Update game
     game_update = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Inning': 1,
         'Half Inning': 0,
         'Away Score': 2,
@@ -488,7 +488,7 @@ def test_ongoing_game_with_man_submit():
     man_game = {'Winner Username': player_away.username, 'Winner Score': 10, 
              'Loser Username': player_home.username, 'Loser Score': 0}
     man_game['TagSet'] = tagset.name
-    man_game['GameID'] = '785756763'
+    man_game['GameID'] = '1867546158'
     man_game['Submitter Rio Key'] = player_away.rk
 
     man_game_response = requests.post("http://127.0.0.1:5000/submit_game/", json=man_game)
@@ -535,7 +535,7 @@ def test_populate_db():
 
     # Read dummy game
     data = dict()
-    with open('app/tests/data/game_785756763.json') as file:
+    with open('app/tests/data/game_1867546158.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
