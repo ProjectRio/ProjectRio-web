@@ -184,7 +184,8 @@ def tagset_create():
     results = db.session.execute(query).first()
     if results != None:
         result_dict = results._asdict()
-        if result_dict['active_tag_sets'] >= result_dict['tag_set_limit']:
+        #Only unofficial comms have tag_set limits
+        if comm.type != 'Official' and (result_dict['active_tag_sets'] >= result_dict['tag_set_limit']):
             return abort(415, description='Community has reached active tag_set_limit')
 
     # Get user making the new community
