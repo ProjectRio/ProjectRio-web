@@ -1,13 +1,17 @@
 from flask import render_template, request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
-import secrets
 from datetime import datetime, timedelta, timezone
+from pprint import pprint
 from .. import bc
-from ..models import db, RioUser, UserGroup, UserGroupUser
+from ..models import db, RioUser, UserGroup, UserGroupUser, CommunityUser
 from ..util import *
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
+from ..decorators import api_key_check
+
+import secrets
+import time
 
 # === User Registration Front End ===
 @app.route('/signup/')
@@ -446,3 +450,24 @@ def get_users_communities():
     return {
         "communities": communities
     }, 200
+
+# Prune unverified users that were created over a week ago
+@app.route('/user/prune', methods=['POST'])
+@jwt_required(optional=True)
+@api_key_check(['Admin'])
+def prune_users():
+    number_of_secs_in_week = 604800
+    current_unix_time = int(time.time())
+
+    cutoff_unix_time = (current_unix_time-number_of_secs_in_week)
+    unverified_users = RioUser.query.filter(RioUser.verified==False, RioUser.date_created <= cutoff_unix_time)
+
+    deleted_users = list()
+    for user in unverified_users:
+        deleted_users.append({'Username': user.username, 'Verified': user.verified, 'Date Created': datetime.utcfromtimestamp(user.date_created).strftime('%Y-%m-%d %H:%M:%S')})
+        UserGroupUser.query.filter_by(user_id=user.id).delete()
+        CommunityUser.query.filter_by(user_id=user.id).delete()
+        db.session.delete(user)
+        db.session.commit()
+    pprint(deleted_users)
+    return jsonify(deleted_users)
