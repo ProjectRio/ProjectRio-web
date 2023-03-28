@@ -222,6 +222,8 @@ class CommunityUser(db.Model):
     active = db.Column(db.Boolean)
     banned = db.Column(db.Boolean)
     date_joined = db.Column(db.Integer)
+    community_key = db.Column(db.String(4), unique = True, nullable=True)
+    date_key_created = db.Column(db.Integer, nullable=True)
 
     ladders = db.relationship('Ladder', backref='community_users')
 

@@ -15,6 +15,7 @@ db = SQLAlchemy()
 bc = Bcrypt()
 jwt = JWTManager()
 sched = BackgroundScheduler(daemon=True)
+migrate = Migrate()
 
 def init_app():
     # Construct core application
@@ -27,7 +28,7 @@ def init_app():
     db.init_app(app)
     bc.init_app(app)
     jwt.init_app(app)
-    migrate = Migrate(app, db)
+    migrate.init_app(app, db)
 
     #Set logger properties
     #Rotating log file
