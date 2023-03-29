@@ -98,8 +98,8 @@ def endpoint_games(called_internally=False):
         tags = request.args.getlist('tag')
         tags_lowercase = tuple([lower_and_remove_nonalphanumeric(tag) for tag in tags])
         tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(tags_lowercase)).all()
-        tag_ids = tuple([str(tag.id) for tag in tag_rows])
-        if len(tag_ids) != len(tags):
+        include_tag_ids = tuple([str(tag.id) for tag in tag_rows])
+        if len(include_tag_ids) != len(tags):
             abort(400)
 
         # Check if exclude_tags are valid and get a list of corresponding ids
@@ -200,37 +200,38 @@ def endpoint_games(called_internally=False):
 
 
     # === Set dynamic query values ===
-    count_matching_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(tag_ids)}) THEN 1 ELSE 0 END) AS having_tag_count \n" if len(tag_ids) > 0 else ""
-    count_matching_exclude_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(exclude_tag_ids)}) THEN 1 ELSE 0 END) AS exclude_tag_count \n" if len(exclude_tag_ids) > 0 else ""
-    having_matching_tags =  f'having_tag_count = {len(tag_ids)} ' if count_matching_tags != "" else ""
-    having_exclude_tags = f'exclude_tag_count = 0' if count_matching_exclude_tags != "" else ""
+    # count_matching_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(tag_ids)}) THEN 1 ELSE 0 END) AS having_tag_count \n" if len(tag_ids) > 0 else ""
+    # count_matching_exclude_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(exclude_tag_ids)}) THEN 1 ELSE 0 END) AS exclude_tag_count \n" if len(exclude_tag_ids) > 0 else ""
+    # having_matching_tags =  f'having_tag_count = {len(tag_ids)} ' if count_matching_tags != "" else ""
+    # having_exclude_tags = f'exclude_tag_count = 0' if count_matching_exclude_tags != "" else ""
     
-    with_tags = str()
-    where_tags = str()
-    if count_matching_tags != "" or count_matching_exclude_tags != "":
-        with_tags = (
-            'WITH game_id_and_tag_counts AS ( \n'
-            '   SELECT \n' 
-            '       game_id, \n'
-                    f'{count_matching_tags}'
-                    f'{", " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
-                    f'{count_matching_exclude_tags}'
-            '   FROM game_tag \n'
-            '   GROUP BY game_id \n'
-            ')  \n'
-        )
-        where_tags = (
-            'AND game.game_id IN ( \n'
-            '  SELECT game_id  \n'
-            '  FROM game_id_and_tag_counts \n'
-            '  WHERE ' 
-            f'{having_matching_tags}'
-            f'{" AND " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
-            f'{having_exclude_tags}'
-            '\n)\n '
-        )
+    # with_tags = str()
+    # where_tags = str()
+    # if count_matching_tags != "" or count_matching_exclude_tags != "":
+    #     with_tags = (
+    #         'WITH game_id_and_tag_counts AS ( \n'
+    #         '   SELECT \n' 
+    #         '       game_id, \n'
+    #                 f'{count_matching_tags}'
+    #                 f'{", " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
+    #                 f'{count_matching_exclude_tags}'
+    #         '   FROM game_tag \n'
+    #         '   GROUP BY game_id \n'
+    #         ')  \n'
+    #     )
+    #     where_tags = (
+    #         'AND game.game_id IN ( \n'
+    #         '  SELECT game_id  \n'
+    #         '  FROM game_id_and_tag_counts \n'
+    #         '  WHERE ' 
+    #         f'{having_matching_tags}'
+    #         f'{" AND " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
+    #         f'{having_exclude_tags}'
+    #         '\n)\n '
+    #     )
+    #     where_statement += where_tags
 
-        where_statement += where_tags
+
 
     #Build User strings
     user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
@@ -256,9 +257,17 @@ def endpoint_games(called_internally=False):
     if (not exclude_captain_empty):
         where_statement += f"AND away_captain.char_id NOT IN {exclude_captain_id_string} AND home_captain.char_id NOT IN {exclude_captain_id_string} \n"
 
+    #Build Tag strings
+    include_tag_id_string, include_tag_empty = format_tuple_for_SQL(include_tag_ids)
+    exclude_tag_id_string, exclude_tag_empty = format_tuple_for_SQL(exclude_tag_ids)
+    if (not include_tag_empty):
+        where_statement += f"AND tag.id IN {include_tag_id_string} \n"
+    if (not exclude_tag_empty):
+        where_statement += f"AND tag.id NOT IN {exclude_tag_id_string} \n"
+
+
     # === Construct query === 
     query = (
-        f'{with_tags}'
         'SELECT game.game_id, \n'
         '   game.date_time_start AS date_time_start, \n'
         '   game.date_time_end AS date_time_end, \n'
@@ -269,8 +278,13 @@ def endpoint_games(called_internally=False):
         '   away_player.username AS away_player, \n'
         '   home_player.username AS home_player, \n'
         '   away_captain.name AS away_captain, \n'
-        '   home_captain.name AS home_captain \n'
+        '   home_captain.name AS home_captain, \n'
+        '   game_history.tag_set_id AS tag_set \n'
         'FROM game \n'
+        'LEFT JOIN game_history ON game.game_id = game_history.game_id \n'
+        'LEFT JOIN tag_set ON game_history.tag_set_id = tag_set.id \n'
+        'LEFT JOIN tag_set_tag AS tst ON tag_set.id = tst.tagset_id \n'
+        'LEFT JOIN tag ON tst.tag_id = tag.id \n'
         'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
         'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
         'LEFT JOIN character_game_summary AS away_captain_cgs \n'
@@ -283,7 +297,8 @@ def endpoint_games(called_internally=False):
         '   AND home_captain_cgs.captain = True \n'
         'LEFT JOIN character AS away_captain ON away_captain_cgs.char_id = away_captain.char_id \n'
         'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
-        f'{where_statement} '
+        f'{where_statement} \n'
+        'GROUP BY game.game_id, away_player, home_player, away_captain, home_captain, tag_set \n'
         'ORDER BY game.date_time_start DESC \n'
         f"{('LIMIT ' + str(limit)) if limit != None else ''}"
     )
@@ -314,33 +329,31 @@ def endpoint_games(called_internally=False):
                 'Home Score': game.home_score,
                 'Innings Played': game.innings_played,
                 'Innings Selected': game.innings_selected,
-                'Tags': []
+                'Game Mode': game.tag_set
             })
 
         # If there are games with matching tags, get all additional tags they have
-        if game_ids:
-            where_game_id = str()
-            if len(game_ids) == 1:
-                where_game_id = f'WHERE game_tag.game_id = {game_ids[0]} '
-            else:
-                where_game_id = f'WHERE game_tag.game_id IN {tuple(game_ids)} '
+        # if game_ids:
+        #     where_game_id = str()
+        #     game_id_string, game_id_empty = format_list_for_SQL(game_ids)
+        #     where_game_id = f'WHERE game_tag.game_id = {game_id_string} '
 
-            tags_query = (
-                'SELECT '
-                'game_tag.game_id as game_id, '
-                'game_tag.tag_id as tag_id, '
-                'tag.name as name '
-                'FROM game_tag '
-                'LEFT JOIN tag ON game_tag.tag_id = tag.id '
-                f'{where_game_id}'
-                'GROUP BY game_id, tag_id, name'
-            )
+        #     tags_query = (
+        #         'SELECT '
+        #         'game_tag.game_id as game_id, '
+        #         'game_tag.tag_id as tag_id, '
+        #         'tag.name as name '
+        #         'FROM game_tag '
+        #         'LEFT JOIN tag ON game_tag.tag_id = tag.id '
+        #         f'{where_game_id}'
+        #         'GROUP BY game_id, tag_id, name'
+        #     )
 
-            tag_results = db.session.execute(tags_query).all()
-            for tag in tag_results:
-                for game in games:
-                    if game['Id'] == tag.game_id:
-                        game['Tags'].append(tag.name)
+        #     tag_results = db.session.execute(tags_query).all()
+        #     for tag in tag_results:
+        #         for game in games:
+        #             if game['Id'] == tag.game_id:
+        #                 game['Tags'].append(tag.name)
 
         return {'games': games}
 
