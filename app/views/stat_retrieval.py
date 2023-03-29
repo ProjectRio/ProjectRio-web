@@ -536,7 +536,6 @@ def endpoint_event(called_internally=False):
         (list_of_strikes, 'event.strikes', None),
         (list_of_outs, 'event.outs', None),
         (star_chance_flag, 'event.star_chance', None),
-        (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
         (list_of_pitcher_user_ids, 'pitcher.user_id', None),
         (list_of_results, 'event.result_of_ab', None)
@@ -909,9 +908,9 @@ def endpoint_star_chances():
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
 
-@ URL example: http://127.0.0.1:5000/detailed_stats/?username=demouser1&character=1&by_swing=1
+@ URL example: http://127.0.0.1:5000/stats/?username=demouser1&character=1&by_swing=1
 '''
-@app.route('/detailed_stats/', methods = ['GET'])
+@app.route('/stats/', methods = ['GET'])
 def endpoint_detailed_stats():
 
     #Sanitize games params 
