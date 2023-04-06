@@ -89,6 +89,60 @@ def tag_create():
         tag_dict["gecko_code"] = gecko_code
     return jsonify(tag_dict)
 
+
+@app.route('/tag/update', methods=['POST'])
+@jwt_required(optional=True)
+def tag_update():
+
+    in_action = lower_and_remove_nonalphanumeric(request.json['Action'])
+    in_tag_id = request.json['TagId']
+
+    # Get Tag and Comm
+    tag = Tag.query.filter_by(id=in_tag_id).first()
+    if tag == None:
+        return abort(409, description="No tag found with id={in_tag_id}")
+    comm = Community.query.filter_by(id=tag.community_id).first()
+
+    #Make sure user is admin of community or Rio admin
+    user=None
+    current_user_username = get_jwt_identity()
+    if current_user_username:
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    else:
+        try:
+            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+        except:
+            return abort(410, description="No Rio Key or JWT Provided")
+
+    if user == None:
+        return abort(411, description='Username associated with JWT not found.')
+    
+    #If community tag, make sure user is an admin of the community
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+
+    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin'])
+    if not authorized_user:
+        return abort(412, description='User not a part of community or not an admin')
+    
+    #User is authorized
+    #Begin evaluating actions
+    if in_action == 'rename':
+        in_new_name = request.json['New Name']
+        #Make sure that tag does not use the same name as an existing tag, comm, or tag_set
+        tag_check = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
+        comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
+        tag_set_check = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
+
+        if tag_check != None or comm_name_check != None or tag_set_check != None:
+            return abort(413, description='Name already in use (Tag, TagSet, or Community)')
+        
+        tag.name = in_new_name
+        tag.name_lowercase = lower_and_remove_nonalphanumeric(in_new_name)
+        db.session.add(tag)
+        db.session.commit()
+        return 200
+    
+
 @app.route('/tag/list', methods=['GET', 'POST'])
 def tag_list():
     result = None

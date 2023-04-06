@@ -7,9 +7,9 @@ import secrets
 class Character(db.Model):
     char_id = db.Column(db.Integer, primary_key=True)
     chemistry_table_id = db.Column(db.ForeignKey('chemistry_table.id'), nullable = False)
-    name = db.Column(db.String(16))
-    name_lowercase = db.Column(db.String(16))
-    starting_addr = db.Column(db.String(16))
+    name = db.Column(db.String(100))
+    name_lowercase = db.Column(db.String(100))
+    starting_addr = db.Column(db.String(100))
     curve_ball_speed = db.Column(db.Integer)
     fast_ball_speed = db.Column(db.Integer)
     curve = db.Column(db.Integer)
@@ -174,9 +174,9 @@ class UserGroup(db.Model):
     daily_limit = db.Column(db.Integer)
     weekly_limit = db.Column(db.Integer)
     sponsor_limit = db.Column(db.Integer)
-    name = db.Column(db.String(32), unique=True)
-    name_lowercase = db.Column(db.String(32), unique=True)
-    desc = db.Column(db.String(128))
+    name = db.Column(db.String(100), unique=True)
+    name_lowercase = db.Column(db.String(100), unique=True)
+    desc = db.Column(db.String(64000))
     
     user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')
 
@@ -189,14 +189,14 @@ class UserGroup(db.Model):
 
 class Community(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(32), unique=True)
-    name_lowercase = db.Column(db.String(32), unique=True)    
+    name = db.Column(db.String(100), unique=True)
+    name_lowercase = db.Column(db.String(100), unique=True)    
     sponsor_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=True)
-    comm_type = db.Column(db.String(16))
+    comm_type = db.Column(db.String(100))
     private = db.Column(db.Boolean)
     active_tag_set_limit = db.Column(db.Integer)
     active_url = db.Column(db.String(50), unique=True)
-    desc = db.Column(db.String(300))
+    desc = db.Column(db.String(64000))
     date_created = db.Column(db.Integer)
 
     tags = db.relationship('Tag', backref='community_from_tags')
@@ -577,10 +577,10 @@ class Runner(db.Model):
 class Tag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
-    name = db.Column(db.String(32), unique=True)
-    name_lowercase = db.Column(db.String(32), unique=True)
-    tag_type = db.Column(db.String(16))
-    desc = db.Column(db.String(300))
+    name = db.Column(db.String(100), unique=True)
+    name_lowercase = db.Column(db.String(100), unique=True)
+    tag_type = db.Column(db.String(100))
+    desc = db.Column(db.String(64000))
     active = db.Column(db.Boolean)
     date_created = db.Column(db.Integer)
 
@@ -607,7 +607,7 @@ class Tag(db.Model):
 class GeckoCodeTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tag_id = db.Column(db.Integer, db.ForeignKey('tag.id'), nullable=False)
-    gecko_code_desc = db.Column(db.Text)
+    gecko_code_desc = db.Column(db.String(64000))
     gecko_code = db.Column(db.Text)
 
     tag = db.relationship('Tag', backref='tag')
@@ -632,9 +632,9 @@ tagsettag = db.Table('tag_set_tag',
 class TagSet(db.Model):
     id = db.Column(db.Integer, primary_key=True)    
     community_id = db.Column(db.Integer, db.ForeignKey('community.id'), nullable=True)
-    name = db.Column(db.String(120), unique=True)
-    name_lowercase = db.Column(db.String(120), unique=True)
-    type = db.Column(db.String(120)) #Season, league, tournament.
+    name = db.Column(db.String(100), unique=True)
+    name_lowercase = db.Column(db.String(100), unique=True)
+    type = db.Column(db.String(100)) #Season, league, tournament.
     start_date = db.Column(db.Integer)
     end_date = db.Column(db.Integer)
 
