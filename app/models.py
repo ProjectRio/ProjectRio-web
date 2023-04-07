@@ -176,7 +176,7 @@ class UserGroup(db.Model):
     sponsor_limit = db.Column(db.Integer)
     name = db.Column(db.String(100), unique=True)
     name_lowercase = db.Column(db.String(100), unique=True)
-    desc = db.Column(db.String(64000))
+    desc = db.Column(db.String(1000))
     
     user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')
 
@@ -196,7 +196,7 @@ class Community(db.Model):
     private = db.Column(db.Boolean)
     active_tag_set_limit = db.Column(db.Integer)
     active_url = db.Column(db.String(50), unique=True)
-    desc = db.Column(db.String(64000))
+    desc = db.Column(db.String(1000))
     date_created = db.Column(db.Integer)
 
     tags = db.relationship('Tag', backref='community_from_tags')
@@ -580,7 +580,7 @@ class Tag(db.Model):
     name = db.Column(db.String(100), unique=True)
     name_lowercase = db.Column(db.String(100), unique=True)
     tag_type = db.Column(db.String(100))
-    desc = db.Column(db.String(64000))
+    desc = db.Column(db.String(1000))
     active = db.Column(db.Boolean)
     date_created = db.Column(db.Integer)
 
@@ -607,7 +607,7 @@ class Tag(db.Model):
 class GeckoCodeTag(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     tag_id = db.Column(db.Integer, db.ForeignKey('tag.id'), nullable=False)
-    gecko_code_desc = db.Column(db.String(64000))
+    gecko_code_desc = db.Column(db.String(1000))
     gecko_code = db.Column(db.Text)
 
     tag = db.relationship('Tag', backref='tag')
