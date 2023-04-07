@@ -153,7 +153,7 @@ class RioUser(db.Model, UserMixin):
         self.username = in_username
         self.username_lowercase = lower_and_remove_nonalphanumeric(in_username)
         self.email    = in_email
-        self.password = bc.generate_password_hash(in_password)
+        self.password = bc.generate_password_hash(in_password).decode('utf8')
         self.rio_key  = secrets.token_urlsafe(32)
         self.private = True
         self.verified = False
