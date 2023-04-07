@@ -265,7 +265,7 @@ def logout():
     return response
 
 @app.route('/validate_JWT/', methods = ['GET'])
-@jwt_required(optional=True)
+@jwt_required()
 def validate_JWT():
     try:
         current_user_username = get_jwt_identity()
