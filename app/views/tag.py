@@ -93,15 +93,43 @@ def tag_create():
 @app.route('/tag/update', methods=['POST'])
 @jwt_required(optional=True)
 def tag_update():
+    in_tag_id = request.json['tag_id'] # Required
 
-    in_action = lower_and_remove_nonalphanumeric(request.json['Action'])
-    in_tag_id = request.json['TagId']
+    #Optional Args
+    name_provided = request.is_json and 'name' in request.json
+    new_name = request.json['name']
+    desc_provided = request.is_json and 'desc' in request.json
+    new_desc = request.json['desc']
+    type_provided = request.is_json and 'type' in request.json
+    new_type = request.json['type']
+
+    gecko_code_provided = request.is_json and 'gecko_code' in request.json
+    new_gecko_code = request.json['gecko_code']
+    gecko_code_desc_provided = request.is_json and 'gecko_code_desc' in request.json
+    new_gecko_code_desc = request.json['gecko_code_desc']
+    
+
+
+    if type_provided and (new_type not in cTAG_TYPES.values() or new_type == "Competition" or new_type == "Community"):
+        return abort(410, description="Invalid tag type '{in_tag_type}'")
+    if type_provided and (new_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
+        return abort(412, description="Type is gecko code but code details not provided")
+    if type_provided and (new_type == "Gecko Code" and not validate_gecko_code(new_gecko_code)):
+        return abort(415, description="Type is gecko code but code is not formatted correctly (<CODE> <CODE><\n>)")
 
     # Get Tag and Comm
     tag = Tag.query.filter_by(id=in_tag_id).first()
     if tag == None:
         return abort(409, description="No tag found with id={in_tag_id}")
     comm = Community.query.filter_by(id=tag.community_id).first()
+
+    if type_provided and (((new_type == "Gecko Code" or new_type == "Client Code") and not comm.comm_type == 'Official')):
+        return abort(416, description="Gecko codes must be added to official community")
+    #Check that if gecko code is provided that new or existing type is gecko code
+    if gecko_code_provided and (tag.type != 'Gecko Code' and (type_provided and new_type != 'Gecko Code')):
+        return abort(417, description="Gecko codes can only be added to gecko code tags")
+    if gecko_code_desc_provided and (tag.type != 'Gecko Code' and (type_provided and new_type != 'Gecko Code')):
+        return abort(418, description="Gecko codes desc can only be added to gecko code tags")
 
     #Make sure user is admin of community or Rio admin
     user=None
@@ -126,21 +154,43 @@ def tag_update():
     
     #User is authorized
     #Begin evaluating actions
-    if in_action == 'rename':
-        in_new_name = request.json['New Name']
+    if name_provided:
         #Make sure that tag does not use the same name as an existing tag, comm, or tag_set
-        tag_check = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
-        comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
-        tag_set_check = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
+        tag_check = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
+        comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
+        tag_set_check = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
 
         if tag_check != None or comm_name_check != None or tag_set_check != None:
             return abort(413, description='Name already in use (Tag, TagSet, or Community)')
         
-        tag.name = in_new_name
-        tag.name_lowercase = lower_and_remove_nonalphanumeric(in_new_name)
-        db.session.add(tag)
-        db.session.commit()
-        return 200    
+        tag.name = new_name
+        tag.name_lowercase = lower_and_remove_nonalphanumeric(new_name)
+    if desc_provided:
+        tag.desc = new_desc
+    if type_provided:
+        #If tag was gecko code but is no longer
+        if (tag.type == 'Gecko Code' and new_type != 'Gecko Code'):
+            gecko_code = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
+            if gecko_code == None:
+                return abort(414, description='Could not find gecko code associated with gecko code tag')
+            db.session.delete(gecko_code)
+        #If tag is being upgraded to gecko code
+        elif (tag.type != 'Gecko Code' and new_type == 'Gecko Code'):
+            new_code_tag = GeckoCodeTag(in_tag_id=tag.id, in_gecko_code_desc=new_gecko_code_desc, in_gecko_code=gecko_code)
+            db.session.add(new_code_tag)
+        tag.type = new_type
+    if gecko_code_provided:
+        gecko_code = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
+        gecko_code.gecko_code = new_gecko_code
+    if gecko_code_desc_provided:
+        gecko_code = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
+        gecko_code.gecko_code_desc = new_gecko_code_desc
+
+                
+    db.session.add(tag)
+    db.session.commit()
+    return 200
+
 
 @app.route('/tag/list', methods=['GET', 'POST'])
 def tag_list():
@@ -390,15 +440,38 @@ def tagset_get_tags(tag_set_id):
 @app.route('/tag_set/update', methods=['POST'])
 @jwt_required(optional=True)
 def tag_set_update():
+    in_tagset_id = request.json['tag_set_id'] #Required
 
-    in_action = lower_and_remove_nonalphanumeric(request.json['Action'])
-    in_tagset_id = request.json['TagSetId']
+    #Optional Args
+    name_provided = request.is_json and 'name' in request.json
+    new_name = request.json['name']
+    desc_provided = request.is_json and 'desc' in request.json
+    new_desc = request.json['desc']
+    type_provided = request.is_json and 'type' in request.json
+    new_type = request.json['type']
+    start_time_provided = request.is_json and 'start_time' in request.json
+    new_start_time = request.json['start_time']
+    end_time_provided = request.is_json and 'end_time' in request.json
+    new_end_time = request.json['end_time']
+    tags_provided = request.is_json and 'tag_ids' in request.json
+    new_tag_ids = request.json['tag_ids']
+
+    if (start_time_provided and end_time_provided and new_start_time > new_end_time):
+        return abort(412, description='Invalid start/end times')
+    if type_provided and new_type not in cTAG_SET_TYPES.values():
+        return abort(415, description='Invalid tag type')
 
     # Get Tag and Comm
     tag_set = TagSet.query.filter_by(id=in_tagset_id).first()
     if tag_set == None:
         return abort(409, description="No tag found with id={in_tag_id}")
     comm = Community.query.filter_by(id=tag_set.community_id).first()
+
+    #Check dates against existing dates if needed
+    if (start_time_provided and not end_time_provided and new_start_time > tag_set.end_date):
+        return abort(413, description='Invalid start/end times')
+    if (not start_time_provided and end_time_provided and tag_set.start_date > new_end_time):
+        return abort(414, description='Invalid start/end times')
 
     #Make sure user is admin of community or Rio admin
     user=None
@@ -423,12 +496,11 @@ def tag_set_update():
     
     #User is authorized
     #Begin evaluating actions
-    if in_action == 'rename':
-        in_new_name = request.json['New Name']
+    if name_provided:
         #Make sure that tag does not use the same name as an existing tag, comm, or tag_set
-        tag_check = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
-        comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
-        tag_set_check = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_new_name)).first()
+        tag_check = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
+        comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
+        tag_set_check = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
 
         if tag_check != None or comm_name_check != None or tag_set_check != None:
             return abort(413, description='Name already in use (Tag, TagSet, or Community)')
@@ -438,16 +510,36 @@ def tag_set_update():
         if tag == None:
             return abort(414, description='Could not find tag to rename')
         
-        tag.name = in_new_name
-        tag.name_lowercase = lower_and_remove_nonalphanumeric(in_new_name)
+        tag.name = new_name
+        tag.name_lowercase = lower_and_remove_nonalphanumeric(new_name)
         db.session.add(tag)
         db.session.commit()
         
-        tag_set.name = in_new_name
-        tag_set.name_lowercase = lower_and_remove_nonalphanumeric(in_new_name)
-        db.session.add(tag_set)
-        db.session.commit()
-        return 200  
+        tag_set.name = new_name
+        tag_set.name_lowercase = lower_and_remove_nonalphanumeric(new_name)
+    if desc_provided:
+        tag_set.desc = new_desc
+    if type_provided:
+        tag_set.type = new_type
+    if start_time_provided:
+        tag_set.start_date = new_start_time
+    if end_time_provided:
+        tag_set.end_date = new_end_time
+    if tags_provided:
+        # Validate all tag ids, add to list
+        tags = list()
+        for id in new_tag_ids:
+            tag = Tag.query.filter_by(id=id).first()
+            if tag == None:
+                return abort(419, f'Tag with ID={id} not found')
+            if tag.tag_type == "Community" or tag.tag_type == "Competition":
+                return abort(420, f'Tag with ID={id} not a valid type tag')
+            tags.append(tag)
+        tag_set.tags = tags
+
+    db.session.add(tag_set)
+    db.session.commit()
+    return 200  
 
 
 # @app.route('/tag_set/ladder', methods=['POST'])
