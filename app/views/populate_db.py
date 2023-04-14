@@ -17,8 +17,6 @@ def update_ongoing_game():
         if completed_game != None:
             return abort(409, 'Already completed game with this ID')
 
-        pprint(request.json)
-
         if game == None:
             home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
             away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
@@ -153,6 +151,7 @@ def populate_db2():
     # Delete ongoing game row once game is submitted
     OngoingGame.query.filter_by(game_id=game_id).delete()
 
+    date_time_end = None
     game = Game(
         game_id = game_id,
         away_player_id = away_player.id,
@@ -175,12 +174,16 @@ def populate_db2():
     # Get winner and loser rio_user
     if (game.home_score > game.away_score):
         winner_player = home_player
+        winner_comm_user = home_comm_user
         loser_player = away_player
+        loser_comm_user = away_comm_user
         winner_score = game.home_score
         loser_score = game.away_score
     else:
         winner_player = away_player
+        winner_comm_user = away_comm_user
         loser_player = home_player
+        loser_comm_user = home_comm_user
         winner_score = game.away_score
         loser_score = game.home_score
 
@@ -188,13 +191,43 @@ def populate_db2():
     db.session.add(game)
     db.session.commit()
 
-    # Create GameHistory row
-    # TODO, DO NOT CALL IF TAGSETID IS NONE - Connor
-    game_id = submit_game_history(game.game_id, tag_set_id, winner_player.username, winner_score, loser_player.username, loser_score)['GameID']
+    # ======== Create GameHistory row ========
+
+    #Get TagSet. If season, update/track ELO. Else just add the GameHistory row
+    winner_elo = None
+    loser_elo = None
+
+    #Get ELOs
+    winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id, tag_set_id=tag_set_id).first()
+    loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id, tag_set_id=tag_set_id).first()
+
+    #Create elos for new players if needed
+    if winner_ladder == None:
+        new_glicko_player = Player()
+        winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+        db.session.add(winner_ladder)
+        db.session.commit()
+    if loser_ladder == None:
+        new_glicko_player = Player()
+        loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
+        db.session.add(loser_ladder)
+        db.session.commit()
+
+    winner_elo = winner_ladder.rating
+    loser_elo = loser_ladder.rating
+
+    #Finally ready to write the row
+    new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
+                                   winner_score, loser_score, 
+                                   winner_elo, loser_elo, 
+                                   True, True, True, date_time_end)
+    db.session.add(new_game_history)
+    db.session.commit()
 
     # Calc player elo
     calc_elo(tag_set_id, winner_player.id, loser_player.id)
 
+    
     # ======= Character Game Summary =======
     teams = {
         'Home': [None] * 9,
@@ -559,41 +592,47 @@ def populate_db2():
     return 'Completed...'
 
 
-@app.route('/submit_game/', methods=['POST'])
-def submit_game_history(in_game_id=None, in_tag_set_id=None,
-                        in_winner_username=None, in_winner_score=None, 
-                        in_loser_username=None, in_loser_score=None):
-    game_id = in_game_id if ('GameID' not in request.json) else int(request.json['GameID'].replace(',', ''), 16)
-    winner_username = in_winner_username if (in_winner_username != None) else request.json['Winner Username']
-    winner_score = in_winner_score if (in_winner_score != None) else request.json['Winner Score']
-    loser_username = in_loser_username if (in_loser_username != None) else request.json['Loser Username']
-    loser_score = in_loser_score if (in_loser_score != None) else request.json['Loser Score']
-    tag_set_id = None
-    if in_tag_set_id == None: # Called by endpoint
-        # Lookup tagset id
-        tag_set = TagSet.query.filter_by(name_lowercase=(lower_and_remove_nonalphanumeric(request.json['TagSet']))).first()
-        if tag_set == None:
-            return abort(409, description='No TagSet found with provided name')
-        tag_set_id = tag_set.id
-    else:
-        tag_set_id = in_tag_set_id
+@app.route('/manual_submit_game/', methods=['POST'])
+def submit_game_history():
+    game_id_dec_provided = request.is_json and 'game_id_dec' in request.json
+    game_id_hex_provided = request.is_json and 'game_id_hex' in request.json
+    game_id_provided = game_id_hex_provided or game_id_dec_provided
 
-    #Does full game exist in database
-    game_exists = Game.query.filter_by(game_id=game_id).first()
+    if game_id_hex_provided and game_id_dec_provided:
+        abort(417, description='Two game ids provided')
+
+    game_id = None
+    if game_id_dec_provided:
+        game_id = request.json['game_id_dec']
+    if game_id_hex_provided:
+        game_id = int(request.json['game_id_hex'].replace(',', ''), 16)
+
+
+    #Resolve GameId
+    winner_username = request.json['winner_username']
+    winner_score = request.json['winner_score']
+    loser_username = request.json['loser_username']
+    loser_score = request.json['loser_score']
+    submitter_key_provided = request.is_json and 'submitter_rio_key' in request.json
+    submitter_rio_key = request.json['submitter_rio_key'] if submitter_key_provided else None
+
+    date_provided = request.is_json and 'date' in request.json
+    date = request.json['date'] if date_provided else None
+
+    tag_set = TagSet.query.filter_by(name_lowercase=(lower_and_remove_nonalphanumeric(request.json['tag_set']))).first()
+    if tag_set == None:
+        return abort(409, description='No TagSet found with provided name')
+    tag_set_id = tag_set.id
 
     # Delete ongoing game row once game is submitted (if game crashed)
-    OngoingGame.query.filter_by(game_id=game_id).delete()
-
-    #Now that we've deleted the game we can set game id to None if game does not exist
-    #We need to do this because GameHistory.game_id is a FK and if it doesn't exist we must set
-    #that column to null
-    if (not game_exists):
+    if game_id_provided:
+        OngoingGame.query.filter_by(game_id=game_id).delete()
+        #Make sure Game does not exist
+        game_exists = (Game.query.filter_by(game_id=game_id).first() != None)
+        if game_exists:
+            abort(416, description='No TagSet found with provided name')
         game_id = None
 
-    # Get CommID from TagSet
-    tag_set = TagSet.query.filter_by(id=tag_set_id).first()
-    if tag_set == None:
-        return abort(411, description='No TagSet found')
     comm_id = tag_set.community_id
 
     #Get users and community users
@@ -601,18 +640,16 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     loser_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(loser_username)).first()
 
     if winner_user == None or loser_user == None:
-        print('No users')
-        return abort(409, description='No RioUser found for at least one of the provided usernames')
+        return abort(410, description='No RioUser found for at least one of the provided usernames')
 
     if not winner_user.verified or not loser_user.verified:
-        return abort(410, description='RioUser(s) are not verified')
+        return abort(411, description='RioUser(s) are not verified')
 
     winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user.id, community_id=comm_id).first()
     loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user.id, community_id=comm_id).first()
 
     if winner_comm_user == None or loser_comm_user == None:
-        print('No comm users')
-        return abort(409, description='No CommunityUser found for at least one of the RioUsers')
+        return abort(412, description='No CommunityUser found for at least one of the RioUsers')
 
     #Get TagSet. If season, update/track ELO. Else just add the GameHistory row
     winner_elo = None
@@ -639,51 +676,42 @@ def submit_game_history(in_game_id=None, in_tag_set_id=None,
     
     #Acceptance
     #If full game is recorded (auto submitted, everyone accepts)
-    winner_accept = True if game_exists else False
-    loser_accept = True if game_exists else False
-    admin_accept = True if game_exists else False
+    winner_accept = False
+    loser_accept = False
+    admin_accept = False
 
     #Get submitters key, if it matches set accept for them
-    if (not game_exists):
-        submitter_key_provided = request.is_json and 'Submitter Rio Key' in request.json
-        if submitter_key_provided:
-            submitter_rio_key = request.json['Submitter Rio Key']
-            submitter = db.session.query(
-                CommunityUser
-            ).join(
-                RioUser
-            ).filter(
-                (RioUser.rio_key == submitter_rio_key)
-              & (CommunityUser.community_id == winner_comm_user.community_id)
-            ).first()
+    if submitter_key_provided:
+        submitter = db.session.query(
+            CommunityUser
+        ).join(
+            RioUser
+        ).filter(
+            (RioUser.rio_key == submitter_rio_key)
+            & (CommunityUser.community_id == winner_comm_user.community_id)
+        ).first()
 
-            if submitter == None:
-                print('No submitter found')
-                return abort(409, description=f"Submitter not part of provided community")
-            if (submitter.id != winner_comm_user.id and submitter.id != loser_comm_user.id and not submitter.admin):
-                print('Submitter not player nor admin')
-                print('Submitter ID:', submitter.id)
-                return abort(409, description=f"Submitter is not a player or admin")
-            winner_accept = submitter.id == winner_comm_user.id
-            loser_accept = submitter.id == loser_comm_user.id
-            admin_accept = submitter.admin and (not winner_accept and not loser_accept)
-            if admin_accept:
-                calc_elo(tag_set_id, winner_comm_user.rio_user.id, loser_comm_user.rio_user.id)
-        else: 
-            return abort(413, description=f"Submitter key not provided")
+        if submitter == None:
+            return abort(413, description=f"Submitter not part of provided community")
+        if (submitter.id != winner_comm_user.id and submitter.id != loser_comm_user.id and not submitter.admin):
+            return abort(414, description=f"Submitter is not a player or admin")
+        winner_accept = submitter.id == winner_comm_user.id
+        loser_accept = submitter.id == loser_comm_user.id
+        admin_accept = submitter.admin and (not winner_accept and not loser_accept)
+        if admin_accept:
+            calc_elo(tag_set_id, winner_comm_user.rio_user.id, loser_comm_user.rio_user.id)
+    else: 
+        return abort(415, description=f"Submitter key not provided")
 
     #Finally ready to write the row
     new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
                                    winner_score, loser_score, 
-                                   winner_elo, loser_elo, 
-                                   winner_accept, loser_accept, admin_accept)
+                                   winner_elo, loser_elo,
+                                   winner_accept, loser_accept, admin_accept, date)
     db.session.add(new_game_history)
     db.session.commit()
 
-    if (new_game_history.game_id == None):
-        return {'GameHistoryID': new_game_history.id}
-    else:
-        return {'GameID': new_game_history.game_id}
+    return {'GameHistoryID': new_game_history.id}
 
 
 @app.route('/update_game_status/', methods=['POST'])

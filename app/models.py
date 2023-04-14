@@ -703,7 +703,9 @@ class GameHistory(db.Model):
 
     tag_set = db.relationship('TagSet', backref = 'tag_set')
 
-    def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, in_winner_accept, in_loser_accept, in_admin_accept):
+    def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, 
+                 in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, 
+                 in_winner_accept, in_loser_accept, in_admin_accept, in_date):
         self.game_id = in_game_id
         self.tag_set_id = in_tag_set_id
         self.winner_comm_user_id = in_winner_comm_id
@@ -717,7 +719,7 @@ class GameHistory(db.Model):
         self.winner_accept = in_winner_accept if (in_winner_accept == True) else None
         self.loser_accept = in_loser_accept if (in_loser_accept == True) else None
         self.admin_accept = in_admin_accept if (in_admin_accept == True) else None
-        self.date_created = int( time.time() )
+        self.date_created = int( time.time() ) if in_date == None else in_date
 
 class ApiKey(db.Model):
     id = db.Column(db.Integer, primary_key=True)

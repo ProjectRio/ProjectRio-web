@@ -97,19 +97,17 @@ def tag_update():
 
     #Optional Args
     name_provided = request.is_json and 'name' in request.json
-    new_name = request.json['name']
+    new_name = request.json['name'] if name_provided else None
     desc_provided = request.is_json and 'desc' in request.json
-    new_desc = request.json['desc']
+    new_desc = request.json['desc'] if desc_provided else None
     type_provided = request.is_json and 'type' in request.json
-    new_type = request.json['type']
+    new_type = request.json['type']  if type_provided else None
 
     gecko_code_provided = request.is_json and 'gecko_code' in request.json
-    new_gecko_code = request.json['gecko_code']
+    new_gecko_code = request.json['gecko_code'] if gecko_code_provided else None
     gecko_code_desc_provided = request.is_json and 'gecko_code_desc' in request.json
-    new_gecko_code_desc = request.json['gecko_code_desc']
+    new_gecko_code_desc = request.json['gecko_code_desc'] if gecko_code_desc_provided else None
     
-
-
     if type_provided and (new_type not in cTAG_TYPES.values() or new_type == "Competition" or new_type == "Community"):
         return abort(410, description="Invalid tag type '{in_tag_type}'")
     if type_provided and (new_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
@@ -126,9 +124,9 @@ def tag_update():
     if type_provided and (((new_type == "Gecko Code" or new_type == "Client Code") and not comm.comm_type == 'Official')):
         return abort(416, description="Gecko codes must be added to official community")
     #Check that if gecko code is provided that new or existing type is gecko code
-    if gecko_code_provided and (tag.type != 'Gecko Code' and (type_provided and new_type != 'Gecko Code')):
+    if gecko_code_provided and (tag.tag_type != 'Gecko Code' and (type_provided and new_type != 'Gecko Code')):
         return abort(417, description="Gecko codes can only be added to gecko code tags")
-    if gecko_code_desc_provided and (tag.type != 'Gecko Code' and (type_provided and new_type != 'Gecko Code')):
+    if gecko_code_desc_provided and (tag.tag_type != 'Gecko Code' and (type_provided and new_type != 'Gecko Code')):
         return abort(418, description="Gecko codes desc can only be added to gecko code tags")
 
     #Make sure user is admin of community or Rio admin
@@ -169,16 +167,16 @@ def tag_update():
         tag.desc = new_desc
     if type_provided:
         #If tag was gecko code but is no longer
-        if (tag.type == 'Gecko Code' and new_type != 'Gecko Code'):
+        if (tag.tag_type == 'Gecko Code' and new_type != 'Gecko Code'):
             gecko_code = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
             if gecko_code == None:
                 return abort(414, description='Could not find gecko code associated with gecko code tag')
             db.session.delete(gecko_code)
         #If tag is being upgraded to gecko code
-        elif (tag.type != 'Gecko Code' and new_type == 'Gecko Code'):
+        elif (tag.tag_type != 'Gecko Code' and new_type == 'Gecko Code'):
             new_code_tag = GeckoCodeTag(in_tag_id=tag.id, in_gecko_code_desc=new_gecko_code_desc, in_gecko_code=gecko_code)
             db.session.add(new_code_tag)
-        tag.type = new_type
+        tag.tag_type = new_type
     if gecko_code_provided:
         gecko_code = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
         gecko_code.gecko_code = new_gecko_code
@@ -189,7 +187,7 @@ def tag_update():
                 
     db.session.add(tag)
     db.session.commit()
-    return 200
+    return jsonify('Success')
 
 
 @app.route('/tag/list', methods=['GET', 'POST'])
@@ -243,13 +241,13 @@ def tag_list():
 @app.route('/tag_set/create', methods=['POST'])
 @jwt_required(optional=True)
 def tagset_create():
-    in_tag_set_name = request.json['TagSet Name']
-    in_tag_set_desc = request.json['Description']
-    in_tag_set_type = request.json['Type']
-    in_tag_set_comm_name = request.json['Community Name']
-    in_tag_ids = request.json['Tags']
-    in_tag_set_start_time = request.json['Start']
-    in_tag_set_end_time = request.json['End']
+    in_tag_set_name = request.json['tag_set_name']
+    in_tag_set_desc = request.json['desc']
+    in_tag_set_type = request.json['type']
+    in_tag_set_comm_name = request.json['community_name']
+    in_tag_ids = request.json['tags']
+    in_tag_set_start_date = request.json['start_date']
+    in_tag_set_end_date = request.json['end_date']
 
     comm_name_lower = lower_and_remove_nonalphanumeric(in_tag_set_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
@@ -258,7 +256,7 @@ def tagset_create():
         return abort(409, description=f"No community found with name={in_tag_set_comm_name}")
     if comm.sponsor_id == None:
         return abort(410, description=f"Community is not sponsored")
-    if in_tag_set_end_time < in_tag_set_start_time:
+    if in_tag_set_end_date < in_tag_set_start_date:
         return abort(412, description='Invalid start/end times')
     if in_tag_set_type not in cTAG_SET_TYPES.values():
         return abort(413, description='Invalid tag type')
@@ -299,7 +297,7 @@ def tagset_create():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
         except:
             return abort(416, description="No Rio Key or JWT Provided")
 
@@ -323,7 +321,7 @@ def tagset_create():
         tags.append(tag)
 
     # === Tag Set Creation ===
-    new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name,in_type=in_tag_set_type, in_start=in_tag_set_start_time, in_end=in_tag_set_end_time)
+    new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name,in_type=in_tag_set_type, in_start=in_tag_set_start_date, in_end=in_tag_set_end_date)
     db.session.add(new_tag_set)
     db.session.commit()
 
@@ -362,7 +360,6 @@ def tagset_list():
 
     if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
-    pprint(request.json)
     tag_sets = None
     rio_key_provided = request.is_json and 'Rio Key' in request.json
     if rio_key_provided:
@@ -444,19 +441,19 @@ def tag_set_update():
 
     #Optional Args
     name_provided = request.is_json and 'name' in request.json
-    new_name = request.json['name']
+    new_name = request.json['name'] if name_provided else None
     desc_provided = request.is_json and 'desc' in request.json
-    new_desc = request.json['desc']
+    new_desc = request.json['desc'] if desc_provided else None
     type_provided = request.is_json and 'type' in request.json
-    new_type = request.json['type']
-    start_time_provided = request.is_json and 'start_time' in request.json
-    new_start_time = request.json['start_time']
-    end_time_provided = request.is_json and 'end_time' in request.json
-    new_end_time = request.json['end_time']
+    new_type = request.json['type'] if type_provided else None
+    start_date_provided = request.is_json and 'start_date' in request.json
+    new_start_date = request.json['start_date'] if start_date_provided else None
+    end_date_provided = request.is_json and 'end_date' in request.json
+    new_end_date = request.json['end_date'] if end_date_provided else None
     tags_provided = request.is_json and 'tag_ids' in request.json
-    new_tag_ids = request.json['tag_ids']
+    new_tag_ids = request.json['tag_ids'] if tags_provided else None
 
-    if (start_time_provided and end_time_provided and new_start_time > new_end_time):
+    if (start_date_provided and end_date_provided and new_start_date > new_end_date):
         return abort(412, description='Invalid start/end times')
     if type_provided and new_type not in cTAG_SET_TYPES.values():
         return abort(415, description='Invalid tag type')
@@ -468,9 +465,9 @@ def tag_set_update():
     comm = Community.query.filter_by(id=tag_set.community_id).first()
 
     #Check dates against existing dates if needed
-    if (start_time_provided and not end_time_provided and new_start_time > tag_set.end_date):
+    if (start_date_provided and not end_date_provided and new_start_date > tag_set.end_date):
         return abort(413, description='Invalid start/end times')
-    if (not start_time_provided and end_time_provided and tag_set.start_date > new_end_time):
+    if (not start_date_provided and end_date_provided and tag_set.start_date > new_end_date):
         return abort(414, description='Invalid start/end times')
 
     #Make sure user is admin of community or Rio admin
@@ -521,10 +518,10 @@ def tag_set_update():
         tag_set.desc = new_desc
     if type_provided:
         tag_set.type = new_type
-    if start_time_provided:
-        tag_set.start_date = new_start_time
-    if end_time_provided:
-        tag_set.end_date = new_end_time
+    if start_date_provided:
+        tag_set.start_date = new_start_date
+    if end_date_provided:
+        tag_set.end_date = new_end_date
     if tags_provided:
         # Validate all tag ids, add to list
         tags = list()
@@ -539,7 +536,7 @@ def tag_set_update():
 
     db.session.add(tag_set)
     db.session.commit()
-    return 200  
+    return jsonify('Success')
 
 
 # @app.route('/tag_set/ladder', methods=['POST'])

@@ -433,14 +433,14 @@ class TagSet:
         if tagset_details == None:
             tagset_details = dict()
             length = random.randint(3,20)
-            tagset_details['TagSet Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
-            tagset_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
-            tagset_details['Start'] = int( time.time() )
-            tagset_details['End'] = int( time.time() ) + random.randrange(100000, 1000000)
-        tagset_details['Community Name'] = community.name
-        tagset_details['Rio Key'] = admin_comm_user.user.rk
-        tagset_details['Type'] = tag_type
-        tagset_details['Tags'] = [tag.pk for tag in tags]
+            tagset_details['tag_set_name'] =  ''.join(random.choices(string.ascii_letters, k=length))
+            tagset_details['desc'] =  ''.join(random.choices(string.ascii_letters, k=length))
+            tagset_details['start_date'] = int( time.time() )
+            tagset_details['end_date'] = int( time.time() ) + random.randrange(100000, 1000000)
+        tagset_details['community_name'] = community.name
+        tagset_details['rio_key'] = admin_comm_user.user.rk
+        tagset_details['type'] = tag_type
+        tagset_details['tags'] = [tag.pk for tag in tags]
 
         self.community = community
         self.creator_comm_user = admin_comm_user
@@ -454,7 +454,7 @@ class TagSet:
             return self.success
 
         query = 'SELECT * FROM tag_set WHERE name = %s'
-        params = (self.init_dict['TagSet Name'],)
+        params = (self.init_dict['tag_set_name'],)
         result = db.query(query, params)
         
         self.pk         = result[0]['id']
