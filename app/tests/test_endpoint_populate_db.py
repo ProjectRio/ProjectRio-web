@@ -100,9 +100,9 @@ def test_populate_db():
     assert data[player_home.username]['rating'] == home_user_rating
 
     # Confirm/Reject the games
-    game1_winner_confirm = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_away.rk, 'Accept': 1}
-    game1_loser_reject   = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 0}
-    game1_loser_confirm  = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 1}
+    game1_winner_confirm = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': True}
+    game1_loser_reject   = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': False}
+    game1_loser_confirm  = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': True}
 
     # Winner confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game1_winner_confirm)
@@ -135,8 +135,8 @@ def test_populate_db():
 
     # ============================================================
     # Game 2
-    game2_winner_confirm = {'GameHistoryID': game2_response.json()['GameHistoryID'], 'Rio Key': player_away.rk, 'Accept': 1}
-    game2_loser_confirm  = {'GameHistoryID': game2_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 1}
+    game2_winner_confirm = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': True}
+    game2_loser_confirm  = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': True}
 
     # Winner confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game2_winner_confirm)
@@ -200,7 +200,7 @@ def test_populate_db():
     assert data[player_home.username]['rating'] == home_user_rating
 
     # Game 4 - admin confirm
-    game4_admin_confirm = {'GameHistoryID': game4_response.json()['GameHistoryID'], 'Rio Key': sponsor.rk, 'Accept': 1}
+    game4_admin_confirm = {'game_history_id': game4_response.json()['game_history_id'], 'rio_key': sponsor.rk, 'accept': True}
 
     # Admin confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game4_admin_confirm)
@@ -223,7 +223,7 @@ def test_populate_db():
 
     # Admin reconfirm game - shouldn't update elo
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game4_admin_confirm)
-    assert response.status_code == 411
+    assert response.status_code == 412
 
     # Inspect Ladder
     response = requests.post("http://127.0.0.1:5000/tag_set/ladder/", json={'TagSet': tagset.name})
