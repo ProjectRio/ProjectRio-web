@@ -305,8 +305,6 @@ def endpoint_games(called_internally=False):
         f"{('LIMIT ' + str(limit)) if limit != None else ''}"
     )
 
-    print(query)
-
     results = db.session.execute(query).all()
     
     games = []
