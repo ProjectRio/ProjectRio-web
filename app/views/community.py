@@ -12,11 +12,11 @@ import time
 @app.route('/community/create', methods=['POST'])
 @jwt_required(optional=True)
 def community_create():
-    in_comm_name = request.json['Community Name']
-    in_comm_type = request.json['Type']
-    private = (request.json['Private'] == 1)
-    create_global_link = (request.json['Global Link'] == 1) or not private
-    in_comm_desc = request.json['Description']
+    in_comm_name = request.json['community_name']
+    in_comm_type = request.json['community_type']
+    private = (request.json['private'] == 1)
+    create_global_link = (request.json['global_link'] == 1) or not private
+    in_comm_desc = request.json['desc']
     
     # Get user making the new community
     #Get user via JWT or RioKey 
@@ -26,7 +26,7 @@ def community_create():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
         except:
             return abort(409, description="No Rio Key or JWT Provided")
 
@@ -141,7 +141,7 @@ def community_join(in_comm_name = None, in_active_url = None):
     #    If User has been invite, provide users active URL
 
     if in_comm_name == None:
-        in_comm_name = request.json['Community Name']
+        in_comm_name = request.json['community_name']
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -152,7 +152,7 @@ def community_join(in_comm_name = None, in_active_url = None):
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
         except:
             return abort(409, description="No Rio Key or JWT Provided")
 
@@ -234,7 +234,7 @@ def community_join(in_comm_name = None, in_active_url = None):
 @jwt_required(optional=True)
 def community_invite():
 
-    in_comm_name = request.json['Community Name']
+    in_comm_name = request.json['community_name']
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -245,7 +245,7 @@ def community_invite():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
         except:
             return abort(409, description="No Rio Key or JWT Provided")
 
@@ -263,7 +263,7 @@ def community_invite():
     if (comm.private and comm_user.admin == False):
         return abort(409, description='User is not an admin of this private community.')
 
-    list_of_users_to_invite = request.json['Invite List']
+    list_of_users_to_invite = request.json['invite_list']
 
     #Check that all users exist before sending invites
     for username in list_of_users_to_invite:
@@ -331,7 +331,7 @@ def community_invite():
 @app.route('/community/members', methods=['GET'])
 @jwt_required(optional=True)
 def community_members():
-    in_comm_name = request.json['Community Name']
+    in_comm_name = request.json['community_name']
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -342,7 +342,7 @@ def community_members():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
         except:
             return abort(409, description="No Rio Key or JWT Provided")
 
@@ -372,7 +372,7 @@ def community_members():
 @app.route('/community/tags', methods=['GET'])
 @jwt_required(optional=True)
 def community_tags():
-    in_comm_name = request.json['Community Name']
+    in_comm_name = request.json['community_name']
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -383,7 +383,7 @@ def community_tags():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
         except:
             return abort(409, description="No Rio Key or JWT Provided")
         
@@ -411,10 +411,10 @@ def community_tags():
 #JSON format
 '''
 {
-    Community Name: "NAME",
-    User List: [
+    community_name: "NAME",
+    user_list: [
         {
-            "Username": "USERNAME",
+            "username": "USERNAME",
             "Admin": "y/n"
             "Remove": "y/n"
             "Uninvite": "y/n"
@@ -424,7 +424,7 @@ def community_tags():
 @app.route('/community/manage', methods=['POST'])
 @jwt_required(optional=True)
 def community_manage():
-    in_comm_name = request.json['Community Name']
+    in_comm_name = request.json['community_name']
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -435,7 +435,7 @@ def community_manage():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
         except:
             return abort(409, description="No Rio Key or JWT Provided")
 
@@ -448,12 +448,12 @@ def community_manage():
     if (comm_user == None or comm_user.admin == False):
         return abort(409, description='User is not part of this community or not an admin.')
 
-    list_of_users_to_manage = request.json['User List']
+    list_of_users_to_manage = request.json['user_list']
     #Check that all users exist before sending invites
     for user in list_of_users_to_manage:
-        invited_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(user['Username'])).first()
+        invited_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(user['username'])).first()
         if invited_user == None:
-            return abort(409, description=f"User does not exist. Username={user['Username']}")
+            return abort(409, description=f"User does not exist. Username={user['username']}")
         comm_user = CommunityUser.query.filter_by(user_id=invited_user.id, community_id=comm.id).first()
         if comm_user == None:
             return abort(409, description='User not a part of the community, cannot be made admin. Username={user}')
@@ -461,13 +461,13 @@ def community_manage():
     #Entire list has been validated, add users to table and send emails
     updated_comm_users_list = list()
     for user_actions in list_of_users_to_manage:
-        user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(user_actions['Username'])).first()
+        user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(user_actions['username'])).first()
 
         #Get user to update
         comm_user_to_update = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
         #Remove if specified
         try:
-            if (user_actions['Remove'].lower() in ['yes', 'y', 'true', 't'] and not comm_user_to_update.admin):
+            if (user_actions['remove'] == True and not comm_user_to_update.admin):
                 comm_user_to_update.active = False
                 comm_user_to_update.invited = False
                 db.session.add(comm_user_to_update)
@@ -479,7 +479,7 @@ def community_manage():
 
         #Ban
         try:
-            if (user_actions['Ban'].lower() in ['yes', 'y', 'true', 't'] and not comm_user_to_update.admin):
+            if (user_actions['ban'] == True and not comm_user_to_update.admin):
                 comm_user_to_update.active = False
                 comm_user_to_update.invited = False
                 comm_user_to_update.banned = True
@@ -492,9 +492,9 @@ def community_manage():
 
         #Update admin if specified
         try:
-            if (user_actions['Admin'].lower() in ['yes', 'y', 'true', 't'] and comm_user_to_update.active == True):
+            if (user_actions['admin'] == True and comm_user_to_update.active == True):
                 comm_user_to_update.admin = True
-            elif (user_actions['Admin'].lower() in ['no', 'n', 'f', 'false']):
+            elif (user_actions['admin'] == False):
                 comm_user_to_update.admin = False
             db.session.add(comm_user_to_update)
             db.session.commit()
@@ -502,12 +502,12 @@ def community_manage():
         except:
             pass
 
-    return jsonify({"Members": updated_comm_users_list})
+    return jsonify({"members": updated_comm_users_list})
 
 @app.route('/community/sponsor', methods=['POST'])
 @jwt_required(optional=True)
 def community_sponsor():
-    in_comm_name = request.json['Community Name']
+    in_comm_name = request.json['community_name']
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -516,14 +516,14 @@ def community_sponsor():
         return abort(409, description='Could not find community with name={in_comm_name}')
 
     # Action - Get, Remove, Add
-    action = request.json['Action']
+    action = lower_and_remove_nonalphanumeric(request.json['action'])
     #Get
-    if action == 'Get':
+    if action == 'get':
         if comm.sponsor_id == None:
-            return jsonify({'Sponsor': None})
+            return jsonify({'sponsor': None})
         else:
             sponsor_user = RioUser.query.filter_by(id=comm.sponsor_id).first()
-            return jsonify({'Sponsor': sponsor_user})
+            return jsonify({'sponsor': sponsor_user})
 
     #Get user via JWT or RioKey 
     user=None
@@ -532,7 +532,7 @@ def community_sponsor():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()       
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
         except:
             return abort(409, description="No Rio Key or JWT Provided")
 
@@ -540,20 +540,20 @@ def community_sponsor():
         return abort(409, description='No user logged in or associated with RioKey.')
 
     #Remove
-    if action == 'Remove':
+    if action == 'remove':
         if comm.sponsor_id == None:
-            return jsonify({'Sponsor': None})
+            return jsonify({'sponsor': None})
         else:
             sponsor_user = RioUser.query.filter_by(id=comm.sponsor_id).first()
             if sponsor_user == user:
                 comm.sponsor_id = None
                 db.session.add(comm)
                 db.session.commit()
-                return jsonify({'Sponsor': None})
+                return jsonify({'sponsor': None})
             else:
                 return abort(409, description="Only current sponsor can withdraw sponsorship")
     #Add
-    elif action == 'Add':
+    elif action == 'add':
         if comm.sponsor_id == None:
             # Make sure that user is under limit
             communities_sponsored = Community.query.filter(Community.sponsor_id==user.id).count()
@@ -579,11 +579,11 @@ def community_sponsor():
             comm.sponsor_id = user.id
             db.session.add(comm)
             db.session.commit()
-            return jsonify({'Sponsor': None})
+            return jsonify({'sponsor': None})
         else:
             return abort(409, description="Community is already sponsored")
 
-    return
+    return 'Success', 200
 
 def add_all_users_to_comm(comm_id):
     # Do not create duplicate users 

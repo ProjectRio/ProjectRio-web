@@ -160,13 +160,13 @@ class Community:
         if in_comm_dict == None:
             in_comm_dict = dict()
             length = random.randint(3,20)
-            in_comm_dict['Community Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
-            in_comm_dict['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
+            in_comm_dict['community_name'] =  ''.join(random.choices(string.ascii_letters, k=length))
+            in_comm_dict['desc'] =  ''.join(random.choices(string.ascii_letters, k=length))
 
-        in_comm_dict['Type'] = 'Official' if official else 'Unofficial'
-        in_comm_dict['Private'] = 1 if private else 0
-        in_comm_dict['Global Link'] = 1 if link else 0
-        in_comm_dict['Rio Key'] = founder_user.rk
+        in_comm_dict['community_type'] = 'Official' if official else 'Unofficial'
+        in_comm_dict['private'] = 1 if private else 0
+        in_comm_dict['global_link'] = 1 if link else 0
+        in_comm_dict['rio_key'] = founder_user.rk
 
         response = requests.post("http://127.0.0.1:5000/community/create", json=in_comm_dict)
         self.success = (response.status_code == 200)
@@ -176,7 +176,7 @@ class Community:
 
         # Community created check, do not check comm user and tag (they function the same regardless, redundant)
         query = 'SELECT * FROM community WHERE name = %s'
-        params = (in_comm_dict["Community Name"],)
+        params = (in_comm_dict["community_name"],)
         result = db.query(query, params)
 
         self.pk = result[0]['id']
@@ -210,7 +210,7 @@ class Community:
             endpoint = "http://127.0.0.1:5000/community/join/{}/{}".format(self.name, self.url)
         else:
             endpoint = "http://127.0.0.1:5000/community/join/{}".format(self.name)
-        response = requests.post(endpoint, json={'Rio Key': user.rk})
+        response = requests.post(endpoint, json={'rio_key': user.rk})
         success = (response.status_code == 200)
 
         if not success:
@@ -227,7 +227,7 @@ class Community:
         
     # If invited, join. If not, request outstanding
     def join_via_request(self, user):
-        response = requests.post("http://127.0.0.1:5000/community/join", json={'Community Name': self.name, 'Rio Key': user.rk})
+        response = requests.post("http://127.0.0.1:5000/community/join", json={'community_name': self.name, 'rio_key': user.rk})
         success = (response.status_code == 200)
 
         if not success:
@@ -245,9 +245,9 @@ class Community:
         
     # If requested to join, accept. If not, invite
     def invite(self, admin_user, invitee_dict):
-        invite_json = {'Rio Key': admin_user.rk, 
-                       'Community Name': self.name, 
-                       'Invite List': [invitee.username for invitee in invitee_dict.values()] }
+        invite_json = {'rio_key': admin_user.rk, 
+                       'community_name': self.name, 
+                       'invite_list': [invitee.username for invitee in invitee_dict.values()] }
 
         response = requests.post("http://127.0.0.1:5000/community/invite", json=invite_json)
         success = (response.status_code == 200)
@@ -260,19 +260,19 @@ class Community:
     def manage(self, admin_user, user_list, modification):
         manage_user_list = list()
         for user in user_list:
-            temp_dict = {'Username': user.username}
+            temp_dict = {'username': user.username}
             if modification.lower() == 'admin':
-                temp_dict['Admin'] = 't'
+                temp_dict['admin'] = True
             elif modification.lower() == 'ban':
-                temp_dict['Ban'] = 't'
+                temp_dict['ban'] = True
             elif modification.lower() == 'remove':
-                temp_dict['Remove'] = 't'
+                temp_dict['remove'] = True
             manage_user_list.append(temp_dict)
 
         
-        response = requests.post("http://127.0.0.1:5000/community/manage", json={'Community Name': self.name, 
-                                                                             'Rio Key': admin_user.rk, 
-                                                                             'User List': manage_user_list })
+        response = requests.post("http://127.0.0.1:5000/community/manage", json={'community_name': self.name, 
+                                                                             'rio_key': admin_user.rk, 
+                                                                             'user_list': manage_user_list })
         success = (response.status_code == 200)
 
         if (success):
@@ -280,7 +280,7 @@ class Community:
         return success
 
     def manage_sponsor(self, user, modification):
-        json = {'Community Name': self.name, 'Action': modification, 'Rio Key': user.rk}
+        json = {'community_name': self.name, 'action': modification, 'rio_key': user.rk}
 
         response = requests.post("http://127.0.0.1:5000/community/sponsor", json=json)
 
@@ -380,15 +380,15 @@ class Tag:
     def __init__(self, admin_comm_user, community, type="Component", tag_details=None):
         if tag_details == None:
             tag_details = dict()
-        if 'Tag Name' not in tag_details.keys():
+        if 'name' not in tag_details.keys():
             length = random.randint(3,20)
-            tag_details['Tag Name'] =  ''.join(random.choices(string.ascii_letters, k=length))
-        if 'Description' not in tag_details.keys():
+            tag_details['name'] =  ''.join(random.choices(string.ascii_letters, k=length))
+        if 'desc' not in tag_details.keys():
             length = random.randint(3,20)
-            tag_details['Description'] =  ''.join(random.choices(string.ascii_letters, k=length))
-        tag_details['Community Name'] = community.name
-        tag_details['Tag Type'] = type
-        tag_details['Rio Key'] = admin_comm_user.user.rk
+            tag_details['desc'] =  ''.join(random.choices(string.ascii_letters, k=length))
+        tag_details['community_name'] = community.name
+        tag_details['type'] = type
+        tag_details['rio_key'] = admin_comm_user.user.rk
 
         self.init_dict = tag_details
 
@@ -404,7 +404,7 @@ class Tag:
             return self.success
 
         query = 'SELECT * FROM tag WHERE name = %s'
-        params = (self.init_dict['Tag Name'],)
+        params = (self.init_dict['name'],)
         result = db.query(query, params)
         
         self.pk      = result[0]['id']
@@ -433,7 +433,7 @@ class TagSet:
         if tagset_details == None:
             tagset_details = dict()
             length = random.randint(3,20)
-            tagset_details['tag_set_name'] =  ''.join(random.choices(string.ascii_letters, k=length))
+            tagset_details['name'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tagset_details['desc'] =  ''.join(random.choices(string.ascii_letters, k=length))
             tagset_details['start_date'] = int( time.time() )
             tagset_details['end_date'] = int( time.time() ) + random.randrange(100000, 1000000)
@@ -454,7 +454,7 @@ class TagSet:
             return self.success
 
         query = 'SELECT * FROM tag_set WHERE name = %s'
-        params = (self.init_dict['tag_set_name'],)
+        params = (self.init_dict['name'],)
         result = db.query(query, params)
         
         self.pk         = result[0]['id']
@@ -505,7 +505,7 @@ def reset_db():
     return response.status_code == 200
 
 def get_community_members(community_name, user):
-    json = {'Community Name': community_name, 'Rio Key': user.rk}
+    json = {'community_name': community_name, 'rio_key': user.rk}
     response = requests.get("http://127.0.0.1:5000/community/members", json=json)
     success = response.status_code == 200
 
@@ -522,7 +522,7 @@ def compare_comm_user_to_dict(comm_user_dict, comm_user):
          and comm_user_dict['banned']  == comm_user.banned )
 
 def get_community_tags(community_name, user):
-    json = {'Community Name': community_name, 'Rio Key': user.rk}
+    json = {'community_name': community_name, 'rio_key': user.rk}
     response = requests.get("http://127.0.0.1:5000/community/tags", json=json)
     success = response.status_code == 200
 

@@ -462,24 +462,24 @@ def test_community_sponsor_manage():
     assert community.join_via_request(future_sponsor)
 
     # Try to remove sponsor as regular member
-    assert not community.manage_sponsor(future_sponsor, 'Remove')
+    assert not community.manage_sponsor(future_sponsor, 'remove')
     # print(community.sponsor.to_dict())
     # print(sponsor.to_dict())
     # print(future_sponsor.to_dict())
     assert compare_users(community.sponsor, sponsor)
     
     # Remove sponsor as sponsor
-    assert community.manage_sponsor(sponsor, 'Remove')
+    assert community.manage_sponsor(sponsor, 'remove')
     assert community.sponsor == None
 
     # Add new sponsor, not a patron
-    assert not community.manage_sponsor(future_sponsor, 'Add')
+    assert not community.manage_sponsor(future_sponsor, 'add')
     assert community.sponsor == None
 
     # Add new sponsor who is now patron
     future_sponsor.verify_user()
     assert future_sponsor.add_to_group('patron: mvp') == True
-    assert community.manage_sponsor(future_sponsor, 'Add')
+    assert community.manage_sponsor(future_sponsor, 'add')
     # print(community.sponsor)
     # print(future_sponsor)
     assert compare_users(community.sponsor, future_sponsor)
@@ -497,7 +497,7 @@ def test_community_sponsorless_tagset_create():
     assert community.success == True
 
     # Remove sponsor as sponsor
-    assert community.manage_sponsor(sponsor, 'Remove')
+    assert community.manage_sponsor(sponsor, 'remove')
     assert community.sponsor == None
 
     # Create Tags

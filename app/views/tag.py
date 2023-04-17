@@ -14,10 +14,10 @@ from pprint import pprint
 @app.route('/tag/create', methods=['POST'])
 @jwt_required(optional=True)
 def tag_create():
-    in_tag_name = request.json['Tag Name']
-    in_tag_desc = request.json['Description']
-    in_tag_comm_name = request.json['Community Name']
-    in_tag_type = request.json['Tag Type']
+    in_tag_name = request.json['name']
+    in_tag_desc = request.json['desc']
+    in_tag_comm_name = request.json['community_name']
+    in_tag_type = request.json['type']
 
     #Fields for gecko codes only
     gecko_code_desc_provided = request.is_json and 'Gecko Code Desc' in request.json
@@ -59,7 +59,7 @@ def tag_create():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
         except:
             return abort(409, description="No Rio Key or JWT Provided")
 
@@ -136,7 +136,7 @@ def tag_update():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
         except:
             return abort(410, description="No Rio Key or JWT Provided")
 
@@ -241,7 +241,7 @@ def tag_list():
 @app.route('/tag_set/create', methods=['POST'])
 @jwt_required(optional=True)
 def tagset_create():
-    in_tag_set_name = request.json['tag_set_name']
+    in_tag_set_name = request.json['name']
     in_tag_set_desc = request.json['desc']
     in_tag_set_type = request.json['type']
     in_tag_set_comm_name = request.json['community_name']
@@ -361,9 +361,9 @@ def tagset_list():
     if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
     tag_sets = None
-    rio_key_provided = request.is_json and 'Rio Key' in request.json
+    rio_key_provided = request.is_json and 'rio_key' in request.json
     if rio_key_provided:
-        rio_key = request.json.get('Rio Key')
+        rio_key = request.json.get('rio_key')
         tag_sets = db.session.query(
             TagSet
         ).join(
@@ -392,7 +392,7 @@ def tagset_list():
             continue
 
         if (rio_key_provided):
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
             #If user is not in the Beta Tester group do not return Test TagSets
             if (tag_set.type == "Test" and not is_user_in_groups(user.id, ['Admin', 'Developer', 'BetaTester'])):
                 continue
@@ -477,7 +477,7 @@ def tag_set_update():
         user = RioUser.query.filter_by(username=current_user_username).first()
     else:
         try:
-            user = RioUser.query.filter_by(rio_key=request.json['Rio Key']).first()
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
         except:
             return abort(410, description="No Rio Key or JWT Provided")
 
