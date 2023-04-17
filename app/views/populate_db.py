@@ -98,7 +98,7 @@ def update_ongoing_game():
 # Prune unverified users that were created over a week ago
 @app.route('/ongoing_game/prune', methods=['POST'])
 @api_key_check(['Admin'])
-def prune_users():
+def prune_ongoing_game():
     number_of_secs_in_day = 86400
     current_unix_time = int(time.time())
 
