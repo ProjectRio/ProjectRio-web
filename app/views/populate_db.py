@@ -6,6 +6,7 @@ from ..util import *
 from ..glicko2 import Player
 from pprint import pprint
 from random import random
+from ..decorators import api_key_check
 
 @app.route('/populate_db/ongoing_game/', methods=['POST', 'GET'])
 def update_ongoing_game():
@@ -93,6 +94,19 @@ def update_ongoing_game():
         for game in ongoing_games:
             games_list.append(game.to_dict())
         return {'ongoing_games': games_list}
+    
+# Prune unverified users that were created over a week ago
+@app.route('/ongoing_game/prune', methods=['POST'])
+@api_key_check(['Admin'])
+def prune_users():
+    number_of_secs_in_day = 86400
+    current_unix_time = int(time.time())
+
+    cutoff_unix_time = (current_unix_time-number_of_secs_in_day)
+    old_ongoing_games = OngoingGame.query.filter(OngoingGame.date_time_start <= cutoff_unix_time).delete()
+
+    return 'Success', 200
+
 
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
