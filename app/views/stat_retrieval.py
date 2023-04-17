@@ -279,6 +279,8 @@ def endpoint_games(called_internally=False):
         '   home_player.username AS home_player, \n'
         '   away_captain.name AS away_captain, \n'
         '   home_captain.name AS home_captain, \n'
+        '   game_history.winner_elo AS winner_incoming_elo, \n'
+        '   game_history.loser_elo AS loser_incoming_elo, \n'
         '   game_history.tag_set_id AS tag_set \n'
         'FROM game \n'
         'LEFT JOIN game_history ON game.game_id = game_history.game_id \n'
@@ -298,7 +300,7 @@ def endpoint_games(called_internally=False):
         'LEFT JOIN character AS away_captain ON away_captain_cgs.char_id = away_captain.char_id \n'
         'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
         f'{where_statement} \n'
-        'GROUP BY game.game_id, away_player, home_player, away_captain, home_captain, tag_set \n'
+        'GROUP BY game.game_id, away_player, home_player, away_captain, home_captain, winner_incoming_elo, loser_incoming_elo, tag_set \n'
         'ORDER BY game.date_time_start DESC \n'
         f"{('LIMIT ' + str(limit)) if limit != None else ''}"
     )
@@ -329,6 +331,8 @@ def endpoint_games(called_internally=False):
                 'Home Score': game.home_score,
                 'Innings Played': game.innings_played,
                 'Innings Selected': game.innings_selected,
+                'Winner Incoming ELO': game.winner_incoming_elo,
+                'Loser Incoming ELO': game.loser_incoming_elo,
                 'Game Mode': game.tag_set
             })
 
