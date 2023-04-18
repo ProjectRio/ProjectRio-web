@@ -694,8 +694,11 @@ class GameHistory(db.Model):
     loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     winner_score = db.Column(db.Integer)
     loser_score = db.Column(db.Integer)
-    winner_elo = db.Column(db.Integer, nullable=False)
-    loser_elo = db.Column(db.Integer, nullable=False)
+    winner_incoming_elo = db.Column(db.Integer, nullable=False)
+    loser_incoming_elo = db.Column(db.Integer, nullable=False)
+    winner_result_elo = db.Column(db.Integer, nullable=True)
+    loser_result_elo = db.Column(db.Integer, nullable=True)
+    recalced_elo = db.Column(db.Boolean)
     winner_accept = db.Column(db.Boolean)
     loser_accept = db.Column(db.Boolean, nullable=True)
     admin_accept = db.Column(db.Boolean, nullable=True)
@@ -704,7 +707,9 @@ class GameHistory(db.Model):
     tag_set = db.relationship('TagSet', backref = 'tag_set')
 
     def __init__(self, in_game_id, in_tag_set_id, in_winner_comm_id, in_loser_com_id, 
-                 in_winner_score, in_loser_score, in_winner_elo, in_loser_elo, 
+                 in_winner_score, in_loser_score, 
+                 in_winner_incoming_elo, in_loser_incoming_elo,
+                 in_winner_result_elo, in_loser_result_elo, 
                  in_winner_accept, in_loser_accept, in_admin_accept, in_date):
         self.game_id = in_game_id
         self.tag_set_id = in_tag_set_id
@@ -712,8 +717,11 @@ class GameHistory(db.Model):
         self.loser_comm_user_id = in_loser_com_id
         self.winner_score = in_winner_score
         self.loser_score = in_loser_score
-        self.winner_elo = in_winner_elo
-        self.loser_elo = in_loser_elo
+        self.winner_incoming_elo = in_winner_incoming_elo
+        self.loser_incoming_elo = in_loser_incoming_elo
+        self.winner_result_elo = in_winner_result_elo
+        self.loser_result_elo = in_loser_result_elo
+        self.recalced_elo = False
 
         # Initializing a GameHistory to false is really saying this user hasn't accpeted or rejected yet. So we'll set that to NULL
         self.winner_accept = in_winner_accept if (in_winner_accept == True) else None

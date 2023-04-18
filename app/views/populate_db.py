@@ -230,17 +230,18 @@ def populate_db2():
     winner_elo = winner_ladder.rating
     loser_elo = loser_ladder.rating
 
+
+    # Calc player elo
+    ratings = calc_elo(tag_set_id, winner_player.id, loser_player.id)
+
     #Finally ready to write the row
     new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
                                    winner_score, loser_score, 
-                                   winner_elo, loser_elo, 
+                                   winner_elo, loser_elo,
+                                   ratings['winner_rating'], ratings['loser_rating'],
                                    True, True, True, date_time_end)
     db.session.add(new_game_history)
     db.session.commit()
-
-    # Calc player elo
-    calc_elo(tag_set_id, winner_player.id, loser_player.id)
-
     
     # ======= Character Game Summary =======
     teams = {
@@ -719,6 +720,7 @@ def submit_game_history():
     new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
                                    winner_score, loser_score, 
                                    winner_elo, loser_elo,
+                                   None, None, #We haven't calculated the new elo yet
                                    winner_accept, loser_accept, admin_accept, date)
     db.session.add(new_game_history)
     db.session.commit()
@@ -845,7 +847,7 @@ def calc_elo(tag_set_id, winner_user_id, loser_user_id):
 
     db.session.commit()
 
-    return
+    return {'winner_rating': winner_player.rating, "loser_rating": loser_player.rating}
 
 @app.route('/recalc_elo/', methods=['POST'])
 def recalc_elo(in_tag_set_id=None):
@@ -895,4 +897,13 @@ def recalc_elo(in_tag_set_id=None):
 
             winner_rio_user_id = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first().user_id
             loser_rio_user_id = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first().user_id
-            calc_elo(tag_set_id, winner_rio_user_id, loser_rio_user_id)
+            ratings = calc_elo(tag_set_id, winner_rio_user_id, loser_rio_user_id)
+
+            if ((game.winner_result_elo != None and game.winner_result_elo != ratings['winner_rating'])
+                or (game.loser_result_elo != None and game.loser_result_elo != ratings['loser_rating'])):
+                game.winner_result_elo = ratings['winner_rating']
+                game.loser_result_elo = ratings['loser_rating']
+                game.recalced_elo = True
+    
+    db.session.commit()
+            
