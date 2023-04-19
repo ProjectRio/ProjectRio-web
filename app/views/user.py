@@ -232,25 +232,26 @@ def change_password():
 # === JWT endpoints ===
 @app.route('/login/', methods=['POST'])
 def login():
-    in_username = lower_and_remove_nonalphanumeric(request.json['Username'])
     in_password = request.json['Password']
     in_email    = request.json['Email'].lower()
 
-    # filter User out of database through username
-    user = RioUser.query.filter_by(username_lowercase=in_username).first()
-
     # filter User out of database through email
-    user_by_email = RioUser.query.filter_by(email=in_email).first()
+    user = RioUser.query.filter_by(email=in_email).first()
 
-    if user == user_by_email:
-        if bc.check_password_hash(user.password, in_password):            
+    if not user.verified:
+        abort(401, description='Please verify your account before logging in')
+
+    if user:
+        if bc.check_password_hash(user.password, in_password):
             # Creating JWT and Cookies
+            access_token = create_access_token(identity=user.username)
+            set_access_cookies(response, access_token)
+
             response = jsonify({
                 'msg': 'login successful',
                 'username': user.username,
+                'access_token': access_token
             })
-            access_token = create_access_token(identity=user.username)
-            set_access_cookies(response, access_token)
 
             return response
         else:
