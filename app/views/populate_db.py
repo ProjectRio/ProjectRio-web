@@ -808,6 +808,7 @@ def update_game_status():
     return 'No recalculation needed', 200
 
 def calc_elo(tag_set_id, winner_user_id, loser_user_id):
+    # print("Winner Id", winner_user_id, "Loser Id", loser_user_id)
     winner_ladder = db.session.query(
             Ladder
         ).join(
@@ -851,7 +852,7 @@ def calc_elo(tag_set_id, winner_user_id, loser_user_id):
 
 @app.route('/recalc_elo/', methods=['POST'])
 def recalc_elo(in_tag_set_id=None):
-    tag_set_id = in_tag_set_id if in_tag_set_id != None else request.json['TagSetID']
+    tag_set_id = in_tag_set_id if in_tag_set_id != None else request.json['tag_set_id']
 
     tag_set = TagSet.query.filter_by(id=tag_set_id).first()
     if (tag_set == None):
@@ -859,9 +860,10 @@ def recalc_elo(in_tag_set_id=None):
 
     # Delete all ladder rows for tag_set
     Ladder.query.filter_by(tag_set_id=tag_set_id).delete()
+    db.session.commit()
 
     # Loop through all games and recalc the elo from the start
-    all_games = GameHistory.query.filter(tag_set_id==tag_set_id).order_by(GameHistory.date_created.asc())
+    all_games = GameHistory.query.filter(GameHistory.tag_set_id==tag_set_id).order_by(GameHistory.date_created.asc())
     for game in all_games:
         # If game counts (users or admin have accepted)
         if ((game.winner_accept == True and game.loser_accept == True and game.admin_accept == None) 
@@ -872,7 +874,7 @@ def recalc_elo(in_tag_set_id=None):
                 CommunityUser
             ).filter(
                 (Ladder.tag_set_id == tag_set_id) &
-                (CommunityUser.user_id == game.winner_comm_user_id)
+                (CommunityUser.id == game.winner_comm_user_id)
             ).first()
             loser_ladder = db.session.query(
                     Ladder
@@ -880,16 +882,20 @@ def recalc_elo(in_tag_set_id=None):
                     CommunityUser
                 ).filter(
                     (Ladder.tag_set_id == tag_set_id) &
-                    (CommunityUser.user_id == game.loser_comm_user_id)
+                    (CommunityUser.id == game.loser_comm_user_id)
                 ).first()
                 
             #Create elos for new players if needed
             if winner_ladder == None:
+                # winner_rio_user_id = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first().user_id
+                # print('Making Ladder for RioUser=', winner_rio_user_id, 'CommUser=', game.winner_comm_user_id)
                 new_glicko_player = Player()
                 winner_ladder = Ladder(tag_set_id, game.winner_comm_user_id, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
                 db.session.add(winner_ladder)
                 db.session.commit()
             if loser_ladder == None:
+                # loser_rio_user_id = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first().user_id
+                # print('Making Ladder for RioUser=', loser_rio_user_id, 'CommUser=', game.loser_comm_user_id)
                 new_glicko_player = Player()
                 loser_ladder = Ladder(tag_set_id, game.loser_comm_user_id, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
                 db.session.add(loser_ladder)
@@ -901,9 +907,9 @@ def recalc_elo(in_tag_set_id=None):
 
             if ((game.winner_result_elo != None and game.winner_result_elo != ratings['winner_rating'])
                 or (game.loser_result_elo != None and game.loser_result_elo != ratings['loser_rating'])):
-                game.winner_result_elo = ratings['winner_rating']
-                game.loser_result_elo = ratings['loser_rating']
                 game.recalced_elo = True
+            game.winner_result_elo = ratings['winner_rating']
+            game.loser_result_elo = ratings['loser_rating']
     
     db.session.commit()
             
