@@ -362,25 +362,50 @@ def tagset_list():
         return abort(409, description="Communities key added to JSON but no community ids passed")
     tag_sets = None
     rio_key_provided = request.is_json and 'rio_key' in request.json
+    rio_key = request.json.get('rio_key') if rio_key_provided else None
+    user = None
     if rio_key_provided:
-        rio_key = request.json.get('rio_key')
-        tag_sets = db.session.query(
-            TagSet
-        ).join(
-            Community
-        ).join(
-            CommunityUser
-        ).join(
-            RioUser
-        ).filter(
-            RioUser.rio_key == rio_key
-        ).all()
+        # Check if rio_key is full rio_key or shortened community_key.
+        # If community key, only return tag_sets from community that the community user is a part of
+        if len(rio_key) == 4:
+            tag_sets = db.session.query(
+                TagSet
+            ).join(
+                Community
+            ).join(
+                CommunityUser
+            ).filter(
+                CommunityUser.community_key == rio_key
+            ).all()
+            
+            user = db.session.query(
+                RioUser
+            ).join(
+                CommunityUser
+            ).filter(
+                CommunityUser.community_key == rio_key
+            ).first()
+        else: # Full rio_key
+            tag_sets = db.session.query(
+                TagSet
+            ).join(
+                Community
+            ).join(
+                CommunityUser
+            ).join(
+                RioUser
+            ).filter(
+                RioUser.rio_key == rio_key
+            ).all()
+            user = RioUser.query.filter_by(rio_key=rio_key).first()
     else:
         tag_sets = TagSet.query.all()
     
     #The rio key was bad or there are no tag sets to return
     if tag_sets is None or len(tag_sets) == 0:
         abort(409, "No/Invalid Rio Key provided or something else went wrong and no TagSets were created")
+    if rio_key_provided and user == None:
+        abort(410, "Rio or Community Key provided but no user was found")
 
     tag_set_list = list()
     for tag_set in tag_sets:
@@ -391,8 +416,7 @@ def tagset_list():
         if (communities_provided and tag_set.community_id not in community_id_list):
             continue
 
-        if (rio_key_provided):
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
+        if (user != None):
             #If user is not in the Beta Tester group do not return Test TagSets
             if (tag_set.type == "Test" and not is_user_in_groups(user.id, ['Admin', 'Developer', 'BetaTester'])):
                 continue
