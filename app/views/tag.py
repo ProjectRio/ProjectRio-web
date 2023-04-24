@@ -278,8 +278,8 @@ def tagset_create():
         'MAX(community.active_tag_set_limit) AS tag_set_limit, \n'
         'COUNT(*) AS active_tag_sets \n'
         'FROM tag_set \n'
-        'JOIN community ON community.id = tag_set.community_id \n'
-       f'WHERE tag_set.end_date > {current_unix_time} \n'
+       f'JOIN community ON community.id = tag_set.community_id \n'
+       f'WHERE tag_set.end_date > {current_unix_time} and community.id = {comm.id} \n'
         'GROUP BY tag_set.community_id \n'
     )
     results = db.session.execute(query).first()
@@ -361,8 +361,8 @@ def tagset_list():
     if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
     tag_sets = None
-    rio_key_provided = request.is_json and 'rio_key' in request.json
-    rio_key = request.json.get('rio_key') if rio_key_provided else None
+    rio_key_provided = request.is_json and 'Rio Key' in request.json #TODO change client over to rio_key or key
+    rio_key = request.json.get('Rio Key') if rio_key_provided else None
     user = None
     if rio_key_provided:
         # Check if rio_key is full rio_key or shortened community_key.
