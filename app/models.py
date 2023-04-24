@@ -245,6 +245,14 @@ class CommunityUser(db.Model):
             "banned": self.banned,
             "date_joined": self.date_joined,
         }
+    
+    def gen_key(self):
+        self.community_key = ''.join(random.choices(string.ascii_letters, k=4))
+        self.date_key_created = int( time.time() )
+
+    def delete_key(self):
+        self.community_key = None
+        self.date_key_created = None
 
 class OngoingGame(db.Model):
     game_id = db.Column(db.BigInteger, primary_key = True)

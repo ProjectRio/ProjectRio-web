@@ -13,7 +13,7 @@ import time
 @jwt_required(optional=True)
 def community_create():
     in_comm_name = request.json['community_name']
-    in_comm_type = request.json['community_type']
+    in_comm_type = request.json['type']
     private = (request.json['private'] == 1)
     create_global_link = (request.json['global_link'] == 1) or not private
     in_comm_desc = request.json['desc']
@@ -189,7 +189,7 @@ def community_join(in_comm_name = None, in_active_url = None):
 
     #Public community
     if comm.private == False:
-        if comm_user != None:
+        if comm_user != None and not comm_user.banned:
             comm_user.active = True
             comm_user.date_joined = int( time.time() )
         else:
@@ -211,7 +211,7 @@ def community_join(in_comm_name = None, in_active_url = None):
         if comm.active_url != None and in_active_url == comm.active_url:
             if comm_user == None: # User is joining with global link directly
                 comm_user = CommunityUser(in_user_id=user.id, in_comm_id=comm.id, in_admin=False, in_invited=False, in_active=True)
-            else: # User was invited or already requested access and has used the global link
+            elif comm_user.banned == False: # User was invited or already requested access and has used the global link
                 #Update user to be an active memeber
                 comm_user.active = True
                 comm_user.date_joined = int( time.time() )
@@ -281,6 +281,7 @@ def community_invite():
         if comm_user != None:
             if comm_user.invited == False: #User has requested to join, upgrade user to member
                 comm_user.active = True
+                comm_user.invited = True
                 comm_user.date_joined = int( time.time() )
                 comm_user.banned = False #Lift ban if invited back
                 db.session.add(comm_user)
@@ -415,9 +416,10 @@ def community_tags():
     user_list: [
         {
             "username": "USERNAME",
-            "Admin": "y/n"
-            "Remove": "y/n"
-            "Uninvite": "y/n"
+            "admin": True/False
+            "remove": True/False
+            "key": True/False
+
         }
     ]
     '''
@@ -470,6 +472,7 @@ def community_manage():
             if (user_actions['remove'] == True and not comm_user_to_update.admin):
                 comm_user_to_update.active = False
                 comm_user_to_update.invited = False
+                comm_user_to_update.delete_key()
                 db.session.add(comm_user_to_update)
                 db.session.commit()
                 updated_comm_users_list.append(comm_user_to_update.to_dict())
@@ -480,13 +483,32 @@ def community_manage():
         #Ban
         try:
             if (user_actions['ban'] == True and not comm_user_to_update.admin):
+                comm_user_to_update.banned = True
                 comm_user_to_update.active = False
                 comm_user_to_update.invited = False
-                comm_user_to_update.banned = True
+                comm_user_to_update.delete_key()
                 db.session.add(comm_user_to_update)
                 db.session.commit()
                 updated_comm_users_list.append(comm_user_to_update.to_dict())
                 continue
+        except:
+            pass
+
+        #Key
+        try:
+            if (user_actions['key'] == True and comm_user_to_update.active and not comm_user_to_update.banned):
+                comm_user_to_update.gen_key()
+                db.session.add(comm_user_to_update)
+                db.session.commit()
+                updated_comm_users_list.append(comm_user_to_update.to_dict())
+                continue
+            elif (user_actions['key'] == False):
+                comm_user_to_update.delete_key()
+                db.session.add(comm_user_to_update)
+                db.session.commit()
+                updated_comm_users_list.append(comm_user_to_update.to_dict())
+                continue
+
         except:
             pass
 
@@ -501,6 +523,8 @@ def community_manage():
             updated_comm_users_list.append(comm_user_to_update.to_dict())
         except:
             pass
+
+        #Update
 
     return jsonify({"members": updated_comm_users_list})
 
