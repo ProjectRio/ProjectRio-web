@@ -163,7 +163,7 @@ class Community:
             in_comm_dict['community_name'] =  ''.join(random.choices(string.ascii_letters, k=length))
             in_comm_dict['desc'] =  ''.join(random.choices(string.ascii_letters, k=length))
 
-        in_comm_dict['community_type'] = 'Official' if official else 'Unofficial'
+        in_comm_dict['type'] = 'Official' if official else 'Unofficial'
         in_comm_dict['private'] = 1 if private else 0
         in_comm_dict['global_link'] = 1 if link else 0
         in_comm_dict['rio_key'] = founder_user.rk
