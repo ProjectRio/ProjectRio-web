@@ -277,7 +277,7 @@ def endpoint_games(called_internally=False):
     # === Construct query === 
     query = (
         'SELECT game.game_id, \n'
-        '   game.stadium AS stadium, \n'
+        '   game.stadium_id AS stadium, \n'
         '   game.date_time_start AS date_time_start, \n'
         '   game.date_time_end AS date_time_end, \n'
         '   game.away_score AS away_score, \n'
@@ -311,7 +311,7 @@ def endpoint_games(called_internally=False):
         'LEFT JOIN character AS away_captain ON away_captain_cgs.char_id = away_captain.char_id \n'
         'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
         f'{where_statement} \n'
-        'GROUP BY game.game_id, away_player, home_player, away_captain, home_captain, winner_incoming_elo, loser_incoming_elo, winner_result_elo, loser_result_elo, tag_set \n'
+        'GROUP BY game.game_id, stadium, away_player, home_player, away_captain, home_captain, winner_incoming_elo, loser_incoming_elo, winner_result_elo, loser_result_elo, tag_set \n'
         'ORDER BY game.date_time_start DESC \n'
         f"{('LIMIT ' + str(limit)) if limit != None else ''}"
     )
@@ -330,6 +330,7 @@ def endpoint_games(called_internally=False):
 
             games.append({
                 'Id': game.game_id,
+                'Stadium': game.stadium,
                 'date_time_start': game.date_time_start,
                 'date_time_end': game.date_time_end,
                 'Away User': game.away_player,
