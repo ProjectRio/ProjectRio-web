@@ -1,5 +1,6 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
+from sqlalchemy import or_
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 from app.utils.send_email import send_email
@@ -377,7 +378,8 @@ def tagset_list():
                 CommunityUser
             ).filter(
                 CommunityUser.community_key == rio_key,
-                CommunityUser.active == True
+                CommunityUser.active == True,
+                or_(CommunityUser.banned == None, CommunityUser.banned == False)
             ).all()
             
             user = db.session.query(
@@ -398,7 +400,8 @@ def tagset_list():
                 RioUser
             ).filter(
                 RioUser.rio_key == rio_key,
-                CommunityUser.active == True, #TODO also need to check that user is not banned
+                CommunityUser.active == True,
+                or_(CommunityUser.banned == None, CommunityUser.banned == False)
             ).all()
 
             user = RioUser.query.filter_by(rio_key=rio_key).first()
