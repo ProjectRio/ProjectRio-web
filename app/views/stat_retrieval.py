@@ -391,7 +391,6 @@ def endpoint_event(called_internally=False):
 
         else:
             games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-            print(games)
             for game_id in games['game_ids']:
                 list_of_game_ids.append(game_id)
     except:
@@ -592,8 +591,6 @@ def endpoint_event(called_internally=False):
        f'{limit_statement}'
     )
 
-    print(query)
-
     result = db.session.execute(query).all()
 
     if called_internally:
@@ -747,8 +744,6 @@ def endpoint_landing_data():
        f'WHERE event.id IN {event_id_string}'
     )
 
-    print(query)
-
     result = db.session.execute(query).all()
 
     data = []
@@ -813,8 +808,6 @@ def endpoint_star_chances():
        f'WHERE event.id IN {event_id_string} and event.result_of_ab != 0 \n'
        f'{group_by_statement}'
     )
-
-    print(query)
 
     result = db.session.execute(query).all()
 
@@ -1020,8 +1013,6 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
        f"{where_statement}"
        f"{group_by_statement}"
     )
-
-    print(contact_batting_query)
 
     #Redo groups, removing swing type
     groups = ','.join(filter(None,[by_user, by_char]))

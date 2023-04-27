@@ -365,7 +365,6 @@ def tagset_list():
     rio_key_provided = request.is_json and 'Rio Key' in request.json #TODO change client over to rio_key or key
     rio_key = request.json.get('Rio Key') if rio_key_provided else None
     user = None
-    print(rio_key_provided, rio_key)
     if rio_key_provided:
         # Check if rio_key is full rio_key or shortened community_key.
         # If community key, only return tag_sets from community that the community user is a part of
@@ -453,7 +452,6 @@ def tagset_list():
 
         # Append passing tag set information
         tag_set_list.append(tag_set_dict)
-    pprint(tag_set_list)
     return {"Tag Sets": tag_set_list}
 
 @app.route('/tag_set/<tag_set_id>', methods=['GET'])

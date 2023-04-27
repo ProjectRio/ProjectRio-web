@@ -471,5 +471,4 @@ def prune_users():
         CommunityUser.query.filter_by(user_id=user.id).delete()
         db.session.delete(user)
         db.session.commit()
-    pprint(deleted_users)
     return jsonify(deleted_users)

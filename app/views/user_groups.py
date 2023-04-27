@@ -295,7 +295,6 @@ def refresh_patrons():
     results = db.session.execute(query).all()
     for result_row in results:
         result_dict = result_row._asdict()
-        pprint(result_dict)
         if result_dict['communities_sponsored'] > result_dict['sponsor_limit']:
             num_comms_to_remove_sponsorship_from = result_dict['communities_sponsored'] - result_dict['sponsor_limit']
             comm_list = Community.query.filter_by(sponsor_id=result_dict['id']).order_by(Community.date_created)
