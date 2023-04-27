@@ -158,6 +158,9 @@ def endpoint_games(called_internally=False):
         list_of_exclude_captain_ids =list(itertools.chain(*list_of_exclude_captain_id_tuples))
         tuple_exclude_captain_ids = tuple(list_of_exclude_captain_ids)
 
+        stadium = request.args.getlist('stadium')
+        tuple_stadium_ids = tuple(stadium)
+
         limit = int()
         try:
             if request.args.get('limit_games') is None:
@@ -266,9 +269,15 @@ def endpoint_games(called_internally=False):
         where_statement += f"AND tag.id NOT IN {exclude_tag_id_string} \n"
 
 
+    stadium_id_string, stadium_empty = format_tuple_for_SQL(tuple_stadium_ids)
+    if (not stadium_empty):
+        where_statement += f"AND game.stadium_id NOT IN {stadium_id_string} \n"
+
+
     # === Construct query === 
     query = (
         'SELECT game.game_id, \n'
+        '   game.stadium AS stadium, \n'
         '   game.date_time_start AS date_time_start, \n'
         '   game.date_time_end AS date_time_end, \n'
         '   game.away_score AS away_score, \n'
@@ -338,34 +347,8 @@ def endpoint_games(called_internally=False):
                 'Game Mode': game.tag_set
             })
 
-        # If there are games with matching tags, get all additional tags they have
-        # if game_ids:
-        #     where_game_id = str()
-        #     game_id_string, game_id_empty = format_list_for_SQL(game_ids)
-        #     where_game_id = f'WHERE game_tag.game_id = {game_id_string} '
-
-        #     tags_query = (
-        #         'SELECT '
-        #         'game_tag.game_id as game_id, '
-        #         'game_tag.tag_id as tag_id, '
-        #         'tag.name as name '
-        #         'FROM game_tag '
-        #         'LEFT JOIN tag ON game_tag.tag_id = tag.id '
-        #         f'{where_game_id}'
-        #         'GROUP BY game_id, tag_id, name'
-        #     )
-
-        #     tag_results = db.session.execute(tags_query).all()
-        #     for tag in tag_results:
-        #         for game in games:
-        #             if game['Id'] == tag.game_id:
-        #                 game['Tags'].append(tag.name)
-
         return {'games': games}
 
-
-
-# == Functions to return coordinates for graphing ==
 '''
 @Endpoint: Events
 @Description: Used to pick out events that fit the given params
