@@ -151,11 +151,11 @@ def verify_email(active_url):
 # === Password change endpoints ===
 @app.route('/request_password_change/', methods=['POST'])
 def request_password_change():
-    if '@' in request.json['username or email']:
-        email_lowercase = request.json['username or email'].lower()
+    if '@' in request.json['username_or_email']:
+        email_lowercase = request.json['username_or_email'].lower()
         user = RioUser.query.filter_by(email=email_lowercase).first()
     else:
-        username_lower = lower_and_remove_nonalphanumeric(request.json['username or email'])
+        username_lower = lower_and_remove_nonalphanumeric(request.json['username_or_email'])
         user = RioUser.query.filter_by(username_lowercase=username_lower).first()
 
     if not user:
@@ -218,8 +218,7 @@ def change_password():
     if user.verified == False:
         return abort(401, 'Email unverified')
 
-    user.password = bc.generate_password_hash(password)
-    user.active_url = None
+    user.reset_password(password)
     db.session.add(user)
     db.session.commit()
 

@@ -161,6 +161,10 @@ class RioUser(db.Model, UserMixin):
         self.active_url = secrets.token_urlsafe(32)
         self.date_created = int(time.time())
 
+    def reset_password(self, new_password):
+        self.password = bc.generate_password_hash(new_password).decode('utf8')
+        self.active_url = None
+
 class UserGroupUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False)
