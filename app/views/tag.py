@@ -364,6 +364,7 @@ def tagset_list():
     rio_key_provided = request.is_json and 'Rio Key' in request.json #TODO change client over to rio_key or key
     rio_key = request.json.get('Rio Key') if rio_key_provided else None
     user = None
+    print(rio_key_provided, rio_key)
     if rio_key_provided:
         # Check if rio_key is full rio_key or shortened community_key.
         # If community key, only return tag_sets from community that the community user is a part of
@@ -376,8 +377,7 @@ def tagset_list():
                 CommunityUser
             ).filter(
                 CommunityUser.community_key == rio_key,
-                CommunityUser.active == True,
-                CommunityUser.banned == False
+                CommunityUser.active == True
             ).all()
             
             user = db.session.query(
@@ -398,9 +398,9 @@ def tagset_list():
                 RioUser
             ).filter(
                 RioUser.rio_key == rio_key,
-                CommunityUser.active == True,
-                CommunityUser.banned == False
+                CommunityUser.active == True, #TODO also need to check that user is not banned
             ).all()
+
             user = RioUser.query.filter_by(rio_key=rio_key).first()
     else:
         tag_sets = TagSet.query.all()
