@@ -245,13 +245,14 @@ def login():
         if bc.check_password_hash(user.password, in_password):
             # Creating JWT and Cookies
             access_token = create_access_token(identity=user.username)
-            set_access_cookies(response, access_token)
-
+            
             response = jsonify({
                 'msg': 'login successful',
                 'username': user.username,
                 'access_token': access_token
             })
+            
+            set_access_cookies(response, access_token)
 
             return response
         else:
@@ -259,7 +260,8 @@ def login():
     else:
         return abort(408, description='Incorrect Username or Password')
 
-@app.route('/logout/', methods=['POST'])
+@app.route('/logout/', methods=['GET'])
+@jwt_required()
 def logout():    
     response = jsonify({'msg': 'logout successful'})
     unset_jwt_cookies(response)
@@ -270,7 +272,7 @@ def logout():
 def validate_JWT():
     try:
         current_user_username = get_jwt_identity()
-        return jsonify(logged_in_as=current_user_username)
+        return jsonify({"logged_in_as": current_user_username})
     except:
         return 'No JWT...'
 
