@@ -271,7 +271,7 @@ def endpoint_games(called_internally=False):
 
     stadium_id_string, stadium_empty = format_tuple_for_SQL(tuple_stadium_ids)
     if (not stadium_empty):
-        where_statement += f"AND game.stadium_id NOT IN {stadium_id_string} \n"
+        where_statement += f"AND game.stadium_id IN {stadium_id_string} \n"
 
 
     # === Construct query === 
@@ -705,26 +705,22 @@ def endpoint_landing_data():
         'batter_user.username AS batter_username, \n'
         'batter.batting_hand, \n'
         'pitcher.fielding_hand, \n'
-        'contact.ball_power AS ball_power '
-        'contact.ball_horiz_angle AS ball_horiz_angle '
-        'contact.ball_vert_angle AS ball_vert_angle '
-        'contact.contact_absolute AS contact_absolute '
-        'contact.contact_quality AS contact_quality '
-        'contact.rng1 AS rng1 '
-        'contact.rng2 AS rng2 '
-        'contact.rng3 AS rng3 '
-        'contact.ball_x_velocity AS ball_x_velocity '
-        'contact.ball_y_velocity AS ball_y_velocity '
-        'contact.ball_z_velocity AS ball_z_velocity '
-        'contact.ball_x_contact_pos AS ball_x_contact_pos '
-        'contact.ball_y_contact_pos AS ball_y_contact_pos '
-        'contact.ball_z_contact_pos AS ball_z_contact_pos '
-        'contact.bat_x_contact_pos AS bat_x_contact_pos '
-        'contact.bat_y_contact_pos AS bat_y_contact_pos '
-        'contact.bat_z_contact_pos AS bat_z_contact_pos '
-        'contact.ball_x_landing_pos AS ball_x_landing_pos '
-        'contact.ball_y_landing_pos AS ball_y_landing_pos '
-        'contact.ball_z_landing_pos AS ball_z_landing_pos '
+        'contact.ball_power AS ball_power, \n'
+        'contact.ball_horiz_angle AS ball_horiz_angle, \n'
+        'contact.ball_vert_angle AS ball_vert_angle, \n'
+        'contact.contact_absolute AS contact_absolute, \n'
+        'contact.contact_quality AS contact_quality, \n'
+        'contact.rng1 AS rng1, \n'
+        'contact.rng2 AS rng2, \n'
+        'contact.rng3 AS rng3, \n'
+        'contact.ball_x_velocity AS ball_x_velocity, \n'
+        'contact.ball_y_velocity AS ball_y_velocity, \n'
+        'contact.ball_z_velocity AS ball_z_velocity, \n'
+        'contact.ball_x_contact_pos AS ball_x_contact_pos, \n'
+        'contact.ball_z_contact_pos AS ball_z_contact_pos, \n'
+        'contact.ball_x_landing_pos AS ball_x_landing_pos, \n'
+        'contact.ball_y_landing_pos AS ball_y_landing_pos, \n'
+        'contact.ball_z_landing_pos AS ball_z_landing_pos, \n'
         'contact.ball_max_height AS ball_max_height, \n'
         'contact.input_direction_stick AS stick_input, \n'
         'contact.charge_power_up AS charge_power_up, \n'
