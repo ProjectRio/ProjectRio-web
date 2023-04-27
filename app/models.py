@@ -3,6 +3,7 @@ from flask_login import UserMixin
 from .util import *
 import time
 import secrets
+import random
 
 class Character(db.Model):
     char_id = db.Column(db.Integer, primary_key=True)
@@ -235,8 +236,8 @@ class CommunityUser(db.Model):
         self.active = in_active
         self.date_joined = int( time.time() )
 
-    def to_dict(self):
-        return {
+    def to_dict(self, include_key=False):
+        ret_dict = {
             "id": self.id,
             "user_id": self.user_id,
             "admin": self.admin,
@@ -245,6 +246,10 @@ class CommunityUser(db.Model):
             "banned": self.banned,
             "date_joined": self.date_joined,
         }
+        if (include_key):
+            ret_dict["community_key"] = self.community_key
+            ret_dict["date_key_created"] = self.date_key_created
+        return ret_dict
     
     def gen_key(self):
         self.community_key = ''.join(random.choices(string.ascii_letters, k=4))

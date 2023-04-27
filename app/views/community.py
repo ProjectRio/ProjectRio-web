@@ -609,6 +609,47 @@ def community_sponsor():
 
     return 'Success', 200
 
+@app.route('/community/key', methods=['POST'])
+@jwt_required(optional=True)
+def community_key():
+    in_comm_name = request.json['community_name']
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
+    comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
+
+    valid_actions = ['generate', 'revoke']
+    action = request.json['action']
+
+    #Get user via JWT or RioKey 
+    user=None
+    current_user_username = get_jwt_identity()
+    if current_user_username:
+        user = RioUser.query.filter_by(username=current_user_username).first()
+    else:
+        try:
+            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
+        except:
+            return abort(409, description="No Rio Key or JWT Provided")  
+    
+    if comm == None:
+        return abort(410, description='Could not find community with name={in_comm_name}')
+    if user == None:
+        return abort(411, description='No user logged in or associated with RioKey.')
+
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+    if (comm_user == None):
+        return abort(412, description='User is not part of this community or not an admin.')
+    
+    if action not in valid_actions:
+        return abort(413, description='Invalid action provided')
+    
+    if action == 'generate':
+        comm_user.gen_key()
+    elif action == 'revoke':
+        comm_user.delete_key()
+    db.session.commit()
+    return jsonify(comm_user.to_dict(True))
+    
+
 def add_all_users_to_comm(comm_id):
     # Do not create duplicate users 
     community_user_list = CommunityUser.query.filter_by(community_id=comm_id)

@@ -375,7 +375,9 @@ def tagset_list():
             ).join(
                 CommunityUser
             ).filter(
-                CommunityUser.community_key == rio_key
+                CommunityUser.community_key == rio_key,
+                CommunityUser.active == True,
+                CommunityUser.banned == False
             ).all()
             
             user = db.session.query(
@@ -395,7 +397,9 @@ def tagset_list():
             ).join(
                 RioUser
             ).filter(
-                RioUser.rio_key == rio_key
+                RioUser.rio_key == rio_key,
+                CommunityUser.active == True,
+                CommunityUser.banned == False
             ).all()
             user = RioUser.query.filter_by(rio_key=rio_key).first()
     else:
