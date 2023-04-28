@@ -8,6 +8,7 @@ import secrets
 from ..models import *
 from ..consts import *
 from ..util import *
+from ..user_util import *
 from app.views.user_groups import *
 import time
 from pprint import pprint
@@ -53,16 +54,7 @@ def tag_create():
         return abort(413, description='Name already in use (Tag, TagSet, or Community)')
 
     # Get user making the new community
-    #Get user via JWT or RioKey
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
+    user=get_user(request)
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
@@ -131,15 +123,7 @@ def tag_update():
         return abort(418, description="Gecko codes desc can only be added to gecko code tags")
 
     #Make sure user is admin of community or Rio admin
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
-        except:
-            return abort(410, description="No Rio Key or JWT Provided")
+    user=get_user(request)
 
     if user == None:
         return abort(411, description='Username associated with JWT not found.')
@@ -290,17 +274,8 @@ def tagset_create():
         if comm.comm_type != 'Official' and (result_dict['active_tag_sets'] >= result_dict['tag_set_limit']):
             return abort(415, description='Community has reached active tag_set_limit')
 
-    # Get user making the new community
-    #Get user via JWT or RioKey
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
-        except:
-            return abort(416, description="No Rio Key or JWT Provided")
+    # Get user making the new TagSet
+    user=get_user(request)
 
     if user == None:
         return abort(417, description='Username associated with JWT not found.')
@@ -500,15 +475,7 @@ def tag_set_update():
         return abort(414, description='Invalid start/end times')
 
     #Make sure user is admin of community or Rio admin
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()
-        except:
-            return abort(410, description="No Rio Key or JWT Provided")
+    user=get_user(request)
 
     if user == None:
         return abort(411, description='Username associated with JWT not found.')
@@ -646,6 +613,7 @@ def get_ladder(in_tag_set=None):
         'JOIN community_user as cu on comm_user_id = cu.id \n'
         'JOIN rio_user as ru on cu.user_id = ru.id \n'
         'JOIN ladder on ladder.community_user_id = cu.id \n'
+       f"WHERE ladder.tag_set_id = {tag_set.id} \n"
         'GROUP BY \n'
         '    comm_user_id, ru.username, ladder.rating;'
     )
