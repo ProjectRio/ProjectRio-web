@@ -581,20 +581,78 @@ def get_ladder(in_tag_set=None):
     if tag_set == None:
         return abort(409, description=f"Could not find TagSet with name={tag_set_name}")
 
-    query = (
-        'SELECT \n'
-        'ladder.rating, \n'
-        'rio_user.id, \n'
-        'rio_user.username \n'
-        'FROM ladder \n'
-        'JOIN community_user on community_user.id = ladder.community_user_id \n'
-        'JOIN rio_user on rio_user.id = community_user.user_id \n'
-       f"WHERE ladder.tag_set_id = {tag_set.id}"
+    game_history_query = (
+        'SELECT '
+        '    comm_user_id, \n'
+        '    ru.username AS username, \n'
+        '    ladder.rating AS rating, \n'
+        '    SUM(is_winner) AS num_wins, \n'
+        '    SUM(is_loser) AS num_losses, \n'
+        '    COUNT(*) - SUM(is_winner) - SUM(is_loser) AS num_ties \n'
+        'FROM \n'
+        '    ( \n'
+        '        SELECT \n'
+        '            winner_comm_user_id AS comm_user_id, \n'
+        '            1 AS is_winner, \n'
+        '            0 AS is_loser \n'
+        '        FROM \n'
+        '            game_history \n'
+       f"        WHERE tag_set_id = {tag_set.id} \n"
+        '                AND (winner_score > loser_score) \n'
+        '                AND ( \n'
+        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    OR \n'
+        '                    (admin_accept)) \n'
+        '        UNION ALL \n'
+        '        SELECT \n'
+        '            loser_comm_user_id AS comm_user_id, \n'
+        '            0 AS is_winner, \n'
+        '            1 AS is_loser \n'
+        '        FROM \n'
+        '            game_history \n'
+       f"        WHERE tag_set_id = {tag_set.id} \n"
+        '                AND (winner_score > loser_score) \n'
+        '                AND ( \n'
+        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    OR \n'
+        '                    (admin_accept)) \n'
+        '        UNION ALL \n'
+        '        SELECT \n'
+        '            winner_comm_user_id AS comm_user_id, \n'
+        '            0 AS is_winner, \n'
+        '            0 AS is_loser \n'
+        '        FROM \n'
+        '            game_history \n'
+       f"        WHERE tag_set_id = {tag_set.id} \n"
+        '                AND (winner_score = loser_score) \n'
+        '                AND ( \n'
+        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    OR \n'
+        '                    (admin_accept)) \n'
+        '        UNION ALL \n'
+        '        SELECT \n'
+        '            loser_comm_user_id AS comm_user_id, \n'
+        '            0 AS is_winner, \n'
+        '            0 AS is_loser \n'
+        '        FROM \n'
+        '            game_history \n'
+       f"        WHERE tag_set_id = {tag_set.id} \n"
+        '                AND (winner_score = loser_score) \n'
+        '                AND ( \n'
+        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    OR \n'
+        '                    (admin_accept)) \n'
+        '    ) AS combined \n'
+        'JOIN community_user as cu on comm_user_id = cu.id \n'
+        'JOIN rio_user as ru on cu.user_id = ru.id \n'
+        'JOIN ladder on ladder.community_user_id = cu.id \n'
+        'GROUP BY \n'
+        '    comm_user_id, ru.username, ladder.rating;'
     )
+    query_results = db.session.execute(game_history_query).all()
 
-    results = db.session.execute(query).all()
     ladder_results = dict()
-    for result_row in results:
+    for result_row in query_results:
         result_dict = result_row._asdict()
         ladder_results[result_dict['username']] = result_row._asdict()
     return jsonify(ladder_results)
