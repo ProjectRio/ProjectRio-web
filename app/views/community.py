@@ -6,6 +6,7 @@ from app.utils.send_email import send_email
 from ..models import db, RioUser, CommunityUser, Community, Tag, TagSet
 from ..consts import *
 from ..util import *
+from ..user_util import *
 from app.views.user_groups import *
 import time
 
@@ -20,16 +21,7 @@ def community_create():
     
     # Get user making the new community
     #Get user via JWT or RioKey 
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
-
+    user=get_user(request)
 
     comm = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
     if comm != None:
@@ -146,15 +138,7 @@ def community_join(in_comm_name = None, in_active_url = None):
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey 
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
+    user=get_user(request)
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
@@ -239,15 +223,7 @@ def community_invite():
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
+    user=get_user(request)
 
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
@@ -337,15 +313,7 @@ def community_members():
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey 
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
+    user=get_user(request)
 
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
@@ -378,15 +346,7 @@ def community_tags():
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
     #Get user via JWT or RioKey
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
+    user=get_user(request)
         
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
@@ -430,16 +390,8 @@ def community_manage():
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
-    #Get user via JWT or RioKey 
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
+    #Get user via JWT or RioKey
+    user=get_user(request)
 
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
@@ -535,7 +487,6 @@ def community_sponsor():
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
-
     if comm == None:
         return abort(409, description='Could not find community with name={in_comm_name}')
 
@@ -549,16 +500,8 @@ def community_sponsor():
             sponsor_user = RioUser.query.filter_by(id=comm.sponsor_id).first()
             return jsonify({'sponsor': sponsor_user})
 
-    #Get user via JWT or RioKey 
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")
+    #Get user via JWT or RioKey
+    user=get_user(request)
 
     if user == None:
         return abort(409, description='No user logged in or associated with RioKey.')
@@ -620,15 +563,7 @@ def community_key():
     action = request.json['action']
 
     #Get user via JWT or RioKey 
-    user=None
-    current_user_username = get_jwt_identity()
-    if current_user_username:
-        user = RioUser.query.filter_by(username=current_user_username).first()
-    else:
-        try:
-            user = RioUser.query.filter_by(rio_key=request.json['rio_key']).first()       
-        except:
-            return abort(409, description="No Rio Key or JWT Provided")  
+    user=get_user(request)
     
     if comm == None:
         return abort(410, description='Could not find community with name={in_comm_name}')
