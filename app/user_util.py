@@ -57,3 +57,17 @@ def get_user(request):
   
   # Return
   return None
+
+def get_user_via_rio_or_comm_key(key):
+    user = None
+    if len(key) == 4: #Community Key 
+        user = db.session.query(
+            RioUser
+        ).join(
+            CommunityUser
+        ).filter(
+            CommunityUser.community_key == key
+        ).first()
+    else: #Rio Key
+        user = RioUser.query.filter_by(rio_key=key).first()
+    return user
