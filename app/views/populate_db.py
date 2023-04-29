@@ -3,6 +3,7 @@ from flask import current_app as app
 from ..models import *
 from ..consts import *
 from ..util import *
+from ..user_util import *
 from ..glicko2 import Player
 from pprint import pprint
 from random import random
@@ -19,8 +20,9 @@ def update_ongoing_game():
             return abort(409, 'Already completed game with this ID')
 
         if game == None:
-            home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
-            away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
+            #Is provided key a Rio key or community key
+            home_player = get_user_via_rio_or_comm_key(request.json['Home Player'])
+            away_player = get_user_via_rio_or_comm_key(request.json['Away Player'])
 
             if home_player is None or away_player is None:
                 return abort(410, 'Invalid Rio User')
@@ -230,9 +232,8 @@ def populate_db2():
     winner_elo = winner_ladder.rating
     loser_elo = loser_ladder.rating
 
-
     # Calc player elo
-    ratings = calc_elo(tag_set_id, winner_player.id, loser_player.id)
+    ratings = calc_elo(winner_ladder, loser_ladder)
 
     #Finally ready to write the row
     new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
@@ -765,8 +766,6 @@ def update_game_status():
     confirmer_rio_key = request.json.get('rio_key')
     confirmer_accept = request.json.get('accept')
 
-    print(confirmer_rio_key)
-
     # Check for admin verification
     confirmer_comm_user = db.session.query(
             CommunityUser
@@ -803,33 +802,10 @@ def update_game_status():
     # See if we need to adjust the elo to ignore this game
     recalc_needed = admin_has_changed_accept or ((game_history.winner_accept and game_history.winner_accept and game_history.admin_accept == None) and not users_already_accepted)
     if (recalc_needed):
-        recalc_elo(tag_set.id)
-        return 'Recalculated ELO', 200
+        return recalc_elo(tag_set.id)
     return 'No recalculation needed', 200
 
-def calc_elo(tag_set_id, winner_user_id, loser_user_id):
-    # print("Winner Id", winner_user_id, "Loser Id", loser_user_id)
-    winner_ladder = db.session.query(
-            Ladder
-        ).join(
-            CommunityUser
-        ).filter(
-            (Ladder.tag_set_id == tag_set_id) &
-            (CommunityUser.user_id == winner_user_id)
-        ).first()
-    loser_ladder = db.session.query(
-            Ladder
-        ).join(
-            CommunityUser
-        ).filter(
-            (Ladder.tag_set_id == tag_set_id) &
-            (CommunityUser.user_id == loser_user_id)
-        ).first()
-
-    if winner_ladder == None:
-        return abort(409, description="No winner ladder entry")
-    if loser_ladder == None:
-        return abort(409, description="No loser ladder entry")
+def calc_elo(winner_ladder, loser_ladder):
 
     winner_player = Player(winner_ladder.rating, winner_ladder.rd, winner_ladder.vol)
     loser_player = Player(loser_ladder.rating, loser_ladder.rd, loser_ladder.vol)
@@ -838,6 +814,30 @@ def calc_elo(tag_set_id, winner_user_id, loser_user_id):
     loser_player.update_player([winner_ladder.rating], [winner_ladder.rd], [0])
 
     #Todo function in Ladder
+
+    #Get RioUser for debug
+    winner_ru = db.session.query(
+                RioUser
+            ).join(
+                CommunityUser
+            ).filter(
+                CommunityUser.id == winner_ladder.community_user_id
+            ).first()
+    loser_ru = db.session.query(
+                RioUser
+            ).join(
+                CommunityUser
+            ).filter(
+                CommunityUser.id == loser_ladder.community_user_id
+            ).first()
+    ret_dict = {'winner_username': winner_ru.username, 
+                'winner_rating': winner_player.rating, 'winner_previous_rating': winner_ladder.rating,
+                'winner_rd': winner_player.rd,'winner_previous_rd': winner_ladder.rd,
+                'winner_vol': winner_player.vol,'winner_previous_vol': winner_ladder.vol,
+                'loser_username': loser_ru.username,
+                'loser_rating': loser_player.rating, 'loser_previous_rating': loser_ladder.rating,
+                'loser_rd': loser_player.rd,'loser_previous_rd': loser_ladder.rd,
+                'loser_vol': loser_player.vol,'loser_previous_vol': loser_ladder.vol}
     winner_ladder.rating = winner_player.rating
     winner_ladder.rd = winner_ladder.rd
     winner_ladder.vol = winner_ladder.vol
@@ -848,7 +848,7 @@ def calc_elo(tag_set_id, winner_user_id, loser_user_id):
 
     db.session.commit()
 
-    return {'winner_rating': winner_player.rating, "loser_rating": loser_player.rating}
+    return ret_dict
 
 @app.route('/recalc_elo/', methods=['POST'])
 def recalc_elo(in_tag_set_id=None):
@@ -864,7 +864,8 @@ def recalc_elo(in_tag_set_id=None):
 
     # Loop through all games and recalc the elo from the start
     all_games = GameHistory.query.filter(GameHistory.tag_set_id==tag_set_id).order_by(GameHistory.date_created.asc())
-    for game in all_games:
+    game_calc_dict = dict()
+    for count, game in enumerate(all_games):
         # If game counts (users or admin have accepted)
         if ((game.winner_accept == True and game.loser_accept == True and game.admin_accept == None) 
              or game.admin_accept == True):
@@ -901,9 +902,11 @@ def recalc_elo(in_tag_set_id=None):
                 db.session.add(loser_ladder)
                 db.session.commit()
 
-            winner_rio_user_id = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first().user_id
-            loser_rio_user_id = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first().user_id
-            ratings = calc_elo(tag_set_id, winner_rio_user_id, loser_rio_user_id)
+            # print(f"GameHistoryId={game.id}")
+            ratings = calc_elo(winner_ladder, loser_ladder)
+
+            ratings['game_history_id'] = game.id
+            game_calc_dict[count] = ratings
 
             if ((game.winner_result_elo != None and game.winner_result_elo != ratings['winner_rating'])
                 or (game.loser_result_elo != None and game.loser_result_elo != ratings['loser_rating'])):
@@ -912,4 +915,4 @@ def recalc_elo(in_tag_set_id=None):
             game.loser_result_elo = ratings['loser_rating']
     
     db.session.commit()
-            
+    return game_calc_dict
