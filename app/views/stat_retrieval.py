@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, Event
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event
 from ..consts import *
 from ..util import *
 import pprint
@@ -1126,18 +1126,18 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
         'SELECT '
        f"{select_user}"
        f"{select_char}"
-       f"COUNT(*){'/9' if group_by_char != True else ''} AS game_appearances, \n "
        f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_wins, \n"
        f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_loses, \n"
        f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_wins, \n"
        f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_loses, \n"      
-        'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
-        'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
-        'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
-        'SUM(character_game_summary.offensive_stars_put_in_play) AS offensive_stars_put_in_play, \n'
-        'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
-        'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
-        'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
+       f"COUNT(*){'/9' if group_by_char != True else ''} AS game_appearances \n "
+        # 'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
+        # 'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
+        # 'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
+        # 'SUM(character_game_summary.offensive_stars_put_in_play) AS offensive_stars_put_in_play, \n'
+        # 'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
+        # 'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
+        # 'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
         'FROM character_game_summary \n'
         'JOIN game ON character_game_summary.game_id = game.game_id \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
@@ -1343,3 +1343,42 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_b
         if type_of_result not in in_stat_dict:
             in_stat_dict[type_of_result] = {}
         in_stat_dict[type_of_result].update(data_dict)
+
+
+@app.route('/stats/fix/', methods = ['GET'])
+def fix_event_cgs_ids():
+    all_games = Game.query.filter_by(game_id=79846463289)
+    for game in all_games:
+        all_cgs = CharacterGameSummary.query.filter_by(game_id=game.game_id)
+        cgs_dict = dict()
+        cgs_dict[0] = {}
+        cgs_dict[1] = {}
+        cgs_by_id = dict()
+        for cgs in all_cgs:
+            print(cgs.team_id, cgs.roster_loc)
+            cgs_dict[cgs.team_id][cgs.roster_loc] = cgs
+
+            cgs_by_id[cgs.id] = cgs
+
+        all_game_events = Event.query.filter_by(game_id=game.game_id)
+        for event in all_game_events:
+            #Fix pitcher_id
+            pitcher_roster_loc = cgs_by_id[event.pitcher_id].roster_loc
+            pitcher_team_id = 1-cgs_by_id[event.pitcher_id].team_id
+            old_pitcher_id = event.pitcher_id
+            event.pitcher_id = cgs_dict[pitcher_team_id][pitcher_roster_loc].id
+
+            #Fix batter_id
+            batter_roster_loc = cgs_by_id[event.batter_id].roster_loc
+            batter_team_id = 1-cgs_by_id[event.batter_id].team_id
+            old_batter_id = event.batter_id
+            event.batter_id = cgs_dict[batter_team_id][batter_roster_loc].id
+
+            print('Pitcher: ', old_pitcher_id, '->', event.pitcher_id, ' Batter: ', old_batter_id, '->', event.batter_id, sep="")
+
+            #Fix catcher_id
+            catcher_roster_loc = cgs_by_id[event.catcher_id].roster_loc
+            catcher_team_id = 1-cgs_by_id[event.catcher_id].team_id
+            event.catcher_id = cgs_dict[catcher_team_id][catcher_roster_loc].id
+
+        db.session.commit()
