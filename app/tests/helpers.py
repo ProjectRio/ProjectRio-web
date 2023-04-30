@@ -135,7 +135,7 @@ class User:
 
 
 class CommUser():
-    def __init__(self, user, comm_user_pk, comm_id, admin, invited, active, banned):
+    def __init__(self, user, comm_user_pk, comm_id, admin, invited, active, banned, ck):
         self.pk = comm_user_pk
         self.user = user
         self.comm_id = comm_id
@@ -143,6 +143,7 @@ class CommUser():
         self.invited = invited
         self.active = active
         self.banned = banned
+        self.ck = ck
     
     def to_dict(self):
         return {
@@ -152,7 +153,8 @@ class CommUser():
             'Admin': self.admin,
             'Invited': self.invited,
             'Active': self.active,
-            'Banned': self.banned
+            'Banned': self.banned,
+            'CommKey': self.ck
         }
 
 class Community:
@@ -190,7 +192,7 @@ class Community:
         params = (str(self.pk),str(founder_user.pk))
         result = db.query(query, params)
         self.founder = CommUser(founder_user, result[0]['id'], self.pk, result[0]['admin'], result[0]['invited'], 
-                                result[0]['active'], result[0]['banned'])
+                                result[0]['active'], result[0]['banned'], result[0]['community_key'])
         print(self.founder.to_dict())
         self.members = dict()
         self.members[self.founder.pk] = self.founder
@@ -221,7 +223,7 @@ class Community:
         params = (str(self.pk),str(user.pk),)
         result = db.query(query, params)
         comm_user = CommUser(user, result[0]['id'], self.pk, result[0]['admin'], result[0]['invited'], 
-                             result[0]['active'], result[0]['banned'])
+                             result[0]['active'], result[0]['banned'], result[0]['community_key'])
         self.members[comm_user.pk] = comm_user
         return success
         
@@ -238,7 +240,7 @@ class Community:
         params = (str(self.pk),str(user.pk),)
         result = db.query(query, params)
         comm_user = CommUser(user, result[0]['id'], self.pk, result[0]['admin'], result[0]['invited'], 
-                             result[0]['active'], result[0]['banned'])
+                             result[0]['active'], result[0]['banned'], result[0]['community_key'])
         self.members[comm_user.pk] = comm_user
 
         return success
@@ -268,11 +270,20 @@ class Community:
             elif modification.lower() == 'remove':
                 temp_dict['remove'] = True
             manage_user_list.append(temp_dict)
-
         
         response = requests.post("http://127.0.0.1:5000/community/manage", json={'community_name': self.name, 
                                                                              'rio_key': admin_user.rk, 
                                                                              'user_list': manage_user_list })
+        success = (response.status_code == 200)
+
+        if (success):
+            self.refresh()
+        return success
+    
+    def key(self, member_rk, action):
+        payload = {'rio_key': member_rk, 'action': action, 'community_name': self.name}
+        
+        response = requests.post("http://127.0.0.1:5000/community/key", json=payload)
         success = (response.status_code == 200)
 
         if (success):
@@ -303,7 +314,8 @@ class Community:
                  'community_user.admin AS admin,\n'
                  'community_user.invited AS invited,\n'
                  'community_user.active AS active,\n'
-                 'community_user.banned AS banned\n'
+                 'community_user.banned AS banned,\n'
+                 'community_user.community_key AS community_key \n'
                  'FROM community_user \n'
                  'JOIN rio_user ON community_user.user_id = rio_user.id \n'
                  'WHERE community_user.community_id = %s')
@@ -318,7 +330,7 @@ class Community:
             user.rk       = result_row['rio_key']
             user.url      = result_row['url']
             comm_user = CommUser(user, result_row['id'], self.pk, result_row['admin'], result_row['invited'], 
-                                    result_row['active'], result_row['banned'])
+                                    result_row['active'], result_row['banned'], result_row['community_key'])
             print(comm_user.to_dict())
             self.members[comm_user.pk] = comm_user
 

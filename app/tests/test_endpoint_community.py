@@ -603,3 +603,75 @@ def test_community_gecko_tags():
             assert 'gecko_code' in tag.keys()
         else:
             assert 'gecko_code' not in tag.keys()
+
+def test_community_keys():
+    wipe_db()
+
+    sponsor = User()
+    sponsor.register()
+    assert sponsor.success == True
+
+    sponsor.verify_user()
+    assert sponsor.add_to_group('admin') == True
+
+    #### Community #####
+    communityA = Community(sponsor, official=True, private=False, link=False)
+    assert communityA.success == True
+
+    # Add tag with admin
+    tag = Tag(communityA.founder, communityA)
+    tag.create()
+
+    tagset = TagSet(communityA.founder, communityA, [tag], 'League')
+    tagset.create()
+
+    # Refresh to get tags
+    communityA.refresh()
+    #### =================
+
+    #### CommunityB #####
+    communityB = Community(sponsor, official=True, private=False, link=False)
+    assert communityB.success == True
+
+    # Add tag with admin
+    tag = Tag(communityB.founder, communityB)
+    tag.create()
+
+    tagset = TagSet(communityB.founder, communityB, [tag], 'League')
+    tagset.create()
+
+    # Refresh to get tags
+    communityB.refresh()
+    #### =================
+
+    # Two players
+    member = User()
+    member.register()
+
+    member.verify_user()
+
+    payload = {'community_name': communityA.name, 'rio_key': member.rk, 'action': 'generate'}
+    response = requests.post("http://127.0.0.1:5000/community/key", json=payload)
+    assert (response.status_code == 200)
+    pprint(response.json())
+    communityA.refresh()
+
+    comm_key = communityA.get_member(member).ck
+
+    #Test get tag sets with comm key, should be 1
+    payload = {'Rio Key': comm_key}
+    response = requests.post("http://127.0.0.1:5000/tag_set/list", json=payload)
+    assert (response.status_code == 200)
+    pprint(payload)
+    pprint(response.json())
+    assert len(response.json()['Tag Sets']) == 1
+
+    #Tests get tag sets with ri okey, should be both
+    payload = {'Rio Key': member.rk}
+    response = requests.post("http://127.0.0.1:5000/tag_set/list", json=payload)
+    assert (response.status_code == 200)
+    assert len(response.json()['Tag Sets']) == 2
+
+    #Test validate from client
+    response = requests.get(f"http://127.0.0.1:5000/validate_user_from_client/?username={member.username}&rio_key={comm_key}")
+    assert (response.status_code == 200) 
