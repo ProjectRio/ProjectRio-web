@@ -112,7 +112,6 @@ def prune_ongoing_game():
 
 @app.route('/populate_db/', methods=['POST'])
 def populate_db2():
-    return 404
     version_split = request.json['Version'].split('.')
     if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
         abort(400, "Not accepting games from clients below 1.9.5")
