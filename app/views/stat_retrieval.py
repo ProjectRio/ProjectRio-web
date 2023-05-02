@@ -69,6 +69,92 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
         return int_list, ''
     except:
         return None, error_msg
+    
+def get_rosters_from_game(game_id):
+    query = (
+        " SELECT  \n"
+        "    away_0.char_id AS away_0, \n"
+        "    away_1.char_id AS away_1, \n"
+        "    away_2.char_id AS away_2, \n"
+        "    away_3.char_id AS away_3, \n"
+        "    away_4.char_id AS away_4, \n"
+        "    away_5.char_id AS away_5, \n"
+        "    away_6.char_id AS away_6, \n"
+        "    away_7.char_id AS away_7, \n"
+        "    away_8.char_id AS away_8, \n"
+        "    home_0.char_id AS home_0, \n"
+        "    home_1.char_id AS home_1, \n"
+        "    home_2.char_id AS home_2, \n"
+        "    home_3.char_id AS home_3, \n"
+        "    home_4.char_id AS home_4, \n"
+        "    home_5.char_id AS home_5, \n"
+        "    home_6.char_id AS home_6, \n"
+        "    home_7.char_id AS home_7, \n"
+        "    home_8.char_id AS home_8 \n"
+        "    FROM  \n"
+        "        game \n"
+        "    LEFT JOIN character_game_summary AS away_0 ON game.game_id = away_0.game_id \n"
+        "        AND away_0.team_id = 0 AND away_0.roster_loc = 0 \n"
+        "    LEFT JOIN character_game_summary AS away_1 ON game.game_id = away_1.game_id \n"
+        "        AND away_1.team_id = 0 AND away_1.roster_loc = 1 \n"
+        "    LEFT JOIN character_game_summary AS away_2 ON game.game_id = away_2.game_id \n"
+        "        AND away_2.team_id = 0 AND away_2.roster_loc = 2 \n"
+        "    LEFT JOIN character_game_summary AS away_3 ON game.game_id = away_3.game_id \n"
+        "        AND away_3.team_id = 0 AND away_3.roster_loc = 3 \n"
+        "    LEFT JOIN character_game_summary AS away_4 ON game.game_id = away_4.game_id \n"
+        "        AND away_4.team_id = 0 AND away_4.roster_loc = 4 \n"
+        "    LEFT JOIN character_game_summary AS away_5 ON game.game_id = away_5.game_id \n"
+        "        AND away_5.team_id = 0 AND away_5.roster_loc = 5 \n"
+        "    LEFT JOIN character_game_summary AS away_6 ON game.game_id = away_6.game_id \n"
+        "        AND away_6.team_id = 0 AND away_6.roster_loc = 6 \n"
+        "    LEFT JOIN character_game_summary AS away_7 ON game.game_id = away_7.game_id \n"
+        "        AND away_7.team_id = 0 AND away_7.roster_loc = 7 \n"
+        "    LEFT JOIN character_game_summary AS away_8 ON game.game_id = away_8.game_id \n"
+        "        AND away_8.team_id = 0 AND away_8.roster_loc = 8 \n"
+        "    LEFT JOIN character_game_summary AS home_0 ON game.game_id = home_0.game_id \n"
+        "        AND home_0.team_id = 1 AND home_0.roster_loc = 0 \n"
+        "    LEFT JOIN character_game_summary AS home_1 ON game.game_id = home_1.game_id \n"
+        "        AND home_1.team_id = 1 AND home_1.roster_loc = 1 \n"
+        "    LEFT JOIN character_game_summary AS home_2 ON game.game_id = home_2.game_id \n"
+        "        AND home_2.team_id = 1 AND home_2.roster_loc = 2 \n"
+        "    LEFT JOIN character_game_summary AS home_3 ON game.game_id = home_3.game_id \n"
+        "        AND home_3.team_id = 1 AND home_3.roster_loc = 3 \n"
+        "    LEFT JOIN character_game_summary AS home_4 ON game.game_id = home_4.game_id \n"
+        "        AND home_4.team_id = 1 AND home_4.roster_loc = 4 \n"
+        "    LEFT JOIN character_game_summary AS home_5 ON game.game_id = home_5.game_id \n"
+        "        AND home_5.team_id = 1 AND home_5.roster_loc = 5 \n"
+        "    LEFT JOIN character_game_summary AS home_6 ON game.game_id = home_6.game_id \n"
+        "        AND home_6.team_id = 1 AND home_6.roster_loc = 6 \n"
+        "    LEFT JOIN character_game_summary AS home_7 ON game.game_id = home_7.game_id \n"
+        "        AND home_7.team_id = 1 AND home_7.roster_loc = 7 \n"
+        "    LEFT JOIN character_game_summary AS home_8 ON game.game_id = home_8.game_id \n"
+        "        AND home_8.team_id = 1 AND home_8.roster_loc = 8 \n"
+        "    WHERE  \n"
+       f"        game.game_id = {game_id} \n"
+    )
+
+    results = db.session.execute(query).all()
+
+    away_dict = {0: results[0]['away_0'],
+                 1: results[0]['away_1'],
+                 2: results[0]['away_2'],
+                 3: results[0]['away_3'],
+                 4: results[0]['away_4'],
+                 5: results[0]['away_5'],
+                 6: results[0]['away_6'],
+                 7: results[0]['away_7'],
+                 8: results[0]['away_8']}
+    
+    home_dict = {0: results[0]['home_0'],
+                 1: results[0]['home_1'],
+                 2: results[0]['home_2'],
+                 3: results[0]['home_3'],
+                 4: results[0]['home_4'],
+                 5: results[0]['home_5'],
+                 6: results[0]['home_6'],
+                 7: results[0]['home_7'],
+                 8: results[0]['home_8']}
+    return away_dict, home_dict
 
 '''
 @ Description: Returns games that fit the parameters
@@ -84,6 +170,7 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
     - vs_captain - captain name who MUST appear in game along with captain
     - exclude_captian -  captain name to EXLCUDE from results
     - limit_games - Int of number of games || False to return all
+    - include_teams - bool to iclude team roster dicts (TODO likely not performant)
 
 @ Output:
     - List of games and highlevel info based on flags
@@ -268,10 +355,13 @@ def endpoint_games(called_internally=False):
     if (not exclude_tag_empty):
         where_statement += f"AND tag.id NOT IN {exclude_tag_id_string} \n"
 
-
+    #Stadium args
     stadium_id_string, stadium_empty = format_tuple_for_SQL(tuple_stadium_ids)
     if (not stadium_empty):
         where_statement += f"AND game.stadium_id IN {stadium_id_string} \n"
+
+    #Include_team args
+    include_teams = (request.args.get('include_teams') == '1')
 
 
     # === Construct query === 
@@ -300,16 +390,18 @@ def endpoint_games(called_internally=False):
         'LEFT JOIN tag ON tst.tag_id = tag.id \n'
         'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
         'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
-        'LEFT JOIN character_game_summary AS away_captain_cgs \n'
-        '   ON game.game_id = away_captain_cgs.game_id \n'
-        '   AND away_captain_cgs.user_id = away_player.id \n'
-        '   AND away_captain_cgs.captain = True \n'
-        'LEFT JOIN character_game_summary AS home_captain_cgs \n'
-        '	ON game.game_id = home_captain_cgs.game_id \n'
-        '   AND home_captain_cgs.user_id = home_player.id \n'
-        '   AND home_captain_cgs.captain = True \n'
-        'LEFT JOIN character AS away_captain ON away_captain_cgs.char_id = away_captain.char_id \n'
-        'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
+        'LEFT JOIN character_game_summary AS away_cgs \n'
+        '	ON game.game_id = away_cgs.game_id \n'
+        '   AND away_cgs.user_id = away_player.id \n'
+        'LEFT JOIN character AS away_captain \n'
+        '   ON away_cgs.char_id = away_captain.char_id \n'
+        '   AND away_cgs.captain = True \n'
+        'LEFT JOIN character_game_summary AS home_cgs \n'
+        '	ON game.game_id = home_cgs.game_id \n'
+        '   AND home_cgs.user_id = home_player.id \n'
+        'LEFT JOIN character AS home_captain \n'
+        '   ON home_cgs.char_id = home_captain.char_id \n'
+        '   AND home_cgs.captain = True \n'
         f'{where_statement} \n'
         'GROUP BY game.game_id, stadium, away_player, home_player, away_captain, home_captain, winner_incoming_elo, loser_incoming_elo, winner_result_elo, loser_result_elo, tag_set \n'
         'ORDER BY game.date_time_start DESC \n'
@@ -326,11 +418,9 @@ def endpoint_games(called_internally=False):
         return { "game_ids": game_ids }
     else:
         for game in results:
-            game_ids.append(game.game_id)
-
-            games.append({
-                'Id': game.game_id,
-                'Stadium': game.stadium,
+            game_dict = {
+                'game_id': game.game_id,
+                'stadium': game.stadium,
                 'date_time_start': game.date_time_start,
                 'date_time_end': game.date_time_end,
                 'Away User': game.away_player,
@@ -346,7 +436,12 @@ def endpoint_games(called_internally=False):
                 'Winner Result ELO': game.winner_result_elo,
                 'Loser Result ELO': game.loser_result_elo,
                 'Game Mode': game.tag_set
-            })
+            }
+            if (include_teams):
+                away_roster_dict, home_roster_dict = get_rosters_from_game(game.game_id)
+                game_dict['away_roster'] = away_roster_dict
+                game_dict['home_roster'] = home_roster_dict
+            games.append(game_dict)
 
         return {'games': games}
 
