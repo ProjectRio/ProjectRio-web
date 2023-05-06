@@ -1,5 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
+from sqlalchemy import desc
 from ..models import *
 from ..consts import *
 from ..util import *
@@ -90,7 +91,7 @@ def update_ongoing_game():
 
         return game.to_dict()
     if request.method == 'GET':
-        ongoing_games = OngoingGame.query.all()
+        ongoing_games = OngoingGame.query.order_by(desc(OngoingGame.date_time_start)).all()
 
         games_list = list()
         for game in ongoing_games:
