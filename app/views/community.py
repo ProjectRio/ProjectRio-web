@@ -583,7 +583,84 @@ def community_key():
         comm_user.delete_key()
     db.session.commit()
     return jsonify(comm_user.to_dict(True))
+
+
+@app.route('/community/update', methods=['POST'])
+@jwt_required(optional=True)
+def tag_set_update():
+    in_comm_id = request.json['community_id'] #Required
+
+    #Optional Args
+    name_provided = request.is_json and 'name' in request.json
+    new_name = request.json['name'] if name_provided else None
+    desc_provided = request.is_json and 'desc' in request.json
+    new_desc = request.json['desc'] if desc_provided else None
+    type_provided = request.is_json and 'type' in request.json
+    new_type = request.json['type'] if type_provided else None
+    link_provided = request.is_json and 'link' in request.json
+    new_link = request.json['link'] if link_provided else None
+    private_provided = request.is_json and 'private' in request.json
+    new_private= request.json['private'] if private_provided else None
+    active_tag_set_limit_provided = request.is_json and 'active_tag_set_limit' in request.json
+    new_active_tag_set_limit= request.json['active_tag_set_limit'] if private_provided else None
+
+    # Get Comm
+    comm = Community.query.filter_by(id=in_comm_id).first()
+    if comm == None:
+        return abort(409, description="No community found with id={in_comm_id}")
+
+    #Make sure user is admin of community or Rio admin
+    user=get_user(request)
+
+    if user == None:
+        return abort(411, description='Username associated with JWT not found.')
     
+    #If community tag, make sure user is an admin of the community
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+
+    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin'])
+    if not authorized_user:
+        return abort(412, description='User not a part of community or not an admin')
+    
+    #User is authorized
+    #Begin evaluating actions
+    if name_provided:
+        #Make sure that tag does not use the same name as an existing tag, comm, or tag_set
+        tag_check = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
+        comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
+        tag_set_check = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
+
+        if tag_check != None or comm_name_check != None or tag_set_check != None:
+            return abort(413, description='Name already in use (Tag, TagSet, or Community)')
+        
+        #Get TagSet tag
+        tag = Tag.query.filter_by(name_lowercase=comm.name_lowercase).first()
+        if tag == None:
+            return abort(414, description='Could not find tag to rename')
+        
+        tag.name = new_name
+        tag.name_lowercase = lower_and_remove_nonalphanumeric(new_name)
+        db.session.add(tag)
+        db.session.commit()
+        
+        comm.name = new_name
+        comm.name_lowercase = lower_and_remove_nonalphanumeric(new_name)
+    if desc_provided:
+        comm.desc = new_desc
+    #Only allow type change if user is Rio admin
+    if type_provided and is_user_in_groups(user.id, ['Admin']):
+        comm.type = new_type
+    #Only allow type change if user is Rio admin
+    if active_tag_set_limit_provided and is_user_in_groups(user.id, ['Admin']):
+        comm.active_tag_set_limit = new_active_tag_set_limit
+    if private_provided:
+        comm.private = new_private
+    if link_provided or comm.private == False:
+        comm.update_link(new_link or comm.private == False)
+
+    db.session.add(comm)
+    db.session.commit()
+    return jsonify('Success')
 
 def add_all_users_to_comm(comm_id):
     # Do not create duplicate users 

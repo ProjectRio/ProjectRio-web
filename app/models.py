@@ -217,6 +217,9 @@ class Community(db.Model):
         self.active_url = secrets.token_urlsafe(32) if (in_gloabl_link) else None
         self.desc = in_description
         self.date_created = int( time.time() )
+    
+    def update_link(self, in_gen_link):
+        self.active_url = secrets.token_urlsafe(32) if (in_gen_link) else None
 
 class CommunityUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
