@@ -587,7 +587,7 @@ def community_key():
 
 @app.route('/community/update', methods=['POST'])
 @jwt_required(optional=True)
-def tag_set_update():
+def community_update():
     in_comm_id = request.json['community_id'] #Required
 
     #Optional Args
