@@ -390,16 +390,16 @@ def endpoint_games(called_internally=False):
         'LEFT JOIN tag ON tst.tag_id = tag.id \n'
         'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
         'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
-        'LEFT JOIN character_game_summary AS away_cgs \n'
+        'JOIN character_game_summary AS away_cgs \n'
         '	ON game.game_id = away_cgs.game_id \n'
         '   AND away_cgs.user_id = away_player.id \n'
-        'LEFT JOIN character AS away_captain \n'
+        'JOIN character AS away_captain \n'
         '   ON away_cgs.char_id = away_captain.char_id \n'
         '   AND away_cgs.captain = True \n'
-        'LEFT JOIN character_game_summary AS home_cgs \n'
+        'JOIN character_game_summary AS home_cgs \n'
         '	ON game.game_id = home_cgs.game_id \n'
         '   AND home_cgs.user_id = home_player.id \n'
-        'LEFT JOIN character AS home_captain \n'
+        'JOIN character AS home_captain \n'
         '   ON home_cgs.char_id = home_captain.char_id \n'
         '   AND home_cgs.captain = True \n'
         f'{where_statement} \n'
@@ -423,19 +423,19 @@ def endpoint_games(called_internally=False):
                 'stadium': game.stadium,
                 'date_time_start': game.date_time_start,
                 'date_time_end': game.date_time_end,
-                'Away User': game.away_player,
-                'Away Captain': game.away_captain,
-                'Away Score': game.away_score,
-                'Home User': game.home_player,
-                'Home Captain': game.home_captain,
-                'Home Score': game.home_score,
-                'Innings Played': game.innings_played,
-                'Innings Selected': game.innings_selected,
-                'Winner Incoming ELO': game.winner_incoming_elo,
-                'Loser Incoming ELO': game.loser_incoming_elo,
-                'Winner Result ELO': game.winner_result_elo,
-                'Loser Result ELO': game.loser_result_elo,
-                'Game Mode': game.tag_set
+                'away_user': game.away_player,
+                'away_captain': game.away_captain,
+                'away_score': game.away_score,
+                'home_user': game.home_player,
+                'home_captain': game.home_captain,
+                'home_score': game.home_score,
+                'innings_played': game.innings_played,
+                'innings_selected': game.innings_selected,
+                'winner_incoming_elo': game.winner_incoming_elo,
+                'loser_incoming_elo': game.loser_incoming_elo,
+                'winner_result_elo': game.winner_result_elo,
+                'loser_result_elo': game.loser_result_elo,
+                'game_mode': game.tag_set
             }
             if (include_teams):
                 away_roster_dict, home_roster_dict = get_rosters_from_game(game.game_id)
