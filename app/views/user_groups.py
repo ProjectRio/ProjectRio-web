@@ -1,4 +1,4 @@
-from flask import request, abort
+from flask import request, abort, jsonify
 from flask import current_app as app
 from ..models import Community, db, RioUser, UserGroup, UserGroupUser
 from ..decorators import api_key_check
@@ -193,7 +193,7 @@ def wipe_patrons():
     db.session.execute(cmd)
 
 # Get groups for users
-@app.route('/patreon/refresh/', methods=['GET'])
+@app.route('/patreon/refresh/', methods=['POST', 'GET'])
 @api_key_check(['Admin'])
 def refresh_patrons():
     wipe_patrons()
@@ -258,6 +258,7 @@ def refresh_patrons():
     patron_dict = get_patrons_from_page(data, dict(), dict())
     
     # pprint(patron_dict)
+    ret_list = list()
     # Associate users with a tier (work around because Patreon API has a bug)
     for user in patron_dict['users'].values():
         if not user.get('amount'):
@@ -279,6 +280,7 @@ def refresh_patrons():
         if rio_user == None:
             continue
         add_user_to_user_group(rio_user.username, group_name)
+        ret_list.append({'username': rio_user.username, 'tier': group_name})
 
     # Iterate through each community to see if the sponsor is a patron and within their limits. If not, remove sponsor
     query = (
@@ -307,7 +309,31 @@ def refresh_patrons():
                 if num_comms_to_remove_sponsorship_from == 0:
                     break
 
-    return 200
+    return ret_list
+
+@app.route('/patreon/list', methods=['POST', 'GET'])
+@api_key_check(['Admin'])
+def list_patrons():
+    sql_tier_list, empty = format_list_for_SQL(cPATREON_TIERS)
+    query = (
+        'SELECT \n'
+        'username as username, \n'
+        'user_group.name as tier\n'
+        'from rio_user \n'
+        'LEFT JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
+        'LEFT JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
+       f"WHERE user_group.name IN {sql_tier_list} \n"
+        'GROUP BY rio_user.id, user_group.name \n'
+    )
+
+    results = db.session.execute(query).all()
+    if results is None:
+        return '', 202
+    ret_list = list()
+    for result_row in results:
+        print(result_row._asdict())
+        ret_list.append(result_row._asdict())
+    return {'patrons': ret_list}, 200
             
 # Add all users to a single group
 @app.route('/user_group/add_all_users', methods=['POST'])
