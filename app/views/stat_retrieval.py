@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet
 from ..consts import *
 from ..util import *
 import pprint
@@ -1484,3 +1484,99 @@ def fix_event_cgs_ids():
         game_count += 1
 
     db.session.commit()
+
+
+@app.route('/ladder/games/', methods = ['GET'])
+def endpoint_ladder_games():
+    try:
+        # Check if tags are valid and get a list of corresponding ids
+        tag_sets = request.args.getlist('tag_set')
+        tag_set_lowercase = tuple([lower_and_remove_nonalphanumeric(tag) for tag in tag_sets])
+        tag_set_rows = db.session.query(TagSet).filter(TagSet.name_lowercase.in_(tag_set_lowercase)).all()
+        tag_set_ids = tuple([str(tag_set.id) for tag_set in tag_set_rows])
+        if len(tag_set_ids) != len(tag_sets):
+            abort(400)
+    except:
+       return abort(400, 'Invalid TagSet')
+    
+
+    #Get and validate start_time and end_time parameters from URL
+    start_time_unix = 1
+    if (request.args.get('start_time') != None):
+        try:
+            start_time = request.args.get('start_time')
+            start_time_unix = int(start_time)
+        except:
+            return abort(408, 'Invalid start time format')
+    
+    end_time_unix = 0
+    if (request.args.get('end_time') != None):
+        try:
+            end_time = request.args.get('end_time')
+            end_time_unix = int(end_time)
+        except:
+            return abort(408, 'Invalid end time format')
+
+    # Add start and end_time parameters to WHERE statement
+    where_statement = f"WHERE game_history.date_created > {start_time_unix} \n"
+    if (end_time_unix != 0):
+        where_statement += f"AND game_history.date_created < {end_time_unix} \n"
+
+    tag_set_id_string, include_tag_empty = format_tuple_for_SQL(tag_set_ids)
+    if (not include_tag_empty):
+        where_statement += f"AND game_history.tag_set_id IN {tag_set_id_string}"
+    
+    query = (
+        'SELECT \n'
+        '   game.game_id, \n'
+        '   game.stadium_id AS stadium, \n'
+        '   game.date_time_start AS date_time_start, \n'
+        '   game.date_time_end AS date_time_end, \n'
+        '   game.away_score AS away_score, \n'
+        '   game.home_score AS home_score, \n'
+        '   game.innings_played AS innings_played, \n'
+        '   game.innings_selected AS innings_selected, \n'
+        '   away_player.username AS away_player, \n'
+        '   home_player.username AS home_player, \n'
+        '   away_captain.name AS away_captain, \n'
+        '   home_captain.name AS home_captain, \n'
+        '   winner_rio_user.username AS winner_player, \n'
+        '   loser_rio_user.username AS loser_player, \n'
+        '   game_history.winner_incoming_elo AS winner_incoming_elo, \n'
+        '   game_history.loser_incoming_elo AS loser_incoming_elo, \n'
+        '   game_history.winner_result_elo AS winner_result_elo, \n'
+        '   game_history.loser_result_elo AS loser_result_elo, \n'
+        '   game_history.tag_set_id AS tag_set \n'
+        'from game_history \n'
+        'LEFT JOIN game ON game_history.game_id = game.game_id \n'
+        'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
+        'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
+        'LEFT JOIN community_user AS winner_comm_user ON game_history.winner_comm_user_id = winner_comm_user.id \n'
+        'LEFT JOIN community_user AS loser_comm_user ON game_history.loser_comm_user_id = loser_comm_user.id \n'
+        'LEFT JOIN rio_user AS winner_rio_user ON winner_comm_user.user_id = winner_rio_user.id \n'
+        'LEFT JOIN rio_user AS loser_rio_user ON loser_comm_user.user_id = loser_rio_user.id \n'
+        'LEFT JOIN character_game_summary AS away_cgs  \n'
+	    '    ON game.game_id = away_cgs.game_id  \n'
+        '    AND away_cgs.user_id = away_player.id  \n'
+        '    AND away_cgs.captain = True  \n'
+        'LEFT JOIN character AS away_captain  \n'
+        '    ON away_cgs.char_id = away_captain.char_id  \n'
+        'LEFT JOIN character_game_summary AS home_cgs  \n'
+	    '    ON game.game_id = home_cgs.game_id  \n'
+        '    AND home_cgs.user_id = home_player.id  \n'
+        '    AND home_cgs.captain = True  \n'
+        'LEFT JOIN character AS home_captain  \n'
+        '    ON home_cgs.char_id = home_captain.char_id \n'
+        f"{where_statement} \n"
+        'ORDER BY game_history.date_created DESC \n'
+        'LIMIT 50'
+    )
+    print(query)
+
+    results = db.session.execute(query).all()
+    
+    games = []
+    for game in results:
+        games.append(game._asdict())
+    return {'games': games}
+    
