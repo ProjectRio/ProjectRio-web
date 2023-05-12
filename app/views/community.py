@@ -228,16 +228,16 @@ def community_invite():
     if user == None:
         return abort(409, description='Username associated with JWT not found.')
     if comm == None:
-        return abort(409, description='Could not find community with name={in_comm_name}')
+        return abort(410, description='Could not find community with name={in_comm_name}')
 
     #Check if CommunityUser already exists
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
     # If User does not exist or is not an admin of the private community they cannot invite
     if comm_user == None:
-        return abort(409, description='User is not part of this community')
+        return abort(411, description='User is not part of this community')
     if (comm.private and comm_user.admin == False):
-        return abort(409, description='User is not an admin of this private community.')
+        return abort(412, description='User is not an admin of this private community.')
 
     list_of_users_to_invite = request.json['invite_list']
 
@@ -245,7 +245,8 @@ def community_invite():
     for username in list_of_users_to_invite:
         invited_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(username)).first()
         if invited_user == None:
-            return abort(409, description='User does not exist. Username={user}')
+            print(username)
+            return abort(413, description='User does not exist. Username={user}')
 
     #Entire list has been validated, add users to table and send emails
     for user in list_of_users_to_invite:
