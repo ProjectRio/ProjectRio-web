@@ -10,110 +10,116 @@ from ..user_util import *
 from app.views.user_groups import *
 import time
 
-@app.route('/community/create', methods=['POST'])
+@app.route('/community/create', methods=['POST', 'GET'])
 @jwt_required(optional=True)
+@api_key_check(['Admin'] + cPATREON_TIERS)
 def community_create():
-    in_comm_name = request.json['community_name']
-    in_comm_type = request.json['type']
-    private = (request.json['private'] == 1)
-    create_global_link = (request.json['global_link'] == 1) or not private
-    in_comm_desc = request.json['desc']
-    
-    # Get user making the new community
-    #Get user via JWT or RioKey 
-    user=get_user(request)
+    if request.method == "POST":
+        in_comm_name = request.json['community_name']
+        in_comm_type = request.json['type']
+        private = (request.json['private'] == 1)
+        create_global_link = (request.json['global_link'] == 1) or not private
+        in_comm_desc = request.json['desc']
 
-    comm = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
-    if comm != None:
-        return abort(409, description='Community name already in use')
-    if user == None:
-        return abort(409, description='Username associated with JWT not found. Community not created')
-    if in_comm_type not in cCOMM_TYPES.values():
-        return abort(410, description='Invalid community type')
-    if in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
-        return abort(411, description='Non admin user cannot create official community')
-    if not is_user_in_groups(user.id, cPATREON_TIERS) and not is_user_in_groups(user.id, ['Admin']):
-        return abort(412, description='Creator is not a patron')
+        print('test')
+        
+        # Get user making the new community
+        #Get user via JWT or RioKey 
+        user=get_user(request)
 
-    #Make sure that community does not use the same name as a tag
-    tag = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
-    tagset = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
+        comm = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
+        if comm != None:
+            return abort(409, description='Community name already in use')
+        if user == None:
+            return abort(409, description='Username associated with JWT not found. Community not created')
+        if in_comm_type not in cCOMM_TYPES.values():
+            return abort(410, description='Invalid community type')
+        if in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
+            return abort(411, description='Non admin user cannot create official community')
+        if not is_user_in_groups(user.id, cPATREON_TIERS) and not is_user_in_groups(user.id, ['Admin']):
+            return abort(412, description='Creator is not a patron')
 
-    if tag != None or tagset != None:
-        return abort(413, description='Name already in use (Tag or TagSet)')
+        #Make sure that community does not use the same name as a tag
+        tag = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
+        tagset = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
 
-    # Check that patron can sponsor a new community
-    communities_sponsored = Community.query.filter(Community.sponsor_id==user.id).count()
+        if tag != None or tagset != None:
+            return abort(413, description='Name already in use (Tag or TagSet)')
 
-    limit_query = (
-        'SELECT \n'
-        'rio_user.id, \n'
-        'MAX(user_group.sponsor_limit) AS sponsor_limit \n'
-        'FROM rio_user \n'
-        'JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
-        'JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
-        f'WHERE rio_user.id = {user.id} \n'
-        'GROUP BY rio_user.id \n'
-    )
-    results = db.session.execute(limit_query).first()
-    sponsor_limit = 0 if results == None else results._asdict()['sponsor_limit']
+        # Check that patron can sponsor a new community
+        communities_sponsored = Community.query.filter(Community.sponsor_id==user.id).count()
 
-    # Results will be None if patron is not sponsoring any communities
-    # Allow this community to be created if None or if under the limit
-    if communities_sponsored >= sponsor_limit:
-        return abort(413, description='Patron has reached limit of sponsored communities')
+        limit_query = (
+            'SELECT \n'
+            'rio_user.id, \n'
+            'MAX(user_group.sponsor_limit) AS sponsor_limit \n'
+            'FROM rio_user \n'
+            'JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
+            'JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
+            f'WHERE rio_user.id = {user.id} \n'
+            'GROUP BY rio_user.id \n'
+        )
+        results = db.session.execute(limit_query).first()
+        sponsor_limit = 0 if results == None else results._asdict()['sponsor_limit']
 
-    # === Create Community row ===
-    new_comm = Community(in_comm_name, user.id, in_comm_type, private, 
-                            cACTIVE_TAGSET_LIMIT, create_global_link,
-                            in_comm_desc)
-    db.session.add(new_comm)
-    db.session.commit()
+        # Results will be None if patron is not sponsoring any communities
+        # Allow this community to be created if None or if under the limit
+        if communities_sponsored >= sponsor_limit:
+            return abort(413, description='Patron has reached limit of sponsored communities')
 
-    # === Create CommunityUser (admin)
-    new_comm_user = CommunityUser(user.id, new_comm.id, True, False, True)
-    db.session.add(new_comm_user)
-    db.session.commit()
+        # === Create Community row ===
+        new_comm = Community(in_comm_name, user.id, in_comm_type, private, 
+                                cACTIVE_TAGSET_LIMIT, create_global_link,
+                                in_comm_desc)
+        db.session.add(new_comm)
+        db.session.commit()
 
-    # === Create Community Tag ===
-    new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", f"Community tag for {new_comm.name}")
-    db.session.add(new_comm_tag)
-    db.session.commit()
+        # === Create CommunityUser (admin)
+        new_comm_user = CommunityUser(user.id, new_comm.id, True, False, True)
+        db.session.add(new_comm_user)
+        db.session.commit()
 
-    # === Send Email ===
-    subject = 'ProjectRio - New community created!'
-    community_type = 'private' if private else 'public'
-    html_content = (
-        f'''
-            <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
-            <br/>
-            <p>Happy Hitting!</p>
-            <p>Rio Team</p>
-        '''
-    )
-    text_content = (
-        f'''
-            Congratulations on starting a new {community_type} community, {new_comm.name}!\n
-            \n
-            Happy hitting!
-            Project Rio Web Team
-        '''
-    )
+        # === Create Community Tag ===
+        new_comm_tag = Tag(new_comm.id, new_comm.name, "Community", f"Community tag for {new_comm.name}")
+        db.session.add(new_comm_tag)
+        db.session.commit()
 
-    # === Take action based comm type === 
-    # Add all users to new official community TODO
-    if (new_comm.comm_type == 'Official'):
-        add_all_users_to_comm(new_comm.id)
-    try:
-        send_email(user.email, subject, html_content, text_content)
-    except:
-        return abort(502, description='Failed to send email')
+        # === Send Email ===
+        subject = 'ProjectRio - New community created!'
+        community_type = 'private' if private else 'public'
+        html_content = (
+            f'''
+                <h1>Congratulations on starting a new {community_type} community, {new_comm.name}!</h1>
+                <br/>
+                <p>Happy Hitting!</p>
+                <p>Rio Team</p>
+            '''
+        )
+        text_content = (
+            f'''
+                Congratulations on starting a new {community_type} community, {new_comm.name}!\n
+                \n
+                Happy hitting!
+                Project Rio Web Team
+            '''
+        )
 
-    return jsonify({
-        'community name': new_comm.name,
-        'private': new_comm.private,
-        'active_url': new_comm.active_url
-    })
+        # === Take action based comm type === 
+        # Add all users to new official community TODO
+        if (new_comm.comm_type == 'Official'):
+            add_all_users_to_comm(new_comm.id)
+        try:
+            send_email(user.email, subject, html_content, text_content)
+        except:
+            return abort(502, description='Failed to send email')
+
+        return jsonify({
+            'community name': new_comm.name,
+            'private': new_comm.private,
+            'active_url': new_comm.active_url
+        })
+    if request.method == "GET":
+        return 200
 
 @app.route('/community/join/<comm_name>', methods=['POST'])
 def community_join_url_simple(comm_name):
