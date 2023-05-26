@@ -1,5 +1,6 @@
 from flask import request, abort, jsonify
 from flask import current_app as app
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import Community, db, RioUser, UserGroup, UserGroupUser
 from ..decorators import api_key_check
 from ..util import format_list_for_SQL
@@ -194,9 +195,10 @@ def wipe_patrons():
 
 # Get groups for users
 @app.route('/patreon/refresh/', methods=['POST', 'GET'])
+@jwt_required(optional=True)
 @api_key_check(['Admin'])
 def refresh_patrons():
-    wipe_patrons()
+    #wipe_patrons()
 
     campaign_api_url = 'https://www.patreon.com/api/oauth2/api/current_user/campaigns'
     header = {'Authorization': 'Bearer ' + os.getenv('PATREON_API_KEY')}
@@ -220,7 +222,7 @@ def refresh_patrons():
                 user_dict[patron_id] = dict()
                 user_dict[patron_id]['id'] = patron_id
                 user_dict[patron_id]['name'] = entry['attributes']['first_name']
-                user_dict[patron_id]['email'] = entry['attributes']['email']
+                user_dict[patron_id]['email'] = entry['attributes']['email'].lower()
                 # print('\n')
             # Garbage reward tiers have id of -1 and 0, not sure why
             elif entry['type'] == 'reward' and int(entry['id']) > 0:
@@ -309,9 +311,10 @@ def refresh_patrons():
                 if num_comms_to_remove_sponsorship_from == 0:
                     break
 
-    return ret_list
+    return {'patrons': ret_list}
 
 @app.route('/patreon/list', methods=['POST', 'GET'])
+@jwt_required(optional=True)
 @api_key_check(['Admin'])
 def list_patrons():
     sql_tier_list, empty = format_list_for_SQL(cPATREON_TIERS)
@@ -327,13 +330,13 @@ def list_patrons():
     )
 
     results = db.session.execute(query).all()
-    if results is None:
+    if not results:
         return '', 202
     ret_list = list()
     for result_row in results:
         print(result_row._asdict())
         ret_list.append(result_row._asdict())
-    return {'patrons': ret_list}, 200
+    return jsonify({'patrons': ret_list})
             
 # Add all users to a single group
 @app.route('/user_group/add_all_users', methods=['POST'])
