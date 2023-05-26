@@ -37,8 +37,8 @@ def tag_create():
         return abort(409, description="No community found with name={in_tag_comm_name}")
     if in_tag_type not in cTAG_TYPES.values() or in_tag_type == "Competition" or in_tag_type == "Community":
         return abort(410, description="Invalid tag type '{in_tag_type}'")
-    if ((in_tag_type == "Gecko Code" or in_tag_type == "Client Code") and not comm.comm_type == 'Official'):
-        return abort(411, description="Gecko codes must be added to official community")
+    # if ((in_tag_type == "Gecko Code" or in_tag_type == "Client Code") and not comm.comm_type == 'Official'):
+    #     return abort(411, description="Gecko codes must be added to official community")
     if (in_tag_type == "Gecko Code" and (not gecko_code_desc_provided or not gecko_code_provided)):
         return abort(412, description="Type is gecko code but code details not provided")
     if (in_tag_type == "Gecko Code" and not validate_gecko_code(gecko_code)):
@@ -234,6 +234,9 @@ def tagset_create():
     in_tag_set_start_date = request.json['start_date']
     in_tag_set_end_date = request.json['end_date']
 
+    #Optionally users can provide a TagSetId and copy all of the tags from that tagset into this new one
+    in_tag_set_id = request.json['tag_set_id'] if 'tag_set_id' in request.json else None
+
     comm_name_lower = lower_and_remove_nonalphanumeric(in_tag_set_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
@@ -286,15 +289,26 @@ def tagset_create():
     if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
         return abort(418, description='User not apart of community or not an admin')
 
-    # Validate all tag ids, add to list
     tags = list()
+    # If TagSet is provided, get all tags
+    if in_tag_set_id != None:
+        tag_set = TagSet.query.filter_by(id=in_tag_set_id).first()
+        if tag_set == None:
+            return abort(421, f'TagSet with ID={in_tag_set_id} not found')
+        for tag in tag_set.tags:
+            if tag.tag_type != "Community" and tag.tag_type != "Competition":
+                tags.append(tag.id)
+    
+
+    # Validate all tag ids, add to list
     for id in in_tag_ids:
         tag = Tag.query.filter_by(id=id).first()
         if tag == None:
             return abort(419, f'Tag with ID={id} not found')
         if tag.tag_type == "Community" or tag.tag_type == "Competition":
             return abort(420, f'Tag with ID={id} not a valid type tag')
-        tags.append(tag)
+        if id not in tags:
+            tags.append(tag)
 
     # === Tag Set Creation ===
     new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name,in_type=in_tag_set_type, in_start=in_tag_set_start_date, in_end=in_tag_set_end_date)
