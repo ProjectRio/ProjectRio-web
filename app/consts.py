@@ -1,3 +1,6 @@
+# URL for frontend
+cURL = "https://project-rio-frontend.vercel.app/"
+
 #Rio Web Version
 cRIO_WEB_VERSION = "1.0.0"
 
