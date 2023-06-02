@@ -297,7 +297,7 @@ def tagset_create():
             return abort(421, f'TagSet with ID={in_tag_set_id} not found')
         for tag in tag_set.tags:
             if tag.tag_type != "Community" and tag.tag_type != "Competition":
-                tags.append(tag.id)
+                tags.append(tag)
     
 
     # Validate all tag ids, add to list
@@ -309,7 +309,7 @@ def tagset_create():
             return abort(420, f'Tag with ID={id} not a valid type tag')
         if id not in tags:
             tags.append(tag)
-
+            
     # === Tag Set Creation ===
     new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name,in_type=in_tag_set_type, in_start=in_tag_set_start_date, in_end=in_tag_set_end_date)
     db.session.add(new_tag_set)
