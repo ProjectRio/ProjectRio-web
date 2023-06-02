@@ -566,7 +566,7 @@ def community_key():
     comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
 
-    valid_actions = ['generate', 'revoke']
+    valid_actions = ['generate', 'revoke', 'generate_all']
     action = request.json['action']
 
     #Get user via JWT or RioKey 
@@ -584,12 +584,21 @@ def community_key():
     if action not in valid_actions:
         return abort(413, description='Invalid action provided')
     
+    ret_dict = list()
     if action == 'generate':
         comm_user.gen_key()
+        ret_dict.append(comm_user.to_dict(True))
     elif action == 'revoke':
         comm_user.delete_key()
+        ret_dict.append(comm_user.to_dict(True))
+    if action == 'generate_all' and comm_user.admin:
+        all_comm_users = CommunityUser.query.filter_by(community_id=comm.id)
+        for cu in all_comm_users:
+            cu.gen_key()
+            ru = RioUser.query.filter_by(id=cu.user_id).first()
+            ret_dict.append({'user': ru.username, 'comm_key': cu.comm_key})
     db.session.commit()
-    return jsonify(comm_user.to_dict(True))
+    return jsonify(ret_dict)
 
 
 @app.route('/community/update', methods=['POST'])

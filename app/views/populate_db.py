@@ -122,8 +122,8 @@ def populate_db2():
         return abort(400, 'Database does not accept CPU games')
 
     # Check if rio_keys exist in the db and get associated players
-    home_player = RioUser.query.filter_by(rio_key=request.json['Home Player']).first()
-    away_player = RioUser.query.filter_by(rio_key=request.json['Away Player']).first()
+    home_player = get_user_via_rio_or_comm_key(request.json['Home Player'])
+    away_player = get_user_via_rio_or_comm_key(request.json['Away Player'])
 
     if home_player is None or away_player is None:
         return abort(410, 'Invalid Rio User')

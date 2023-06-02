@@ -18,10 +18,11 @@ def validate_user_from_client():
         ).join(
             CommunityUser
         ).filter(
-            CommunityUser.community_key == in_rio_key
+            (CommunityUser.community_key == in_rio_key)
+            & (RioUser.username_lowercase == in_username_lower)
         ).first()
     else: # Full Rio Key
-        user = RioUser.query.filter_by(rio_key=in_rio_key).first()
+        user = RioUser.query.filter_by(rio_key=in_rio_key, username_lowercase=in_username_lower).first()
 
     if user is None:
         abort(404, 'Invalid UserID or RioKey')
