@@ -724,6 +724,7 @@ def endpoint_landing_data():
         'contact.ball_y_landing_pos AS ball_y_landing_pos '
         'contact.ball_z_landing_pos AS ball_z_landing_pos '
         'contact.ball_max_height AS ball_max_height, \n'
+        'contact.ball_hang_time AS ball_hang_time, \n'
         'contact.input_direction_stick AS stick_input, \n'
         'contact.charge_power_up AS charge_power_up, \n'
         'contact.charge_power_down AS charge_power_down, \n'
