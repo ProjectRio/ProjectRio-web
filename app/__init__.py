@@ -41,6 +41,7 @@ def init_app():
         from .views import populate_db
         from .views import user
         from .views import db_setup
+        from .views import delete_game
         from .views import recreate_stat_files
         from .views import client_routes
         from .views import stat_retrieval
