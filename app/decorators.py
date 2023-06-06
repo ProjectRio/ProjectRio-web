@@ -18,8 +18,7 @@ def api_key_check(acceptable_user_groups):
                 admin_key = request.json.get('ADMIN_KEY')
                 if (admin_key != os.getenv('ADMIN_KEY')):
                     return abort(460, description="No API Key, Rio Key or JWT Provided")
-                func(*args, **kwargs)
-                return
+                return func(*args, **kwargs)
 
             # Declare user var
             rio_user = None
