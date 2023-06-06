@@ -25,6 +25,6 @@ def validate_user_from_client():
         user = RioUser.query.filter_by(rio_key=in_rio_key, username_lowercase=in_username_lower).first()
 
     if user is None:
-        abort(404, 'Invalid UserID or RioKey')
+        abort(404, description='Invalid UserID or RioKey')
 
     return {'msg': 'success'}

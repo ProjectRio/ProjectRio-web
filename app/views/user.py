@@ -176,7 +176,7 @@ def request_password_change():
             \n
             We received a password reset request for your account. If you did not make this request, please ignore this email.\n
             Otherwise, follow this link to reset your password:\n
-            {user.active_url}\n
+            <a href={cURL + '/login/reset_password/' + user.active_url}>Reset Password</a>\n
             \n
             Happy hitting!\n
             Project Rio Web Team     
@@ -187,7 +187,7 @@ def request_password_change():
             Dear {user.email},\n
             We received a password reset request for your account. If you did not make this request, please ignore this email.\n
             Otherwise, follow this link to reset your password:\n
-            {user.active_url}\n
+            {cURL}/login/reset_password/{user.active_url}\n
             \n
             Happy hitting!\n
             Project Rio Web Team     
@@ -452,6 +452,7 @@ def get_users_communities():
     return {
         "communities": communities
     }, 200
+<<<<<<< HEAD
 
 # Prune unverified users that were created over a week ago
 @app.route('/user/prune', methods=['POST'])
@@ -472,3 +473,5 @@ def prune_users():
         db.session.delete(user)
         db.session.commit()
     return jsonify(deleted_users)
+=======
+>>>>>>> 9a189954d5b0bcd09b96e16928c8b556ccdadea6

@@ -17,7 +17,7 @@ def format_list_for_SQL(in_list):
     return format_tuple_for_SQL(tuple(in_list))
 
 
-def sanatize_ints(str):
+def sanitize_ints(str):
   not_statement = True if str[0] == '!' else False
 
   arr = []

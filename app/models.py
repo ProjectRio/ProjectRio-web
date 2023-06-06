@@ -316,7 +316,7 @@ class OngoingGame(db.Model):
             "home_player": self.home_user.username,
             "tag_set": self.tag_set_id,
             "away_captain": self.away_captain,
-            "away_captain": self.home_captain,
+            "home_captain": self.home_captain,
             "start_time": self.date_time_start,
             "stadium_id": self.stadium_id,
             "inning": self.current_inning,
