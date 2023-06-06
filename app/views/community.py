@@ -114,7 +114,7 @@ def community_create():
             return abort(502, description='Failed to send email')
 
         return jsonify({
-            'community name': new_comm.name,
+            'community_name': new_comm.name,
             'private': new_comm.private,
             'active_url': new_comm.active_url
         })
@@ -553,7 +553,7 @@ def community_sponsor():
             comm.sponsor_id = user.id
             db.session.add(comm)
             db.session.commit()
-            return jsonify({'sponsor': None})
+            return jsonify({'sponsor': user.username})
         else:
             return abort(409, description="Community is already sponsored")
 
