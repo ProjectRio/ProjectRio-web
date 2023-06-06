@@ -452,7 +452,6 @@ def get_users_communities():
     return {
         "communities": communities
     }, 200
-<<<<<<< HEAD
 
 # Prune unverified users that were created over a week ago
 @app.route('/user/prune', methods=['POST'])
@@ -473,5 +472,3 @@ def prune_users():
         db.session.delete(user)
         db.session.commit()
     return jsonify(deleted_users)
-=======
->>>>>>> 9a189954d5b0bcd09b96e16928c8b556ccdadea6
