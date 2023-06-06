@@ -102,11 +102,13 @@ def update_ongoing_game():
 @app.route('/ongoing_game/prune', methods=['POST'])
 @api_key_check(['Admin'])
 def prune_ongoing_game():
-    number_of_secs_in_day = 86400
+    seconds = request.json['seconds']
     current_unix_time = int(time.time())
 
-    cutoff_unix_time = (current_unix_time-number_of_secs_in_day)
-    old_ongoing_games = OngoingGame.query.filter(OngoingGame.date_time_start <= cutoff_unix_time).delete()
+    cutoff_unix_time = (current_unix_time-seconds)
+    db.session.query(OngoingGame).filter(OngoingGame.date_time_start <= cutoff_unix_time).delete()
+
+    db.session.commit()
 
     return 'Success', 200
 
