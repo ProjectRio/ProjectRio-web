@@ -596,7 +596,7 @@ def community_key():
         for cu in all_comm_users:
             cu.gen_key()
             ru = RioUser.query.filter_by(id=cu.user_id).first()
-            ret_dict.append({'user': ru.username, 'comm_key': cu.comm_key})
+            ret_dict.append({'user': ru.username, 'comm_key': cu.community_key})
     db.session.commit()
     return jsonify(ret_dict)
 
