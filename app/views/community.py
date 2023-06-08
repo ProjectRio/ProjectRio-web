@@ -20,8 +20,6 @@ def community_create():
         private = (request.json['private'] == 1)
         create_global_link = (request.json['global_link'] == 1) or not private
         in_comm_desc = request.json['desc']
-
-        print('test')
         
         # Get user making the new community
         #Get user via JWT or RioKey 
@@ -505,7 +503,7 @@ def community_sponsor():
             return jsonify({'sponsor': None})
         else:
             sponsor_user = RioUser.query.filter_by(id=comm.sponsor_id).first()
-            return jsonify({'sponsor': sponsor_user})
+            return jsonify({'sponsor': sponsor_user.username})
 
     #Get user via JWT or RioKey
     user=get_user(request)
