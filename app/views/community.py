@@ -280,7 +280,7 @@ def community_invite():
             f'''
                 <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
                 <p>Click the following link to join: </p>
-                <a href={cURL + comm.name + '/'}>Click here to join!</a>
+                <a href={cURL + '/community/join/' + comm.name + '/'}>Click here to join!</a>
                 <br/>
                 <p>Happy Hitting!</p>
                 <p>Rio Team</p>
