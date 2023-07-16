@@ -296,6 +296,14 @@ def test_community_tags():
     assert tag.type == 'Component'
     assert len(community.tags) == 2
 
+    #Get all tags
+    response = requests.get("http://127.0.0.1:5000/tag/list")
+    assert response.status_code == 200
+    
+    data = response.json()
+    pprint(data)
+    assert len(data['Tags']) == 1 #Only gets the non community tags
+
 def test_community_tagsets():
     wipe_db()
 

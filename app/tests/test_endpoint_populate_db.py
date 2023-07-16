@@ -163,6 +163,7 @@ def test_populate_db():
              'loser_username': player_home.username, 'loser_score': 0}
     game3['tag_set'] = tagset.name
     game3['submitter_rio_key'] = sponsor.rk
+    game3['recalc'] = True
 
     game3_response = requests.post("http://127.0.0.1:5000/manual_submit_game/", json=game3)
     assert game3_response.status_code == 200

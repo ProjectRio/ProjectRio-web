@@ -638,6 +638,11 @@ def submit_game_history():
     date_provided = request.is_json and 'date' in request.json
     date = request.json['date'] if date_provided else None
 
+    recalc_ladder_provided = request.is_json and 'recalc' in request.json
+    recalc = request.json['recalc'] if recalc_ladder_provided else None
+    log_provided = request.is_json and 'log' in request.json
+    log = request.json['log'] if (log_provided and recalc) else None
+
     tag_set = TagSet.query.filter_by(name_lowercase=(lower_and_remove_nonalphanumeric(request.json['tag_set']))).first()
     if tag_set == None:
         return abort(409, description='No TagSet found with provided name')
@@ -730,8 +735,8 @@ def submit_game_history():
     db.session.commit()
     
     #Need to recalc in case games were played after this manually submitted game
-    if admin_accept:
-        recalc_elo(tag_set_id)
+    if admin_accept and recalc:
+        recalc_elo(tag_set_id, log)
 
     return {'game_history_id': new_game_history.id}
 
@@ -854,7 +859,7 @@ def calc_elo(winner_ladder, loser_ladder):
     return ret_dict
 
 @app.route('/recalc_elo/', methods=['POST'])
-def recalc_elo(in_tag_set_id=None):
+def recalc_elo(in_tag_set_id=None, log=False):
     tag_set_id = in_tag_set_id if in_tag_set_id != None else request.json['tag_set_id']
 
     tag_set = TagSet.query.filter_by(id=tag_set_id).first()
@@ -909,7 +914,9 @@ def recalc_elo(in_tag_set_id=None):
             ratings = calc_elo(winner_ladder, loser_ladder)
 
             ratings['game_history_id'] = game.id
-            game_calc_dict[count] = ratings
+            
+            if log:
+                game_calc_dict[count] = ratings
 
             if ((game.winner_result_elo != None and game.winner_result_elo != ratings['winner_rating'])
                 or (game.loser_result_elo != None and game.loser_result_elo != ratings['loser_rating'])):
