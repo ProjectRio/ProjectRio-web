@@ -1,5 +1,5 @@
 # STEP 1: Install base image. Optimized for Python.
-FROM python:3.8.3-slim-buster
+FROM python:3.9.17-slim
 
 # STEP 2: Copy the source code in the current directory to the container.  Store it in a folder named /app.
 ADD . /app
