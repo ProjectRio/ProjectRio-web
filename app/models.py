@@ -221,6 +221,19 @@ class Community(db.Model):
     def update_link(self, in_gen_link):
         self.active_url = secrets.token_urlsafe(32) if (in_gen_link) else None
 
+    def to_dict(self):
+        ret_dict = {
+            'id': self.id,
+            'name': self.name,
+            'type': self.comm_type,
+            'private': self.private,
+            'url': self.active_url,
+            'desc': self.desc,
+            'tag_set_limit': self.active_tag_set_limit,
+            'date_created': self.date_created
+        }
+        return ret_dict
+
 class CommunityUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)

@@ -71,6 +71,35 @@ def test_community_create_unofficial():
     print('Test', community.get_member(invitee).to_dict())
     assert community.get_member(invitee).active  == False
 
+def test_community_get():
+    wipe_db()
+
+    sponsor = User()
+    sponsor.register()
+    assert sponsor.success == True
+
+    sponsor.verify_user()
+    assert sponsor.add_to_group('patron: mvp') == True
+
+    nonmember = User()
+    nonmember.register()
+    nonmember.verify_user()
+
+    communityA = Community(sponsor, official=False, private=False, link=False)
+    assert communityA.success == True
+    communityB = Community(sponsor, official=False, private=False, link=False)
+    assert communityB.success == True
+
+
+    response = requests.get(f"http://127.0.0.1:5000/user/community/?username={sponsor.username}")
+    assert response.status_code == 200
+    assert len(response.json()['communities']) == 3
+    
+    response = requests.get(f"http://127.0.0.1:5000/user/community/?username={nonmember.username}")
+    assert response.status_code == 200
+    assert len(response.json()['communities']) == 1
+
+
 def test_community_create_private_nolink():
     wipe_db()
 
@@ -475,10 +504,20 @@ def test_community_sponsor_manage():
     # print(sponsor.to_dict())
     # print(future_sponsor.to_dict())
     assert compare_users(community.sponsor, sponsor)
+
+    #Check that user is sponsor
+    response = requests.get(f"http://127.0.0.1:5000/user/community/sponsor/?username={sponsor.username}")
+    assert response.status_code == 200
+    assert len(response.json()['sponsored_communities']) == 1
     
     # Remove sponsor as sponsor
     assert community.manage_sponsor(sponsor, 'remove')
     assert community.sponsor == None
+
+    #Check that user is not sponsor
+    response = requests.get(f"http://127.0.0.1:5000/user/community/sponsor/?username={sponsor.username}")
+    assert response.status_code == 200
+    assert len(response.json()['sponsored_communities']) == 0
 
     # Add new sponsor, not a patron
     assert not community.manage_sponsor(future_sponsor, 'add')

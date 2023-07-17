@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, set_access_cookies, jwt_requ
 from datetime import datetime, timedelta, timezone
 from pprint import pprint
 from .. import bc
-from ..models import db, RioUser, UserGroup, UserGroupUser, CommunityUser
+from ..models import db, RioUser, UserGroup, UserGroupUser, Community, CommunityUser
 from ..util import *
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
@@ -353,6 +353,18 @@ def set_privacy():
             'private': current_user.private
         })
 
+#Get id and username of all users
+@app.route('/user/all/', methods = ['GET'])
+def get_users_all():
+    users = RioUser.query.filter_by(verified=True)
+
+    ret_dict = dict()
+    for user in users:
+        ret_dict[user.id] = user.username
+
+    return {
+        "users": ret_dict
+    }, 200
 
 '''
 @ Description: Returns tags available to a user
@@ -422,35 +434,54 @@ def get_users_tags():
 @ Example URL: http://127.0.0.1:5000/user/communities/?username=GenericHomeUser&username=GenericAwayUser
 '''
 
-@app.route('/user/communities/', methods = ['GET'])
+@app.route('/user/community/', methods = ['GET'])
 def get_users_communities():
-    if (app.config['rio_env'] == "production"):
-        return abort(404, description='Endpoint not ready for production')
 
-    in_username_lowercase = lower_and_remove_nonalphanumeric(request.json['username'])
+    in_username_lowercase = lower_and_remove_nonalphanumeric(request.args.get('username'))
+    user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user:
+        return abort(422, 'Invalid Username')
+    
+    result = db.session.query(
+        Community
+    ).join(
+        CommunityUser
+    ).join(
+        RioUser
+    ).filter(
+        (RioUser.username_lowercase == in_username_lowercase) &
+        (CommunityUser.active == True) &
+        ((CommunityUser.banned == False) | (CommunityUser.banned == None))
+    ).all()
+
+    print(len(result))
+    ret_list = list()
+    for comm in result:
+        print(comm.to_dict())
+        ret_list.append(comm.to_dict())
+
+    return {
+        "communities": ret_list
+    }, 200
+
+@app.route('/user/community/sponsor/', methods = ['GET'])
+def get_users_sponsored_communities():
+
+    in_username_lowercase = lower_and_remove_nonalphanumeric(request.args.get('username'))
     user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 
     if not user:
         return abort(422, 'Invalid Username')
 
-    communities_query = (
-        'SELECT \n '
-        'community.name \n '
-        'FROM community \n'
-        'LEFT JOIN community_user ON community.id = community_user.community_id \n'
-        f'WHERE community_user.user_id = {user.id} \n'
-        'GROUP BY \n'
-        'tag.name \n'
-    )
-    
-    result = db.session.execute(communities_query)
+    communities = Community.query.filter_by(sponsor_id=user.id).all()
 
-    communities = list()
-    for community in result:
-        communities.append(community.name)
+    ret_list = list()
+    for comm in communities:
+        ret_list.append(comm.to_dict())
 
     return {
-        "communities": communities
+        "sponsored_communities": ret_list
     }, 200
 
 # Prune unverified users that were created over a week ago
