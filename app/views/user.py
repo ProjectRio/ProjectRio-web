@@ -6,6 +6,7 @@ from pprint import pprint
 from .. import bc
 from ..models import db, RioUser, UserGroup, UserGroupUser, Community, CommunityUser
 from ..util import *
+from ..consts import *
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
 from ..decorators import api_key_check
