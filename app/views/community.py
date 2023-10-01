@@ -310,7 +310,7 @@ def community_invite():
 
 
 #TODO return usernames rather than user ids
-@app.route('/community/members', methods=['GET'])
+@app.route('/community/members', methods=['POST'])
 @jwt_required(optional=True)
 def community_members():
     in_comm_name = request.json['community_name']
@@ -343,7 +343,7 @@ def community_members():
     return jsonify({'Members': member_list_dicts})
 
 #TODO return usernames rather than user ids
-@app.route('/community/tags', methods=['GET'])
+@app.route('/community/tags', methods=['POST'])
 @jwt_required(optional=True)
 def community_tags():
     in_comm_name = request.json['community_name']
@@ -616,7 +616,7 @@ def community_update():
     private_provided = request.is_json and 'private' in request.json
     new_private= request.json['private'] if private_provided else None
     active_tag_set_limit_provided = request.is_json and 'active_tag_set_limit' in request.json
-    new_active_tag_set_limit= request.json['active_tag_set_limit'] if private_provided else None
+    new_active_tag_set_limit= request.json['active_tag_set_limit'] if active_tag_set_limit_provided else None
 
     # Get Comm
     comm = Community.query.filter_by(id=in_comm_id).first()
