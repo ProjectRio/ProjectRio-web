@@ -334,6 +334,54 @@ def tagset_create():
     db.session.commit()
     return jsonify(new_tag_set.to_dict())
 
+#TODO support duration along with end data so eiither can be supplied
+@app.route('/tag_set/delete', methods=['POST'])
+@jwt_required(optional=True)
+def tagset_delete():
+    in_tag_set_name = request.json['name']
+
+    #Get TagSet
+    tag_set = TagSet.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_set_name)).first()
+
+    if tag_set == None:
+        return abort(409, description=f"No tag_set found with name={in_tag_set_name}")
+    
+    comm = Community.query.filter_by(id=tag_set.community_id).first()
+
+    # Get user making the new TagSet
+    user=get_user(request)
+
+    if user == None:
+        return abort(410, description='Username associated with JWT not found.')
+    
+    #If community tag, make sure user is an admin of the community
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
+        return abort(411, description='User not apart of community or not an admin')
+    
+    #Check that no games have been played with this tag_set. If any cannot delete
+    any_game_history = GameHistory.query.filter_by(tag_set_id=tag_set.id).first()
+    
+    if any_game_history:
+        return abort(412, description='Could not delete, games have been played')
+    
+    #Else, delete tag_set and tag
+    tag = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_tag_set_name)).first()
+
+    if tag == None:
+        return abort(413, description='Could not find tag_associated with tag_set')
+
+    #Free to delete both
+    tag_set.tags.clear()
+    db.session.delete(tag_set)
+    db.session.delete(tag)
+    db.session.commit()
+    
+    return {
+        'msg': f"'Successfully deleted tag_set: {in_tag_set_name}"
+    }
+
 # If RioKey/JWT provided get TagSet for user. Else get all
 # Uses:
 #   Get all active TagSets for rio_key
