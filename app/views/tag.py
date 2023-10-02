@@ -22,11 +22,11 @@ def tag_create():
     in_tag_type = request.json['type']
 
     #Fields for gecko codes only
-    gecko_code_desc_provided = request.is_json and 'Gecko Code Desc' in request.json
-    gecko_code_desc = request.json.get('Gecko Code Desc') if gecko_code_desc_provided else None
+    gecko_code_desc_provided = request.is_json and 'gecko_code_desc' in request.json
+    gecko_code_desc = request.json.get('gecko_code_desc') if gecko_code_desc_provided else None
 
-    gecko_code_provided = request.is_json and 'Gecko Code' in request.json
-    gecko_code = request.json.get('Gecko Code') if gecko_code_provided else None
+    gecko_code_provided = request.is_json and 'gecko_code' in request.json
+    gecko_code = request.json.get('gecko_code') if gecko_code_provided else None
 
     comm_name_lower = lower_and_remove_nonalphanumeric(in_tag_comm_name)
     comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
@@ -381,6 +381,47 @@ def tagset_delete():
     return {
         'msg': f"'Successfully deleted tag_set: {in_tag_set_name}"
     }
+
+@app.route('/tag_set/delete/all', methods=['POST'])
+@jwt_required(optional=True)
+@api_key_check(['Admin'])
+def tagset_delete_all():
+    exclude_official = request.json['exclude_official']
+
+    tag_sets = TagSet.query.all()
+
+    # Get user making the new TagSet
+    user=get_user(request)
+
+    if user == None:
+        return abort(410, description='Username associated with JWT not found.')
+    
+    ret_list = list()
+    for tag_set in tag_sets:
+        #Check that no games have been played with this tag_set. If any cannot delete
+        any_game_history = GameHistory.query.filter_by(tag_set_id=tag_set.id).first()
+        
+        if any_game_history:
+            continue
+
+        comm = Community.query.filter_by(id=tag_set.community_id).first()
+        if (exclude_official and comm.comm_type == 'Official'):
+            continue
+        
+        #Else, delete tag_set and tag
+        tag = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(tag_set.name)).first()
+
+        if tag == None:
+            return abort(411, description='Could not find tag_associated with tag_set')
+
+        ret_list.append(tag_set.name)
+        #Free to delete both
+        tag_set.tags.clear()
+        db.session.delete(tag_set)
+        db.session.delete(tag)
+        db.session.commit()
+    
+    return jsonify(ret_list)
 
 # If RioKey/JWT provided get TagSet for user. Else get all
 # Uses:
