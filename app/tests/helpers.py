@@ -535,7 +535,7 @@ def compare_comm_user_to_dict(comm_user_dict, comm_user):
 
 def get_community_tags(community_name, user):
     json = {'community_name': community_name, 'rio_key': user.rk}
-    response = requests.get("http://127.0.0.1:5000/community/tags", json=json)
+    response = requests.post("http://127.0.0.1:5000/community/tags", json=json)
     success = response.status_code == 200
 
     data = response.json()
