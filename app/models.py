@@ -168,7 +168,8 @@ class RioUser(db.Model, UserMixin):
 class UserGroupUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False)
-    user_group_id = db.Column(db.ForeignKey('user_group.id'), nullable=False)
+    user_group_id = db.Column(db.ForeignKey('user_group.id'), nullable=False)    
+    # date_expires = db.Column(db.Integer, null=True)
     
     def __init__(self, user_id, user_group_id):
         self.user_id = user_id,
@@ -181,7 +182,6 @@ class UserGroup(db.Model):
     sponsor_limit = db.Column(db.Integer)
     name = db.Column(db.String(100), unique=True)
     name_lowercase = db.Column(db.String(100), unique=True)
-    date_expires = db.Column(db.Integer, null=True)
     desc = db.Column(db.String(1000))
     
     user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')
