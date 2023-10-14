@@ -2,6 +2,7 @@ from flask import request, abort
 from flask import current_app as app
 from ..models import db, RioUser, CommunityUser
 from ..util import *
+from app.views.user_groups import *
 
 # Evaluate users provided to Client
 # example: /validate_user_from_client/?username=demouser1&rio_key=_______
@@ -26,5 +27,8 @@ def validate_user_from_client():
 
     if user is None:
         abort(404, description='Invalid UserID or RioKey')
+
+    if is_user_in_groups(user.id, ['Banned']):
+        abort(405, description='User is banned')
 
     return {'msg': 'success'}
