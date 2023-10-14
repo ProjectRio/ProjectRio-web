@@ -118,6 +118,87 @@ def community_create():
         })
     if request.method == "GET":
         return 200
+    
+# Temporary endpoint to allow admins to add users without frontend
+@app.route('/community/members/remove/', methods=['GET'])
+def community_remove_members():
+    in_comm_name = request.args.get("comm")
+    in_usernames = request.args.getlist('username')
+    in_admin_user = request.args.getlist('admin')
+
+    #Get user
+    user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(in_admin_user)).first()
+    
+    comm = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
+
+    if user == None:
+        return abort(409, description='Username associated with JWT not found.')
+    if comm == None:
+        return abort(410, description='Could not find community with name={in_comm_name}')
+    
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+    if (comm_user == None and not is_user_in_groups(['Admin'])):
+        return abort(411, description='User is not part of this community.')
+    if (not comm_user.admin and not is_user_in_groups(['Admin'])):
+        return abort(412, description='User is not an admin of this community.')
+    
+    added_users = list()
+    for username in in_usernames:
+        user_to_remove = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(username)).first()
+        if user_to_remove != None:
+
+            #Now see if user has already been added, if so skip.
+            comm_user_to_remove = CommunityUser.query.filter_by(user_id=user_to_remove.id, community_id=comm.id).first()
+
+            if comm_user_to_remove == None:
+                continue # User is not in community
+            else:
+                comm_user_to_remove.active = False
+                db.session.add(comm_user_to_remove)
+                db.session.commit()
+            added_users.append(user_to_remove.username)
+    return jsonify(added_users)
+
+    
+# Temporary endpoint to allow admins to add users without frontend
+@app.route('/community/members/add/', methods=['GET'])
+def community_add_members():
+    in_comm_name = request.args.get("comm")
+    in_usernames = request.args.getlist('username')
+    in_admin_user = request.args.getlist('admin')
+
+    #Get user
+    user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(in_admin_user)).first()
+    
+    comm = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(in_comm_name)).first()
+
+    if user == None:
+        return abort(409, description='Username associated with JWT not found.')
+    if comm == None:
+        return abort(410, description='Could not find community with name={in_comm_name}')
+    
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+    if (comm_user == None and not is_user_in_groups(['Admin'])):
+        return abort(411, description='User is not part of this community.')
+    if (not comm_user.admin and not is_user_in_groups(['Admin'])):
+        return abort(412, description='User is not an admin of this community.')
+    
+    added_users = list()
+    for username in in_usernames:
+        user_to_add = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(username)).first()
+        if user_to_add != None:
+
+            #Now see if user has already been added, if so skip.
+            comm_user_to_add = CommunityUser.query.filter_by(user_id=user_to_add.id, community_id=comm.id).first()
+
+            if comm_user_to_add == None:
+                add_user_to_comm(comm.id, user_to_add.id)
+            else:
+                comm_user_to_add.active = True
+                db.session.add(comm_user_to_add)
+                db.session.commit()
+            added_users.append(user_to_add.username)
+    return jsonify(added_users)
 
 @app.route('/community/join/<comm_name>', methods=['POST'])
 def community_join_url_simple(comm_name):
@@ -342,7 +423,6 @@ def community_members():
 
     return jsonify({'Members': member_list_dicts})
 
-#TODO return usernames rather than user ids
 @app.route('/community/tags', methods=['POST'])
 @jwt_required(optional=True)
 def community_tags():
