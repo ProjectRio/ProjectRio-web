@@ -114,8 +114,6 @@ def tag_update():
         return abort(409, description="No tag found with id={in_tag_id}")
     comm = Community.query.filter_by(id=tag.community_id).first()
 
-    if type_provided and (((new_type == "Gecko Code" or new_type == "Client Code") and not comm.comm_type == 'Official')):
-        return abort(416, description="Gecko codes must be added to official community")
     #Check that if gecko code is provided that new or existing type is gecko code
     if gecko_code_provided and (tag.tag_type != 'Gecko Code' and (type_provided and new_type != 'Gecko Code')):
         return abort(417, description="Gecko codes can only be added to gecko code tags")
@@ -165,9 +163,11 @@ def tag_update():
     if gecko_code_provided:
         gecko_code = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
         gecko_code.gecko_code = new_gecko_code
+        db.session.add(gecko_code)
     if gecko_code_desc_provided:
         gecko_code = GeckoCodeTag.query.filter_by(tag_id=tag.id).first()
         gecko_code.gecko_code_desc = new_gecko_code_desc
+        db.session.add(gecko_code)
 
                 
     db.session.add(tag)

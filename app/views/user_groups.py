@@ -42,7 +42,7 @@ def create_user_group():
 
 # Add RioUser to UserGroup using RioKey
 @app.route('/user_group/add_user', methods=['POST'])
-#@api_key_check(['Admin'])
+@api_key_check(['Admin'])
 def add_user_to_user_group(in_username = None, in_group_name = None):
     # If called by project
     internal_use = (in_username != None and in_group_name != None)

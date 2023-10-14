@@ -181,6 +181,7 @@ class UserGroup(db.Model):
     sponsor_limit = db.Column(db.Integer)
     name = db.Column(db.String(100), unique=True)
     name_lowercase = db.Column(db.String(100), unique=True)
+    date_expires = db.Column(db.Integer, null=True)
     desc = db.Column(db.String(1000))
     
     user_group_user = db.relationship('UserGroupUser', backref='user_group_from_ugu')

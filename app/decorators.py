@@ -8,7 +8,7 @@ import time, os
 '''
 Accepts an array of UserGroups who have permission to use this endpoint
 '''
-def api_key_check(acceptable_user_groups):
+def api_key_check(acceptable_user_groups, unacceptable_user_groups=[]):
     def decorator(func):
         @wraps(func)
         def decorated_function(*args, **kwargs):
@@ -38,9 +38,15 @@ def api_key_check(acceptable_user_groups):
                 RioUser.id == rio_user.id
             )
 
+            user_in_acceptable_group = False
+            user_in_unacceptable_group = False
             for group in user_groups:
                 if group.name in acceptable_user_groups:
-                    return func(*args, **kwargs)
+                  user_in_acceptable_group = True
+                if group.name in unacceptable_user_groups:
+                  user_in_unacceptable_group = True
+            if user_in_acceptable_group and not user_in_unacceptable_group:    
+                return func(*args, **kwargs)
             #TODO maintain counts for validation methods
 
             # api_key = ApiKey.query.filter_by(api_key=in_api_key).first()
