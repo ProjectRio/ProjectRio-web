@@ -717,8 +717,11 @@ def get_ladder(in_tag_set=None):
         'JOIN rio_user as ru on cu.user_id = ru.id \n'
         'JOIN ladder on ladder.community_user_id = cu.id \n'
        f"WHERE ladder.tag_set_id = {tag_set.id} \n"
-        'GROUP BY \n'
-        '    comm_user_id, ru.username, ladder.rating;'
+       'LEFT JOIN user_group_user AS ugu ON ru.id = ugu.user_id \n'
+       'LEFT JOIN user_group AS ug ON ugu.user_group_id = ug.id \n'
+       "WHERE ru.id NOT IN (SELECT user_id FROM user_group_user WHERE user_group_id IN (SELECT id FROM user_group WHERE name_lowercase = 'banned'))\n"
+       'GROUP BY \n'
+       '    comm_user_id, ru.username, ladder.rating;\n'
     )
     query_results = db.session.execute(game_history_query).all()
 
