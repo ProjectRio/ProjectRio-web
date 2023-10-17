@@ -22,6 +22,7 @@ def init_app():
     app = Flask(__name__)
     app.config.from_pyfile('config.py')
     app.config['rio_env'] = os.getenv('RIO_ENV')
+    # app.config['SQLALCHEMY_ECHO'] = True
     CORS(app)
 
     # Initialize Plugins
