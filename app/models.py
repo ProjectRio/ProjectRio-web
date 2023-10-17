@@ -169,7 +169,7 @@ class UserGroupUser(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False)
     user_group_id = db.Column(db.ForeignKey('user_group.id'), nullable=False)    
-    # date_expires = db.Column(db.Integer, null=True)
+    date_expires = db.Column(db.Integer, nullable=True)
     
     def __init__(self, user_id, user_group_id):
         self.user_id = user_id,
