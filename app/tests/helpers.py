@@ -525,6 +525,14 @@ def get_community_members(community_name, user):
 
     return [success, data]
 
+def add_user_group(group_name, daily_limit, weekly_limit, sponsor_limit, user):
+    json = {'group_name': group_name, 'daily_limit': daily_limit, 
+            'weekly_limit': weekly_limit, 'sponsor_limit': sponsor_limit, 
+            'ADMIN_KEY': os.getenv('ADMIN_KEY')}
+    response = requests.get('http://127.0.0.1:5000/user_group/create', json=json)
+    success = response.status_code == 200
+    return success
+
 def compare_comm_user_to_dict(comm_user_dict, comm_user):
     return ( comm_user_dict['user_id'] == comm_user.user.pk
          and comm_user_dict['id']      == comm_user.pk

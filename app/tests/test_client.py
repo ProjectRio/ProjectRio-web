@@ -6,7 +6,7 @@ from pprint import pprint
 from helpers import *
 from connection import Connection
 
-def test_ongoing_game():
+def test_gen_users():
     wipe_db()
 
     # === SETUP ===
@@ -59,4 +59,5 @@ def test_ongoing_game():
     data = response.json()
     pprint(data)
 
-    assert True == False
+    assert 1 == 0
+
