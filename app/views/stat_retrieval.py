@@ -989,20 +989,19 @@ def endpoint_star_chances():
 def endpoint_detailed_stats():
 
     #Sanitize games params 
-    try:
-        list_of_game_ids = list() # Holds IDs for all the games we want data from
-        if (len(request.args.getlist('games')) != 0):
-            list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
-            list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
-            if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
-                return abort(408, description='Provided GameIDs not found')
+    list_of_game_ids = list() # Holds IDs for all the games we want data from
+    if (len(request.args.getlist('games')) != 0):
+        list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
+        list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
+        if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
+            return abort(408, description='Provided GameIDs not found')
 
-        else:
-            games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-            for game_id in games['game_ids']:
-                list_of_game_ids.append(game_id)
-    except:
-        return abort(408, description='Invalid GameID')
+    else:
+        games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
+        for game_id in games['game_ids']:
+            list_of_game_ids.append(game_id)
+        if len(list_of_game_ids) == 0:
+            return abort(409, description='No games found for provided parameters')
 
     # Sanitize character params
     try:
