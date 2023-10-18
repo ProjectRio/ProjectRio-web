@@ -36,7 +36,7 @@ def create_user_group():
         new_group = UserGroup(in_group_name, in_daily_limit, in_weekly_limit, in_sponsor_limit)
         db.session.add(new_group)
         db.session.commit()
-        return 'User Group created.'
+        return jsonify('User Group created.')
     except:
         return abort(400, description='Error creating User Group')
 
@@ -44,55 +44,43 @@ def create_user_group():
 @app.route('/user_group/add_user', methods=['POST'])
 @api_key_check(['Admin'])
 def add_user_to_user_group(in_username = None, in_group_name = None):
-    # If called by project
-    internal_use = (in_username != None and in_group_name != None)
+        
+    in_username = in_username if in_username != None else request.json['username']
+    in_username_lower = lower_and_remove_nonalphanumeric(in_username)
+    in_group_name = in_group_name if in_group_name != None else request.json['group_name']
+    in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
 
-    # If called by endpoint
-    valid_credential = False
+    # Verify User exists
+    user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
+    if not user:
+        return abort(408, description='User does not exist.')
+    if not user.verified:
+        return abort(410, description='User is not verified.')
+
+    # Verify Group exists
+    user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
+    if not user_group:
+        return abort(411, description='UserGroup does not exist.')
+
+    # Verify User is not a member of this group
+    user_group_user = UserGroupUser.query.filter_by(
+        user_id=user.id,
+        user_group_id=user_group.id
+    ).first()
+    if user_group_user:
+        return {200: 'User is already a member of this group.'}
+
+    # Create a UserGroupUser row
     try:
-        valid_credential = request.json['ADMIN_KEY'] == os.getenv('ADMIN_KEY')
-    except:
-        valid_credential = False
-
-    if (valid_credential or internal_use):
-        in_username = in_username if in_username != None else request.json['username']
-        in_username_lower = lower_and_remove_nonalphanumeric(in_username)
-        in_group_name = in_group_name if in_group_name != None else request.json['group_name']
-        in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
-
-        # Verify User exists
-        user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
-        if not user:
-            return abort(408, description='User does not exist.')
-        if not user.verified:
-            return abort(410, description='User is not verified.')
-
-        # Verify Group exists
-        user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
-        if not user_group:
-            return abort(411, description='UserGroup does not exist.')
-
-        # Verify User is not a member of this group
-        user_group_user = UserGroupUser.query.filter_by(
+        new_user_group_user = UserGroupUser(
             user_id=user.id,
             user_group_id=user_group.id
-        ).first()
-        if user_group_user:
-            return {200: 'User is already a member of this group.'}
-
-        # Create a UserGroupUser row
-        try:
-            new_user_group_user = UserGroupUser(
-                user_id=user.id,
-                user_group_id=user_group.id
-            )
-            db.session.add(new_user_group_user)
-            db.session.commit()
-            return 'User added to User Group.'
-        except:
-            return abort(400, description='Error adding User to UserGroup')
-    else:
-        return abort(411, description='Incorrect Password')
+        )
+        db.session.add(new_user_group_user)
+        db.session.commit()
+        return jsonify('User added to User Group.')
+    except:
+        return abort(400, description='Error adding User to UserGroup')
 
 # Check if a single user is a member of a group
 @app.route('/user_group/check_for_member', methods=['GET'])
@@ -158,9 +146,38 @@ def get_groups_for_users():
     return '200'
 
 # Remove user from group
-@app.route('/user_group/remove_member', methods=['GET'])
-def remove_user_from_group():
-    return '200'
+@api_key_check(['Admin'])
+@app.route('/user_group/remove_user', methods=['POST'])
+def remove_user_from_user_group(in_username = None, in_group_name = None):
+        
+    in_username = in_username if in_username != None else request.json['username']
+    in_username_lower = lower_and_remove_nonalphanumeric(in_username)
+    in_group_name = in_group_name if in_group_name != None else request.json['group_name']
+    in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
+
+    # Verify User exists
+    user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
+    if not user:
+        return abort(408, description='User does not exist.')
+    if not user.verified:
+        return abort(410, description='User is not verified.')
+
+    # Verify Group exists
+    user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
+    if not user_group:
+        return abort(411, description='UserGroup does not exist.')
+
+    # Verify User is not a member of this group
+    user_group_user = UserGroupUser.query.filter_by(
+        user_id=user.id,
+        user_group_id=user_group.id
+    ).first()
+    if user_group_user == None:
+        return abort(412, description='User is not in UserGroup')
+    else:
+        db.session.delete(user_group_user)
+        db.session.commit()
+        return jsonify('User removed from UserGroup.')
 
 def is_user_in_groups(user_id, group_list, all=False):
     group_list = [lower_and_remove_nonalphanumeric(group) for group in group_list]
