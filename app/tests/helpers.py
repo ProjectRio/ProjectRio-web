@@ -518,8 +518,11 @@ def reset_db():
 
 def get_community_members(community_name, user):
     json = {'community_name': community_name, 'rio_key': user.rk}
-    response = requests.get("http://127.0.0.1:5000/community/members", json=json)
+    response = requests.post("http://127.0.0.1:5000/community/members", json=json)
     success = response.status_code == 200
+
+    if not success:
+        return [success, None]
 
     data = response.json()
 
