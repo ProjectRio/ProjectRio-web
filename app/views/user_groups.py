@@ -2,7 +2,7 @@ from flask import request, abort, jsonify
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import Community, db, RioUser, UserGroup, UserGroupUser
-from ..decorators import api_key_check
+from ..decorators import *
 from ..util import format_list_for_SQL
 import os
 import requests as req

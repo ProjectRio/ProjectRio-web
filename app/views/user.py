@@ -9,7 +9,7 @@ from ..util import *
 from ..consts import *
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
-from ..decorators import api_key_check
+from ..decorators import *
 
 import secrets
 import time
@@ -21,6 +21,7 @@ def display_signup_page():
 
 # === User registration endpoints ===
 @app.route('/register/', methods=['POST'])
+@record_ip_address
 def register():
     in_username = request.json['Username']
     username_lowercase = lower_and_remove_nonalphanumeric(in_username)

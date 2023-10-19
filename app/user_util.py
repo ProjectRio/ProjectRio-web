@@ -4,12 +4,18 @@ from flask_jwt_extended import create_access_token, set_access_cookies, jwt_requ
 
 def get_user(request):
   #Rio Key or Community Key
-  rio_key_provided = request.is_json and (('Rio Key' in request.json) or ('rio_key' in request.json))
-  if rio_key_provided:
-    try:
-      rio_key = request.json['Rio Key']
-    except:
-      rio_key = request.json['rio_key']
+  rio_key = None
+
+  # Check if "Rio Key" or "rio_key" is provided in JSON data
+  if request.is_json:
+      rio_key = request.json.get("Rio Key", request.json.get("rio_key"))
+
+  # If not found in JSON data, check URL arguments
+  if rio_key is None:
+      rio_key = request.args.get("rio_key")
+
+  if rio_key is not None:
+    # Handle the case where rio_key is not provided
     #Check for community key or rio key based on length. TODO figure out if its worth having the client
     #distinguish between the 2 (leaning towards no)
     if len(rio_key) == 4: #Community Key 

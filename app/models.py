@@ -781,3 +781,16 @@ class ApiKey(db.Model):
         self.total_pings = 0
         self.pings_daily = 0
         self.pings_weekly = 0
+
+class UserIpAddress(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-Many
+    ip_address = db.Column(db.String(50))
+    use_count = db.Column(db.Integer)
+    last_use_date = db.Column(db.Integer)
+
+    def __init__(self, user_id, ip_address):
+        self.user_id = user_id
+        self.ip_address = ip_address
+        self.use_count = 0
+        self.last_use_date = int(time.time())
