@@ -1,4 +1,5 @@
-from .models import db, RioUser, ApiKey, CommunityUser
+from .models import db, RioUser, ApiKey, CommunityUser, UserIpAddress
+import time
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 
@@ -77,3 +78,33 @@ def get_user_via_rio_or_comm_key(key):
     else: #Rio Key
         user = RioUser.query.filter_by(rio_key=key).first()
     return user
+
+def update_ip_address_entry(rio_user, request):
+    # Get the user's public IP address from the request
+    user_ip_address = get_client_ip(request)
+
+    # Query the database to find an entry for this user and IP address
+    user_ip_entry = UserIpAddress.query.filter_by(user_id=rio_user.id, ip_address=user_ip_address).first()
+
+    if user_ip_entry != None:
+        # If the entry exists, update use_count and last_use_date
+        user_ip_entry.use_count += 1
+        user_ip_entry.last_use_date = int(time.time())
+    else:
+        # If the entry doesn't exist, create a new entry
+        new_entry = UserIpAddress(user_id=rio_user.id, ip_address=user_ip_address)
+        db.session.add(new_entry)
+    
+    # Commit changes to the database
+    db.session.commit()
+    return
+
+def get_client_ip(request):
+    # Check the X-Forwarded-For (XFF) header for the client's IP address
+    x_forwarded_for = request.headers.get('X-Forwarded-For')
+    if x_forwarded_for:
+        # If the XFF header is present, it may contain a list of IP addresses; take the first one
+        client_ips = x_forwarded_for.split(',')
+        return client_ips[0].strip()
+    # If the XFF header is not present, use the remote_addr
+    return request.remote_addr

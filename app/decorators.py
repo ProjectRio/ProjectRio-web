@@ -77,25 +77,31 @@ def record_ip_address(func):
         if not rio_user:
             return abort(465, 'No matching user')
         
-        # Get the user's public IP address from the request
-        user_ip_address = get_client_ip(request)
-
-        # Query the database to find an entry for this user and IP address
-        user_ip_entry = UserIpAddress.query.filter_by(user_id=rio_user.id, ip_address=user_ip_address).first()
-
-        if user_ip_entry != None:
-            # If the entry exists, update use_count and last_use_date
-            user_ip_entry.use_count += 1
-            user_ip_entry.last_use_date = int(time.time())
-        else:
-            # If the entry doesn't exist, create a new entry
-            new_entry = UserIpAddress(user_id=rio_user.id, ip_address=user_ip_address)
-            db.session.add(new_entry)
+        update_ip_address_entry(rio_user, request)
         
-        # Commit changes to the database
-        db.session.commit()
         return func()
     return decorated_function
+
+
+def update_ip_address_entry(rio_user, request):
+    # Get the user's public IP address from the request
+    user_ip_address = get_client_ip(request)
+
+    # Query the database to find an entry for this user and IP address
+    user_ip_entry = UserIpAddress.query.filter_by(user_id=rio_user.id, ip_address=user_ip_address).first()
+
+    if user_ip_entry != None:
+        # If the entry exists, update use_count and last_use_date
+        user_ip_entry.use_count += 1
+        user_ip_entry.last_use_date = int(time.time())
+    else:
+        # If the entry doesn't exist, create a new entry
+        new_entry = UserIpAddress(user_id=rio_user.id, ip_address=user_ip_address)
+        db.session.add(new_entry)
+    
+    # Commit changes to the database
+    db.session.commit()
+    return
 
 def get_client_ip(request):
     # Check the X-Forwarded-For (XFF) header for the client's IP address

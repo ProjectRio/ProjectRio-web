@@ -10,6 +10,7 @@ from ..consts import *
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
 from ..decorators import *
+from ..user_util import *
 
 import secrets
 import time
@@ -21,7 +22,6 @@ def display_signup_page():
 
 # === User registration endpoints ===
 @app.route('/register/', methods=['POST'])
-@record_ip_address
 def register():
     in_username = request.json['Username']
     username_lowercase = lower_and_remove_nonalphanumeric(in_username)
@@ -42,6 +42,8 @@ def register():
         new_user = RioUser(in_username, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
+
+        update_ip_address_entry(new_user, request)
 
         subject = 'Verify your Project Rio Account'
         html_content = (
@@ -457,10 +459,8 @@ def get_users_communities():
         ((CommunityUser.banned == False) | (CommunityUser.banned == None))
     ).all()
 
-    print(len(result))
     ret_list = list()
     for comm in result:
-        print(comm.to_dict())
         ret_list.append(comm.to_dict())
 
     return {
