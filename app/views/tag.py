@@ -157,7 +157,7 @@ def tag_update():
             db.session.delete(gecko_code)
         #If tag is being upgraded to gecko code
         elif (tag.tag_type != 'Gecko Code' and new_type == 'Gecko Code'):
-            new_code_tag = GeckoCodeTag(in_tag_id=tag.id, in_gecko_code_desc=new_gecko_code_desc, in_gecko_code=gecko_code)
+            new_code_tag = GeckoCodeTag(in_tag_id=tag.id, in_gecko_code_desc=new_gecko_code_desc, in_gecko_code=new_gecko_code)
             db.session.add(new_code_tag)
         tag.tag_type = new_type
     if gecko_code_provided:
