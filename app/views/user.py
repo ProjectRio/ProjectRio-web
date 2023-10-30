@@ -14,6 +14,7 @@ from ..user_util import *
 
 import secrets
 import time
+import pytz
 
 # === User Registration Front End ===
 @app.route('/signup/')
@@ -505,3 +506,56 @@ def prune_users():
         db.session.delete(user)
         db.session.commit()
     return jsonify(deleted_users)
+
+@app.route('/user/get_ip_data', methods=['POST'])
+@jwt_required(optional=True)
+@api_key_check(['Admin'])
+def get_ip_data():
+    users = RioUser.query.all()
+    user_data = []
+
+    eastern_timezone = pytz.timezone('US/Eastern')  # Replace with the appropriate timezone
+
+    for user in users:
+        user_groups = [ug.user_group_from_ugu.name for ug in user.user_group_user]
+        user_ip_entries = UserIpAddress.query.filter_by(user_id=user.id).all()
+
+        ip_data = []
+        users_with_same_ip = []
+
+        for entry in user_ip_entries:
+            date_used = datetime.fromtimestamp(entry.last_use_date).astimezone(eastern_timezone)
+            formatted_date = date_used.strftime('%m/%d/%Y %H:%M %Z')
+            ip_data.append({
+                'ip_address': entry.ip_address,
+                'date_used': formatted_date,
+                'count': entry.use_count
+            })
+
+        # Find users with the same IP address
+        users_with_same_ip = db.session.query(RioUser, UserIpAddress).join(UserIpAddress).filter(UserIpAddress.ip_address.in_([ip_entry.ip_address for ip_entry in user_ip_entries]), RioUser.id != user.id).all()
+
+        users_with_same_ip_data = []
+        for other_user, ip_entry in users_with_same_ip:
+            users_with_same_ip_data.append({
+                'ip_address': ip_entry.ip_address,
+                'username': other_user.username
+            })
+            pprint({
+                'ip_address': ip_entry.ip_address,
+                'username': other_user.username
+            })
+
+        date_created = datetime.fromtimestamp(user.date_created).astimezone(eastern_timezone)
+        formatted_date_created = date_created.strftime('%m/%d/%Y %H:%M %Z')
+
+        user_data.append({
+            'username': user.username,
+            'email': user.email,
+            'date_created': formatted_date_created,
+            'user_groups': user_groups,
+            'ip_data': ip_data,
+            'users_with_same_ip': users_with_same_ip_data
+        })
+
+    return jsonify(user_data)
