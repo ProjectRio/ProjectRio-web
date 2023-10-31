@@ -129,8 +129,26 @@ def save_game():
         game_id = int(data.get('GameID').replace(',', ''), 16)
         submit_time = data.get('Date - End')
 
+        # Validate users and basic info
         if game_id is None or submit_time is None:
             return jsonify({'error': 'Missing or invalid GameID/Date field in JSON'}), 400
+        
+        version_split = data['Version'].split('.')
+        if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
+            return 'Not accepting games from clients below 1.9.5'
+
+        # Ignore game if it's a CPU game
+        if data['Home Player'] == "CPU" or data['Away Player'] == "CPU":
+            return jsonify({'error': 'Database does not accept CPU games'}), 400
+
+        # Check if rio_keys exist in the db and get associated players
+        home_player = get_user_via_rio_or_comm_key(data['Home Player'])
+        away_player = get_user_via_rio_or_comm_key(data['Away Player'])
+
+        if home_player is None or away_player is None:
+            return jsonify({'error': 'Invalid Rio User'}), 400
+        if home_player.verified is False or away_player.verified is False:
+            return jsonify({'error': 'Both users must be verified to submit games'}), 400
 
         # Save the JSON data to a file with the name based on 'game_id'
         filename = os.path.join('..', app.config['GAMES_UPLOAD_FOLDER'], f'{game_id}_{submit_time}.json')
@@ -181,24 +199,7 @@ def process_all_games():
                 
 
 def process_game(game_json):
-    try:
-        version_split = game_json['Version'].split('.')
-        if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
-            return 'Not accepting games from clients below 1.9.5'
-
-        # Ignore game if it's a CPU game
-        if game_json['Home Player'] == "CPU" or game_json['Away Player'] == "CPU":
-            return 'Database does not accept CPU games'
-
-        # Check if rio_keys exist in the db and get associated players
-        home_player = get_user_via_rio_or_comm_key(game_json['Home Player'])
-        away_player = get_user_via_rio_or_comm_key(game_json['Away Player'])
-
-        if home_player is None or away_player is None:
-            return 'Invalid Rio User'
-        if home_player.verified is False or away_player.verified is False:
-            return 'Both users must be verified to submit games'
-        
+    try:       
 
         # Detect invalid games
         innings_selected = game_json['Innings Selected']
