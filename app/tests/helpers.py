@@ -566,3 +566,12 @@ def compare_users(user_a, user_b):
         and user_a.ak == user_b.ak
         and user_a.url == user_b.url
         and user_a.verified == user_b.verified)
+
+def game_exists(game_id):
+    query = ('SELECT * \n'
+            'FROM game \n'
+            'WHERE game_id = %s')
+    params = (str(game_id),)
+    result = db.query(query, params)
+
+    return len(result) == 1    
