@@ -199,7 +199,12 @@ def process_all_games():
                 
 
 def process_game(game_json):
-    try:       
+    try:
+        # Make sure GameID is not already in DB
+        game_id = int(game_json.get('GameID').replace(',', ''), 16)
+
+        home_player = get_user_via_rio_or_comm_key(game_json['Home Player'])
+        away_player = get_user_via_rio_or_comm_key(game_json['Away Player'])
 
         # Detect invalid games
         innings_selected = game_json['Innings Selected']
