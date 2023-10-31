@@ -1,0 +1,5 @@
+# This directory is here for short term storage of game files before processing
+# Ignore everything in this directory
+*
+# Except this file
+!.gitignore
