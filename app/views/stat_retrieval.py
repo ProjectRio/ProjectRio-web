@@ -729,8 +729,12 @@ def endpoint_landing_data():
         'contact.charge_power_up AS charge_power_up, \n'
         'contact.charge_power_down AS charge_power_down, \n'
         'contact.frame_of_swing_upon_contact AS frame_of_swing, \n'
+        'pitch.pitch_type, \n'
+        'pitch.charge_pitch_type, \n'
         'pitch.type_of_swing, \n'
         'contact.type_of_contact, \n'
+        'pitch.pitch_ball_x_pos, \n'
+        'pitch.pitch_batter_x_pos, \n'
         #Add decoded action
         'fielding.position AS fielder_position, \n'
         'fielding.fielder_x_pos AS fielder_x_pos, \n'
