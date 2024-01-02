@@ -37,48 +37,48 @@ Please read the [FAQ](#faq) before using the Api.
 - [Landing Data](#landing-data)
 - [Star Chances](#star-chances)
 - [Pitch Analysis](#pitch-analysis)
-- [Detailed Stats](#detailed-stats)
+- [Stats](#stats)
 
 
 ## Characters
 
 ### <u>Usage</u>
 
-/characters/ returns an array of data-mined bast stat values for each character. You can narrow down the characters returned by utilizing the name parameter.
+/characters/ returns an array of data-mined stat values for each character. You can narrow down the characters returned by utilizing the name parameter.
 
 ```
 {
 	"characters": [
 		{
-			"char_id":0,
-			"name":"Mario",
-			"batting_stance":0,
-			"batting_stat_bar":6,
-			"bunting":35,
-			"captain":"True",
-			"captain_star_hit_or_pitch":1,
-			"character_class":0,
-			"charge_hit_power":64,
-			"chemistry_table_id":1,
-			"curve":53,
-			"curve_ball_speed":130,
-			"fast_ball_speed":168,
-			"fielding_arm":0,
-			"fielding_stat_bar":6,
-			"hit_trajectory_mhl":0,
-			"hit_trajectory_mpp":0,
-			"nice_contact_spot_size":65,
-			"non_captain_star_pitch":2,
-			"non_captain_star_swing":1,
-			"perfect_contact_spot_size":35,
-			"pitching_stat_bar":6,
-			"running_stat_bar":5,
-			"slap_hit_power":50,
-			"speed":50,
-			"starting_addr":"0x8034e9a0",
-			"throwing_arm":60,
-			"weight":2
-		},
+		"batting_stance": 0,
+		"batting_stat_bar": 6,
+		"bunting": 35,
+		"captain": "True",
+		"captain_star_hit_or_pitch": 1,
+		"char_id": 0,
+		"character_class": 0,
+		"charge_hit_power": 64,
+		"chemistry_table_id": 1,
+		"curve": 53,
+		"curve_ball_speed": 130,
+		"fast_ball_speed": 168,
+		"fielding_arm": 0,
+		"fielding_stat_bar": 6,
+		"hit_trajectory_mhl": 0,
+		"hit_trajectory_mpp": 0,
+		"name": "Mario",
+		"nice_contact_spot_size": 65,
+		"non_captain_star_pitch": 2,
+		"non_captain_star_swing": 1,
+		"perfect_contact_spot_size": 35,
+		"pitching_stat_bar": 6,
+		"running_stat_bar": 5,
+		"slap_hit_power": 50,
+		"speed": 50,
+		"starting_addr": "0x8034e9a0",
+		"throwing_arm": 60,
+		"weight": 2
+		}
 	]
 }
 ```
@@ -94,7 +94,7 @@ Please read the [FAQ](#faq) before using the Api.
 	- name=Mario
 
 - Add that to the end of the API url and you’re ready to go: 
-  - https://projectrio-api-1.api.projectrio.app/characters/?name=Mario
+  - https://api.projectrio.app/characters/?name=Mario
 
  **2. Get data-mined stats for Mario and Luigi**:
 - To get Mario and Luigi's data you can use the _name_ parameter twice.
@@ -102,11 +102,11 @@ Please read the [FAQ](#faq) before using the Api.
 	- name=Luigi
 	
 - Add these to the end of the API url and you’re ready to go:
-  - https://projectrio-api-1.api.projectrio.app/characters/?name=Mario&name=Luigi
+  - https://api.projectrio.app/characters/?name=Mario&name=Luigi
 
  **3. Get data-mined stats for all 54 characters**:
 - There's no need to pass any parameters to get all 54 characters back, so just use the following url to get all values.
-  - https://projectrio-api-1.api.projectrio.app/characters/
+  - https://api.projectrio.app/characters/
 
 ## Games
 
@@ -116,20 +116,25 @@ Please read the [FAQ](#faq) before using the Api.
 
 ```
 {
-	"games":[
+	"games": [
 		{
-			"Away Captain":"Bowser",
-			"Away Score":14,
-			"Away User":"GenericAwayUser",
-			"Home Captain":"Yoshi",
-			"Home Score":0,
-			"Home User":"GenericHomeUser",
-			"Id":2503858538,
-			"Innings Played":7,
-			"Innings Selected":9,
-			"Tags":["Unranked","Normal","Netplay"],
-			"date_time_end":1652965941,
-			"date_time_start":1652964753
+		"away_captain": "Birdo",
+		"away_score": 0,
+		"away_user": "Barth",
+		"date_time_end": 1704057552,
+		"date_time_start": 1704057014,
+		"game_id": 77905544547,
+		"game_mode": 52,
+		"home_captain": "DK",
+		"home_score": 1,
+		"home_user": "Blazethh",
+		"innings_played": 5,
+		"innings_selected": 5,
+		"loser_incoming_elo": 1156,
+		"loser_result_elo": 1150,
+		"stadium": 4,
+		"winner_incoming_elo": 1379,
+		"winner_result_elo": 1386
 		}
 	]
 }
@@ -143,12 +148,13 @@ Please read the [FAQ](#faq) before using the Api.
 - **captain** : provide a captain name to narrow your search by, e.g. captain=DK. Can be passed multiple times to get games from all usernames provided.
 - **vs_captain** : provide the name of a captain who **MUST** appear in game against the provided _captain_. Can be passed multiple times.
 - **exclude_captain** : provide a name of a captain who **MUST NOT** appear in results. Can be passed multiple times.
-- **tag** : provide the name of a tag to narrow your search, e.g. tag=Ranked will only return games with the ranked tag. Can be passed multiple times to further refine your search.
-- **exclude_tag** : provide the name of a tag to narrow your search, e.g. exclude_tag=Ranked will NOT return games with the ranked tag.  Can be passed multiple times to further refine your search.
+- **tag** : provide the name of a tag to narrow your search, e.g. tag=StarsOffSeason7 will only return games with the StarsOffSeason7 tag. Can be passed multiple times to further refine your search.
+- **exclude_tag** : provide the name of a tag to narrow your search, e.g. exclude_tag=StarsOffSeason7 will NOT return games with the StarsOffSeason7 tag.  Can be passed multiple times to further refine your search.
 - **start_time** : specify a unix time to start getting games from. Overrides limit_games.
 - **end_time** :  specify a unix time to stop getting games at. Overrides limit_games.
+- **include_teams**: [0-1] bool if you want the rosters of both teams to be returned for each game. (Note: This will slow the result)
 
-_*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, Netplay_
+* Tags can be gecko codes or any other house rule. Game modes and communities also have a tags. Some examples of tags are: StarsOffSeason7 (Game Mode), BigBallaSeason5 (Game Mode), DuplicateCharacters (Gecko Code), RemoveSlice (Gecko Code), NationalNetplayLeague (Community).
 
 ### <u>Examples</u>
 
@@ -158,29 +164,29 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 	 - limit_games=1
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=1&username=GenericHomeUser
+  - https://api.projectrio.app/games/?limit_games=1&username=GenericHomeUser
 
 **2. Get the 10 most recent games including GenericHomeUser and/or GenericAwayUser** 
--  To get GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _recent_ to limit the return.
+-  To get games involving GenericHomeUser and GenericAwayUser we'll have to use a multiple the of _username_ parameter with _limit_games_ to limit the return.
 	 - username=GenericHomeUser
 	 - username=GenericAwayUser
 	 - limit_games=10
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=10&username=GenericHomeUser&username=GenericAwayUser
+  - https://api.projectrio.app/games/?limit_games=10&username=GenericHomeUser&username=GenericAwayUser
 
-**3. Get GenericHomeUser and GenericAwayUser's 5 most recent Ranked games against each other** 
--  To get GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _limit_games_ to limit the return and _tag_ to specify we want Ranked games.
+**3. Get GenericHomeUser and GenericAwayUser's 5 most recent StarsOffSeason7 games against each other** 
+-  To get GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _limit_games_ to limit the return and _tag_ to specify we want StarsOffSeason7 games.
 	 - username=GenericHomeUser
 	 - vs_username=GenericAwayUser
 	 - limit_games=5
-	 - tag=Ranked
+	 - tag=StarsOffSeason7
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=5&username=GenericHomeUser&vs_username=GenericAwayUser&tag=Ranked
+  - https://api.projectrio.app/games/?limit_games=5&username=GenericHomeUser&vs_username=GenericAwayUser&tag=StarsOffSeason7
 
 
-**4. Get 15 Ranked Normal Netplay games between 05/18 at 10:30pm EST and 05/19 at 1:00am EST between GenericHomeUser and GenericAwayUser** 
+**4. Get 15 StarsOffSeason7 Normal Netplay games between 05/18 at 10:30pm EST and 05/19 at 1:00am EST between GenericHomeUser and GenericAwayUser** 
 -  To specify what times you want games between, you must use unix time. You can use https://www.unixtimestamp.com/ or a different website to convert from MM/DD/YYYY HH:MM to a unix timestamp. 
 - To specify we want GenericHomeUser's games against GenericAwayUser we'll have to use a combination of _username_ and _vs_username_ with _limit_games_ to limit the return.
 	 - username=GenericHomeUser
@@ -188,12 +194,10 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 	 - limit_games=15
 	 - start_time=1652927400
 	 - end_time=1652936400
-	 - tag=Ranked
-	 - tag=Normal
-	 - tag=Netplay
+	 - tag=StarsOffSeason7
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/games/?limit_games=15&username=GenericHomeUser&vs_username=GenericAwayUser&start_time=1652927400&end_time=1652936400&tag=Ranked&tag=Normal&tag=Netplay
+  - https://api.projectrio.app/games/?limit_games=15&username=GenericHomeUser&vs_username=GenericAwayUser&start_time=1652927400&end_time=1652936400&tag=StarsOffSeason7
 
 ## Events
 
@@ -233,7 +237,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 	 - limit_games=5
  
 - Add these to the end of the API url and you're ready to go:
-  - https://projectrio-api-1.api.projectrio.app/events/?limit_games=1&username=GenericHomeUser
+  - https://api.projectrio.app/events/?limit_games=1&username=GenericHomeUser
 
 **2. Get the GenericHomeUser's events from 5 most recent games where they used the charge swing with a righty batter** 
 -  Give the parameters for games and then layer on the event parameters _type_of_swing_, _batter_hand_, users_as_batter_. Users as batters says only get the events where the given usernames are batting.
@@ -243,8 +247,12 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 	 - batter_hand=1
 	 - users_as_batter=1
 
-## Plate Data
+- Add these to the end of the API url and you're ready to go:
+  - https://api.projectrio.app/events/?limit_games=1&username=GenericHomeUser&type_of_swing=2&batter_hand=1&users_as_batter=1
 
+
+## Plate Data
+**Currently Not Functional**
 ```
 {
     "Data": [
@@ -280,37 +288,57 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 ## Landing Data
 ```
 {
-    "Data": [
-        {
-            "batter_char_id": 0,
-            "batter_username": "GenericAwayUser",
-            "batting_hand": false,
-            "event_id": 99936,
-            "fielder_char_id": 3,
-            "fielder_jump": 1,
-            "fielder_position": 3,
-            "fielding_hand": false,
-            "final_result": 4,
-            "game_id": 1464990895,
-            "manual_select_state": 0,
-            "pitcher_username": "GenericHomeUser",
-            "stick_input": 0,
-            "type_of_contact": 1,
-            "type_of_swing": 1,
-            "x_pos": 3.59528,
-            "x_velo": 0.0426119,
-            "y_pos": 0.0,
-            "y_velo": 0.0522467,
-            "z_pos": 37.1124,
-            "z_velo": 0.616323
-        },
+	"Data": [
+		{
+		"ball_hang_time": 149.0,
+		"ball_horiz_angle": 499,
+		"ball_max_height": 11.1148,
+		"ball_power": 89,
+		"ball_vert_angle": 1157,
+		"ball_x_contact_pos": -0.134196,
+		"ball_x_landing_pos": -7.45722,
+		"ball_x_velocity": -0.0650114,
+		"ball_y_landing_pos": 3.20591,
+		"ball_y_velocity": 0.308325,
+		"ball_z_contact_pos": 1.7,
+		"ball_z_landing_pos": 34.0878,
+		"ball_z_velocity": 0.31422,
+		"batter_char_id": 15,
+		"batter_username": "MattGree",
+		"batting_hand": true,
+		"charge_power_down": 0.0,
+		"charge_power_up": 0.0,
+		"chem_links_ob": 0,
+		"contact_absolute": 200.0,
+		"contact_quality": 0.0,
+		"event_num": 2,
+		"fielder_char_id": 2,
+		"fielder_jump": 0,
+		"fielder_position": 5,
+		"fielder_x_pos": -7.80521,
+		"fielder_y_pos": 0.0,
+		"fielder_z_pos": 35.6002,
+		"fielding_hand": false,
+		"final_result": 6,
+		"frame_of_swing": 7,
+		"game_id": 155514857267,
+		"manual_select_state": 0,
+		"pitcher_char_id": 28,
+		"pitcher_username": "duckydonne",
+		"rng1": 13017.0,
+		"rng2": 5490.0,
+		"rng3": 142.0,
+		"stick_input": 1,
+		"type_of_contact": 4,
+		"type_of_swing": 1
+		}
 	]
 }
 ```
 
 ### <u>Usage</u>
 
-`/landing_data/` does not have any unique parameters like `/plate_data/`. This endpoint returns data on the landing spot of the hit and the fielder who fielded
+`/landing_data/` does not have any unique parameters like `/plate_data/`. This endpoint returns data from events where contact with the ball is made. The data supplied in this endpoint includes all needed data to fully recreate the hit, as well as supplying data on the landing spot of the hit and the fielder who fielded it.
 
 ### <u>Parameters</u>
 - **Game params**:     Params for /games/ (tags/users/date/etc)
@@ -319,16 +347,15 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 ## Star Chances
 ```
 {
-    "Data": [
+	"Data": [
 		{
-            "batter_win": 382,
-            "elligible_event": 0,
-            "games": 215,
-            "half_inning": 0,
-            "inning": 1,
-            "pitcher_win": 667,
-            "star_chances": 85
-        },
+		"batter_win": 28556,
+		"eligible_event": 282410,
+		"games": 8962,
+		"pitcher_win": 45013,
+		"star_chances": 73569,
+		"total_events": 579112
+		}
 	]
 }
 ```
@@ -343,6 +370,7 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 
 
 ## Pitch Analysis
+**Currently Not Functional**
 ```
 {
     "Data": [
@@ -366,14 +394,14 @@ _*list of tags currently available: Ranked, Unranked, Normal, Superstar, Local, 
 - **Game params**:     Params for /games/ (tags/users/date/etc)
 - **Event params**:    Params for /events/ (swing_type/inning/)
 
-## Detailed Stats
+## Stats
 ```
 VARIABLE DATA RETURN
 ```
 
 ### <u>Usage</u>
 
-`/detailed_stats/` is one of the more complex endpoints provided by the API, it has a variable output depending on the inputs. It can return stats on a per user, a per character, and per swing (for batting stats). In the standard case (with no params) it returns agregate stats of all users and characters. `by_user` will break stats up by user, and `by_char` will break them up by character. These flags can be combined for different levels of details. This endpoint leverages `/games/` and will only analyze games that satisfy the parameters given. 
+`/stats/` is one of the more complex endpoints provided by the API, it has a variable output depending on the inputs. It can return stats on a per user, a per character, and per swing (for batting stats). In the standard case (with no params) it returns agregate stats of all users and characters. `by_user` will break stats up by user, and `by_char` will break them up by character. These flags can be combined for different levels of details. This endpoint leverages `/games/` and will only analyze games that satisfy the parameters given. 
 
 ### <u>Parameters</u>
 - **Game params**:     Params for /games/ (tags/users/date/etc)\
@@ -398,7 +426,7 @@ Add a ? to the end of the Rio Web address and then add your parameters by specif
 
 For example, if you wanted to see Mario and Luigi's data-mined base stats using the [/characters/](#characters) endpoint, you would type out the URL, followed by ?, then the parameter _name_ followed by =, followed by Mario, followed by &, followed by name=Luigi.
 
-https://projectrio-api-1.api.projectrio.app/characters/?name=mario&name=luigi
+https://api.projectrio.app/characters/?name=mario&name=luigi
 
 **Q: How do I convert a normal date to unix datetime?**
 
@@ -406,7 +434,6 @@ You can use https://www.unixtimestamp.com/ or a website of your choice to conver
 	
 **Q: How do I see my personal stats?**
 
-If you are a Patron you can use your username to retrieve your personal stats from the database. Otherwise, you can view the community's stats as a whole by using GenericHomeUser and GenericAwayUser as usernames. Once we leave Beta account creation will be available to everyone. Check out the [Public Endpoints](#public-endpoints) for more information!
-
+If you have a Project Rio account you can use your username to retrieve your personal stats from the database using the `/stats/` endpoint.
 
 # Thanks for using Rio Web!
