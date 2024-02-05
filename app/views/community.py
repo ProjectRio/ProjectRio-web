@@ -351,7 +351,7 @@ def community_invite():
                 # Still can continue
             #Already invited, skip inviting again
             continue
-        new_comm_user = CommunityUser(in_user_id=invited_user.id, in_comm_id=comm.id, in_admin=False, in_invited=True, in_active=False)
+        new_comm_user = CommunityUser(in_user_id=invited_user.id, in_comm_id=comm.id, in_admin=False, in_invited=True, in_active=True)
         db.session.add(new_comm_user)
         db.session.commit()
 
