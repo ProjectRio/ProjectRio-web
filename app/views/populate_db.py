@@ -295,12 +295,12 @@ def process_game(game_json):
 
         #Create elos for new players if needed
         if winner_ladder == None:
-            new_glicko_player = Player()
+            new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
             winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
             db.session.add(winner_ladder)
             db.session.commit()
         if loser_ladder == None:
-            new_glicko_player = Player()
+            new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
             loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
             db.session.add(loser_ladder)
             db.session.commit()
@@ -760,12 +760,12 @@ def submit_game_history():
 
     #Create elos for new players if needed
     if winner_ladder == None:
-        new_glicko_player = Player()
+        new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
         winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
         db.session.add(winner_ladder)
         db.session.commit()
     if loser_ladder == None:
-        new_glicko_player = Player()
+        new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
         loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
         db.session.add(loser_ladder)
         db.session.commit()
@@ -973,14 +973,14 @@ def recalc_elo(in_tag_set_id=None, log=False):
             if winner_ladder == None:
                 # winner_rio_user_id = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first().user_id
                 # print('Making Ladder for RioUser=', winner_rio_user_id, 'CommUser=', game.winner_comm_user_id)
-                new_glicko_player = Player()
+                new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
                 winner_ladder = Ladder(tag_set_id, game.winner_comm_user_id, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
                 db.session.add(winner_ladder)
                 db.session.commit()
             if loser_ladder == None:
                 # loser_rio_user_id = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first().user_id
                 # print('Making Ladder for RioUser=', loser_rio_user_id, 'CommUser=', game.loser_comm_user_id)
-                new_glicko_player = Player()
+                new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
                 loser_ladder = Ladder(tag_set_id, game.loser_comm_user_id, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
                 db.session.add(loser_ladder)
                 db.session.commit()
