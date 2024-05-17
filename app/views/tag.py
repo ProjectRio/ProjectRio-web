@@ -230,7 +230,15 @@ def tagset_create():
     in_tag_set_desc = request.json['desc']
     in_tag_set_type = request.json['type']
     in_tag_set_comm_name = request.json['community_name']
-    in_tag_ids = request.json['tags']
+
+    # Add new tags to tag_set
+    add_tags_provided = request.is_json and 'add_tag_ids' in request.json
+    add_tag_ids = request.json['add_tag_ids'] if add_tags_provided else None
+    # Remove tags from tag_set
+    remove_tags_provided = request.is_json and 'remove_tag_ids' in request.json
+    remove_tag_ids = request.json['remove_tag_ids'] if remove_tags_provided else None
+
+
     in_tag_set_start_date = request.json['start_date']
     in_tag_set_end_date = request.json['end_date']
 
@@ -295,13 +303,13 @@ def tagset_create():
         tag_set = TagSet.query.filter_by(id=in_tag_set_id).first()
         if tag_set == None:
             return abort(421, f'TagSet with ID={in_tag_set_id} not found')
-        for tag in tag_set.tags:
-            if tag.tag_type != "Community" and tag.tag_type != "Competition":
+        for tag in tag_set.tags: # Copy tags from tag_set, ignoring tags to be added in and leaving out tags to be removed
+            if tag.tag_type != "Community" and tag.tag_type != "Competition" and (tag.id not in add_tag_ids) and (tag.id not in remove_tag_ids):
                 tags.append(tag)
     
 
     # Validate all tag ids, add to list
-    for id in in_tag_ids:
+    for id in add_tag_ids:
         tag = Tag.query.filter_by(id=id).first()
         if tag == None:
             return abort(419, f'Tag with ID={id} not found')
@@ -516,6 +524,7 @@ def tagset_list():
         tag_set_dict = tag_set.to_dict(False)
         tag_set_dict['comm_type'] = comm.comm_type
         tag_set_dict['tags'] = list()
+        tag_set_dict['tag_ids'] = list()
         for tag in tag_set.tags:
             tag_dict = tag.to_dict()
             if (tag.tag_type == 'Gecko Code'):
@@ -527,6 +536,7 @@ def tagset_list():
                 tag_dict["gecko_code_desc"] = ""
                 tag_dict["gecko_code"] = ""
             tag_set_dict['tags'].append(tag_dict)
+            tag_set_dict['tag_ids'].append(tag_dict['id'])
 
         # Append passing tag set information
         tag_set_list.append(tag_set_dict)
@@ -557,8 +567,12 @@ def tag_set_update():
     new_start_date = request.json['start_date'] if start_date_provided else None
     end_date_provided = request.is_json and 'end_date' in request.json
     new_end_date = request.json['end_date'] if end_date_provided else None
-    tags_provided = request.is_json and 'tag_ids' in request.json
-    new_tag_ids = request.json['tag_ids'] if tags_provided else None
+    # Add new tags to tag_set
+    add_tags_provided = request.is_json and 'add_tag_ids' in request.json
+    add_tag_ids = request.json['add_tag_ids'] if add_tags_provided else None
+    # Remove tags from tag_set
+    remove_tags_provided = request.is_json and 'remove_tag_ids' in request.json
+    remove_tag_ids = request.json['remove_tag_ids'] if remove_tags_provided else None
 
     if (start_date_provided and end_date_provided and new_start_date > new_end_date):
         return abort(412, description='Invalid start/end times')
@@ -621,17 +635,26 @@ def tag_set_update():
         tag_set.start_date = new_start_date
     if end_date_provided:
         tag_set.end_date = new_end_date
-    if tags_provided:
-        # Validate all tag ids, add to list
-        tags = list()
-        for id in new_tag_ids:
-            tag = Tag.query.filter_by(id=id).first()
-            if tag == None:
-                return abort(419, f'Tag with ID={id} not found')
-            if tag.tag_type == "Community" or tag.tag_type == "Competition":
-                return abort(420, f'Tag with ID={id} not a valid type tag')
-            tags.append(tag)
-        tag_set.tags = tags
+    if add_tags_provided:
+        # Validate all add_tag_ids
+        for id in add_tag_ids:
+            add_tag = Tag.query.filter_by(id=id).first()
+            if add_tag is None:
+                return abort(419, f'Tag with ID={id} not found for appending')
+            if add_tag.tag_type == "Community" or add_tag.tag_type == "Competition":
+                return abort(420, f'Tag with ID={id} not a valid type for appending')
+            
+            # Check if the tag is already in the tag_set to avoid duplicates
+            if add_tag not in tag_set.tags:
+                tag_set.tags.append(add_tag)
+    if remove_tags_provided:
+        # Validate all remove_tag_ids and remove them if they are part of the tag_set
+        for id in remove_tag_ids:
+            remove_tag = Tag.query.filter_by(id=id).first()
+            if remove_tag and remove_tag in tag_set.tags:
+                # The tag exists and is part of the tag_set, so remove it
+                tag_set.tags.remove(remove_tag)
+            # If the tag does not exist or is not part of the tag_set, do nothing (skip it)
 
     db.session.add(tag_set)
     db.session.commit()
