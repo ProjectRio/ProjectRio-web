@@ -445,6 +445,8 @@ def tagset_list():
     communities_provided = request.is_json and 'Communities' in request.json
     community_id_list = request.json.get('Communities') if communities_provided else list()
 
+    return_combined_gecko_codes = request.json['combine_codes'] if request.is_json and 'combine_codes' in request.json else None
+
     if (communities_provided and len(community_id_list) == 0):
         return abort(409, description="Communities key added to JSON but no community ids passed")
     tag_sets = None
@@ -525,6 +527,8 @@ def tagset_list():
         tag_set_dict['comm_type'] = comm.comm_type
         tag_set_dict['tags'] = list()
         tag_set_dict['tag_ids'] = list()
+        if return_combined_gecko_codes:
+            tag_set_dict['gecko_code'] = str()
         for tag in tag_set.tags:
             tag_dict = tag.to_dict()
             if (tag.tag_type == 'Gecko Code'):
@@ -532,6 +536,8 @@ def tagset_list():
                 if (result != None):
                     tag_dict["gecko_code_desc"] = result.to_dict()["gecko_code_desc"]
                     tag_dict["gecko_code"] = result.to_dict()["gecko_code"]
+                    if return_combined_gecko_codes:
+                        tag_set_dict['gecko_code'] += result.to_dict()["gecko_code"]
             elif client:
                 tag_dict["gecko_code_desc"] = ""
                 tag_dict["gecko_code"] = ""
