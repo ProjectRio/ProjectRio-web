@@ -233,10 +233,10 @@ def tagset_create():
 
     # Add new tags to tag_set
     add_tags_provided = request.is_json and 'add_tag_ids' in request.json
-    add_tag_ids = request.json['add_tag_ids'] if add_tags_provided else None
+    add_tag_ids = request.json['add_tag_ids'] if add_tags_provided else []
     # Remove tags from tag_set
     remove_tags_provided = request.is_json and 'remove_tag_ids' in request.json
-    remove_tag_ids = request.json['remove_tag_ids'] if remove_tags_provided else None
+    remove_tag_ids = request.json['remove_tag_ids'] if remove_tags_provided else []
 
 
     in_tag_set_start_date = request.json['start_date']
@@ -269,6 +269,18 @@ def tagset_create():
     # Make sure community is under the limit of active tag types
     current_unix_time = int( time.time() )
 
+    # Get user making the new TagSet
+    user=get_user(request)
+
+    if user == None:
+        return abort(417, description='Username associated with JWT not found.')
+    
+    #If community tag, make sure user is an admin of the community
+    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+    
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
+        return abort(418, description='User not apart of community or not an admin')
+    
     query = (
         'SELECT \n'
         'MAX(community.active_tag_set_limit) AS tag_set_limit, \n'
@@ -279,23 +291,14 @@ def tagset_create():
         'GROUP BY tag_set.community_id \n'
     )
     results = db.session.execute(query).first()
-    if results != None:
+    if results != None and not is_user_in_groups(user.id, ['Admin']):
         result_dict = results._asdict()
         #Only unofficial comms have tag_set limits
         if comm.comm_type != 'Official' and (result_dict['active_tag_sets'] >= result_dict['tag_set_limit']):
             return abort(415, description='Community has reached active tag_set_limit')
 
-    # Get user making the new TagSet
-    user=get_user(request)
-
-    if user == None:
-        return abort(417, description='Username associated with JWT not found.')
     
-    #If community tag, make sure user is an admin of the community
-    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
-        return abort(418, description='User not apart of community or not an admin')
 
     tags = list()
     # If TagSet is provided, get all tags
