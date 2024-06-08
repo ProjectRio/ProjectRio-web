@@ -368,6 +368,8 @@ def endpoint_games(called_internally=False):
     - balls:           [0-3],   balls
     - strikes:         [0-2],   strikes
     - outs:            [0-2],   outs
+    - home_score       [0-50],  home score
+    - away_score       [0-50],  away score
     - star_chance      [0-1],   bool for star chance
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
@@ -482,7 +484,7 @@ def endpoint_event(called_internally=False):
     if list_of_half_inning == None:
         return abort(400, description = error)
 
-    #Strike list
+    #Balls list
     list_of_balls, error = sanitize_int_list(request.args.getlist('balls'), "Balls not in range", 4)
     if list_of_balls == None:
         return abort(400, description = error)
@@ -494,6 +496,16 @@ def endpoint_event(called_internally=False):
 
     #Outs list
     list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
+    if list_of_outs == None:
+        return abort(400, description = error)
+    
+    #Home scores list
+    list_of_home_scores, error = sanitize_int_list(request.args.getlist('home_score'), "Score not in range", 50)
+    if list_of_outs == None:
+        return abort(400, description = error)
+    
+    #Away scores list
+    list_of_away_scores, error = sanitize_int_list(request.args.getlist('away_score'), "Score not in range", 50)
     if list_of_outs == None:
         return abort(400, description = error)
     
@@ -522,6 +534,8 @@ def endpoint_event(called_internally=False):
         (list_of_balls, 'event.balls', None),
         (list_of_strikes, 'event.strikes', None),
         (list_of_outs, 'event.outs', None),
+        (list_of_home_scores, 'event.home_score', None)
+        (list_of_away_scores, 'event.away_score', None)
         (star_chance_flag, 'event.star_chance', None),
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
