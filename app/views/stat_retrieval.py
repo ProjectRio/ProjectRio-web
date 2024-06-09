@@ -475,7 +475,7 @@ def endpoint_event(called_internally=False):
         return abort(400, description = error)
 
     #Inning list
-    list_of_innings, error = sanitize_int_list(request.args.getlist('innings'), "Innings not in range", 50)
+    list_of_innings, error = sanitize_int_list(request.args.getlist('inning'), "Inning not in range", 50)
     if list_of_innings == None:
         return abort(400, description = error)
 
