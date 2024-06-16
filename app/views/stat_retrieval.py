@@ -466,6 +466,8 @@ def endpoint_games(called_internally=False):
     - balls:           [0-3],   balls
     - strikes:         [0-2],   strikes
     - outs:            [0-2],   outs
+    - home_score       [0-50],  home score
+    - away_score       [0-50],  away score
     - star_chance      [0-1],   bool for star chance
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
@@ -570,7 +572,7 @@ def endpoint_event(called_internally=False):
         return abort(400, description = error)
 
     #Inning list
-    list_of_innings, error = sanitize_int_list(request.args.getlist('innings'), "Innings not in range", 50)
+    list_of_innings, error = sanitize_int_list(request.args.getlist('inning'), "Inning not in range", 50)
     if list_of_innings == None:
         return abort(400, description = error)
 
@@ -579,7 +581,7 @@ def endpoint_event(called_internally=False):
     if list_of_half_inning == None:
         return abort(400, description = error)
 
-    #Strike list
+    #Balls list
     list_of_balls, error = sanitize_int_list(request.args.getlist('balls'), "Balls not in range", 4)
     if list_of_balls == None:
         return abort(400, description = error)
@@ -591,6 +593,16 @@ def endpoint_event(called_internally=False):
 
     #Outs list
     list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
+    if list_of_outs == None:
+        return abort(400, description = error)
+    
+    #Home scores list
+    list_of_home_scores, error = sanitize_int_list(request.args.getlist('home_score'), "Score not in range", 50)
+    if list_of_outs == None:
+        return abort(400, description = error)
+    
+    #Away scores list
+    list_of_away_scores, error = sanitize_int_list(request.args.getlist('away_score'), "Score not in range", 50)
     if list_of_outs == None:
         return abort(400, description = error)
     
@@ -619,6 +631,8 @@ def endpoint_event(called_internally=False):
         (list_of_balls, 'event.balls', None),
         (list_of_strikes, 'event.strikes', None),
         (list_of_outs, 'event.outs', None),
+        (list_of_home_scores, 'event.home_score', None)
+        (list_of_away_scores, 'event.away_score', None)
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
         (list_of_pitcher_user_ids, 'pitcher.user_id', None),
@@ -819,8 +833,12 @@ def endpoint_landing_data():
         'contact.charge_power_up AS charge_power_up, \n'
         'contact.charge_power_down AS charge_power_down, \n'
         'contact.frame_of_swing_upon_contact AS frame_of_swing, \n'
+        'pitch.pitch_type, \n'
+        'pitch.charge_pitch_type, \n'
         'pitch.type_of_swing, \n'
         'contact.type_of_contact, \n'
+        'pitch.pitch_ball_x_pos, \n'
+        'pitch.pitch_batter_x_pos, \n'
         #Add decoded action
         'fielding.position AS fielder_position, \n'
         'fielding.fielder_x_pos AS fielder_x_pos, \n'
