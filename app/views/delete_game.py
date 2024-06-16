@@ -4,7 +4,7 @@ from ..decorators import api_key_check
 from ..models import db, Game, GameHistory, CharacterGameSummary, CharacterPositionSummary, Event, Runner, PitchSummary, ContactSummary, FieldingSummary
 
 @app.route('/delete_game/', methods = ['POST'])
-@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 def delete_game():
     # Verify game_id
     if request.json["game_id"] is not None:

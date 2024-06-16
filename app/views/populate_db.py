@@ -103,7 +103,7 @@ def update_ongoing_game():
     
 # Prune unverified users that were created over a week ago
 @app.route('/ongoing_game/prune', methods=['POST'])
-@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 def prune_ongoing_game():
     seconds = request.json['seconds']
     current_unix_time = int(time.time())

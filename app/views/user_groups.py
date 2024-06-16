@@ -15,7 +15,7 @@ from ..util import *
 
 # Create UserGroup
 @app.route('/user_group/create', methods=['POST'])
-@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 def create_user_group():
     in_group_name = request.json['group_name']
     in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
@@ -42,7 +42,7 @@ def create_user_group():
 
 # Add RioUser to UserGroup using RioKey
 @app.route('/user_group/add_user', methods=['POST'])
-@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 def add_user_to_user_group(in_username = None, in_group_name = None):
         
     in_username = in_username if in_username != None else request.json['username']
@@ -146,7 +146,7 @@ def get_groups_for_users():
     return '200'
 
 # Remove user from group
-@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 @app.route('/user_group/remove_user', methods=['POST'])
 def remove_user_from_user_group(in_username = None, in_group_name = None):
         
@@ -161,6 +161,8 @@ def remove_user_from_user_group(in_username = None, in_group_name = None):
         return abort(408, description='User does not exist.')
     if not user.verified:
         return abort(410, description='User is not verified.')
+    if in_group_name == 'Admin':
+        return abort(409, description='Cannot remove Admin from UserGroup')
 
     # Verify Group exists
     user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()

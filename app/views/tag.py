@@ -62,7 +62,7 @@ def tag_create():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin', 'TrustedUser'])):
         return abort(409, description='User not a part of community or not an admin')
 
     # === Tag Creation ===
@@ -129,7 +129,7 @@ def tag_update():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin'])
+    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin', 'TrustedUser'])
     if not authorized_user:
         return abort(412, description='User not a part of community or not an admin')
     
@@ -278,7 +278,7 @@ def tagset_create():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
     
-    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin', 'TrustedUser'])):
         return abort(418, description='User not apart of community or not an admin')
     
     query = (
@@ -291,7 +291,7 @@ def tagset_create():
         'GROUP BY tag_set.community_id \n'
     )
     results = db.session.execute(query).first()
-    if results != None and not is_user_in_groups(user.id, ['Admin']):
+    if results != None and not is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
         result_dict = results._asdict()
         #Only unofficial comms have tag_set limits
         if comm.comm_type != 'Official' and (result_dict['active_tag_sets'] >= result_dict['tag_set_limit']):
@@ -368,7 +368,7 @@ def tagset_delete():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin'])):
+    if ((comm_user == None or comm_user.admin == False) and not is_user_in_groups(user.id, ['Admin', 'TrustedUser'])):
         return abort(411, description='User not apart of community or not an admin')
     
     #Check that no games have been played with this tag_set. If any cannot delete
@@ -395,7 +395,7 @@ def tagset_delete():
 
 @app.route('/tag_set/delete/all', methods=['POST'])
 @jwt_required(optional=True)
-@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 def tagset_delete_all():
     exclude_official = request.json['exclude_official']
 
@@ -515,7 +515,7 @@ def tagset_list():
 
         if (user != None):
             #If user is not in the Beta Tester group do not return Test TagSets
-            if (tag_set.type == "Test" and not is_user_in_groups(user.id, ['Admin', 'Developer', 'BetaTester'])):
+            if (tag_set.type == "Test" and not is_user_in_groups(user.id, ['Admin', 'TrustedUser', 'Developer', 'BetaTester'])):
                 continue
 
         #Determine if community, and therefore TagSet, is Official

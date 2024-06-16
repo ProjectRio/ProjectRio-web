@@ -12,7 +12,7 @@ import time
 
 @app.route('/community/create', methods=['POST', 'GET'])
 @jwt_required(optional=True)
-@api_key_check(['Admin'] + cPATREON_TIERS)
+@api_key_check(['Admin', 'TrustedUser'] + cPATREON_TIERS)
 def community_create():
     if request.method == "POST":
         in_comm_name = request.json['community_name']
@@ -32,9 +32,9 @@ def community_create():
             return abort(409, description='Username associated with JWT not found. Community not created')
         if in_comm_type not in cCOMM_TYPES.values():
             return abort(410, description='Invalid community type')
-        if in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin']):
+        if in_comm_type == 'Official' and not is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
             return abort(411, description='Non admin user cannot create official community')
-        if not is_user_in_groups(user.id, cPATREON_TIERS) and not is_user_in_groups(user.id, ['Admin']):
+        if not is_user_in_groups(user.id, cPATREON_TIERS) and not is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
             return abort(412, description='Creator is not a patron')
 
         #Make sure that community does not use the same name as a tag
@@ -137,9 +137,9 @@ def community_remove_members():
         return abort(410, description='Could not find community with name={in_comm_name}')
     
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
-    if (comm_user == None and not is_user_in_groups(['Admin'])):
+    if (comm_user == None and not is_user_in_groups(['Admin', 'TrustedUser'])):
         return abort(411, description='User is not part of this community.')
-    if (not comm_user.admin and not is_user_in_groups(['Admin'])):
+    if (not comm_user.admin and not is_user_in_groups(['Admin', 'TrustedUser'])):
         return abort(412, description='User is not an admin of this community.')
     
     added_users = list()
@@ -178,9 +178,9 @@ def community_add_members():
         return abort(410, description='Could not find community with name={in_comm_name}')
     
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
-    if (comm_user == None and not is_user_in_groups(['Admin'])):
+    if (comm_user == None and not is_user_in_groups(['Admin', 'TrustedUser'])):
         return abort(411, description='User is not part of this community.')
-    if (not comm_user.admin and not is_user_in_groups(['Admin'])):
+    if (not comm_user.admin and not is_user_in_groups(['Admin', 'TrustedUser'])):
         return abort(412, description='User is not an admin of this community.')
     
     added_users = list()
@@ -713,7 +713,7 @@ def community_update():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin'])
+    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin', 'TrustedUser'])
     if not authorized_user:
         return abort(412, description='User not a part of community or not an admin')
     
@@ -743,10 +743,10 @@ def community_update():
     if desc_provided:
         comm.desc = new_desc
     #Only allow type change if user is Rio admin
-    if type_provided and is_user_in_groups(user.id, ['Admin']):
+    if type_provided and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
         comm.type = new_type
     #Only allow type change if user is Rio admin
-    if active_tag_set_limit_provided and is_user_in_groups(user.id, ['Admin']):
+    if active_tag_set_limit_provided and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
         comm.active_tag_set_limit = new_active_tag_set_limit
     if private_provided:
         comm.private = new_private
