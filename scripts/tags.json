@@ -1,0 +1,12 @@
+{
+    "Tags": [
+        {
+            "name": "",
+            "desc": "",
+            "type": "Gecko Code/Component",
+            "community_name": "",
+            "gecko_code": "<Code>, only needed if type is Gecko Code",
+            "gecko_code_desc": "<Desc>, only needed if type is Gecko Code"
+        }
+    ]
+}
