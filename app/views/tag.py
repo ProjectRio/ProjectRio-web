@@ -609,7 +609,7 @@ def tag_set_update():
     #If community tag, make sure user is an admin of the community
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
-    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin'])
+    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin', 'TrustedUser'])
     if not authorized_user:
         return abort(412, description='User not a part of community or not an admin')
     
