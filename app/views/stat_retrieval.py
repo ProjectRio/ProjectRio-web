@@ -631,8 +631,8 @@ def endpoint_event(called_internally=False):
         (list_of_balls, 'event.balls', None),
         (list_of_strikes, 'event.strikes', None),
         (list_of_outs, 'event.outs', None),
-        (list_of_home_scores, 'event.home_score', None)
-        (list_of_away_scores, 'event.away_score', None)
+        (list_of_home_scores, 'event.home_score', None),
+        (list_of_away_scores, 'event.away_score', None),
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
         (list_of_pitcher_user_ids, 'pitcher.user_id', None),
