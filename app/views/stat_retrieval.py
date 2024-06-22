@@ -837,8 +837,8 @@ def endpoint_landing_data():
         'pitch.charge_pitch_type, \n'
         'pitch.type_of_swing, \n'
         'contact.type_of_contact, \n'
-        'pitch.pitch_ball_x_pos, \n'
-        'pitch.pitch_batter_x_pos, \n'
+        'pitch.bat_x_contact_pos, \n'
+        'pitch.bat_z_contact_pos, \n'
         #Add decoded action
         'fielding.position AS fielder_position, \n'
         'fielding.fielder_x_pos AS fielder_x_pos, \n'
