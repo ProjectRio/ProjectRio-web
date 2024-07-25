@@ -40,11 +40,10 @@ sqlite-utils = "*"
 google-auth = "*"
 google-auth-oauthlib = "*"
 google-api-python-client = "*"
+better-profanity = "*"
+db-to-sqlite = {extras = [ "postgresql",]}
 
 [dev-packages]
 
 [requires]
 python_version = "3.9"
-
-[packages.db-to-sqlite]
-extras = [ "postgresql",]

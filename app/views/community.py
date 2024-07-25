@@ -120,7 +120,7 @@ def community_create():
         return 200
     
 # Temporary endpoint to allow admins to add users without frontend
-@app.route('/community/members/remove/', methods=['GET'])
+@app.route('/community/members/remove/', methods=['POST'])
 def community_remove_members():
     in_comm_name = request.args.get("comm")
     in_usernames = request.args.getlist('username')
@@ -161,7 +161,7 @@ def community_remove_members():
 
     
 # Temporary endpoint to allow admins to add users without frontend
-@app.route('/community/members/add/', methods=['GET'])
+@app.route('/community/members/add/', methods=['POST'])
 def community_add_members():
     in_comm_name = request.args.get("comm")
     in_usernames = request.args.getlist('username')
@@ -319,10 +319,9 @@ def community_invite():
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
     # If User does not exist or is not an admin of the private community they cannot invite
-    if comm_user == None:
-        return abort(411, description='User is not part of this community')
-    if (comm.private and comm_user.admin == False):
-        return abort(412, description='User is not an admin of this private community.')
+    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin', 'TrustedUser'])
+    if not authorized_user:
+        return abort(412, description='User not a part of community or not an admin')
 
     list_of_users_to_invite = request.json['invite_list']
 
