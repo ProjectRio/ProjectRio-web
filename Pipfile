@@ -40,8 +40,8 @@ sqlite-utils = "*"
 google-auth = "*"
 google-auth-oauthlib = "*"
 google-api-python-client = "*"
-better-profanity = "*"
 db-to-sqlite = {extras = [ "postgresql",]}
+better-profanity = "*"
 
 [dev-packages]
 
