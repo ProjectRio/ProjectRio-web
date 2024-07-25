@@ -120,7 +120,7 @@ def community_create():
         return 200
     
 # Temporary endpoint to allow admins to add users without frontend
-@app.route('/community/members/remove/', methods=['GET'])
+@app.route('/community/members/remove/', methods=['POST'])
 def community_remove_members():
     in_comm_name = request.args.get("comm")
     in_usernames = request.args.getlist('username')
@@ -161,7 +161,7 @@ def community_remove_members():
 
     
 # Temporary endpoint to allow admins to add users without frontend
-@app.route('/community/members/add/', methods=['GET'])
+@app.route('/community/members/add/', methods=['POST'])
 def community_add_members():
     in_comm_name = request.args.get("comm")
     in_usernames = request.args.getlist('username')

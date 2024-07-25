@@ -11,6 +11,7 @@ from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
 from ..decorators import *
 from ..user_util import *
+from better_profanity import profanity
 
 import secrets
 import time
@@ -36,6 +37,8 @@ def register():
         return abort(409, description='Username or Email has already been taken')
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
+    elif profanity.contains_profanity(in_username) or profanity.contains_profanity(username_lowercase):
+        return abort(405, description='Username contains profanity')
     elif '@' not in in_email:
         return abort(406, description='Not a valid email')
     else:
