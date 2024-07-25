@@ -37,10 +37,10 @@ def register():
         return abort(409, description='Username or Email has already been taken')
     elif in_username.isalnum() == False:
         return abort(406, description='Provided username is not alphanumeric')
-    elif profanity.contains_profanity(in_username) or profanity.contains_profanity(username_lowercase):
+    elif profanity.contains_profanity(username_lowercase): # Check for profanity
         return abort(405, description='Username contains profanity')
     elif '@' not in in_email:
-        return abort(406, description='Not a valid email')
+        return abort(406, description='Not a valiNot a valid emaild email')
     else:
         # === Create User row ===
         new_user = RioUser(in_username, in_email, in_password)
