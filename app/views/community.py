@@ -316,13 +316,14 @@ def community_invite():
         return abort(410, description='Could not find community with name={in_comm_name}')
 
     #Check if CommunityUser already exists
-    comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
+    comm_user_admin = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
 
     # If User does not exist or is not an admin of the private community they cannot invite
-    if comm_user == None:
-        return abort(411, description='User is not part of this community')
-    if (comm.private and comm_user.admin == False):
-        return abort(412, description='User is not an admin of this private community.')
+    if not is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
+        if comm_user_admin == None:
+            return abort(411, description='User is not part of this community')
+        if (comm.private and comm_user_admin.admin == False):
+            return abort(412, description='User is not an admin of this private community.')
 
     list_of_users_to_invite = request.json['invite_list']
 
