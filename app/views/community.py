@@ -17,8 +17,8 @@ def community_create():
     if request.method == "POST":
         in_comm_name = request.json['community_name']
         in_comm_type = request.json['type']
-        private = (request.json['private'] == 1)
-        create_global_link = (request.json['global_link'] == 1) or not private
+        private = (request.json['private'] == True)
+        create_global_link = (request.json['global_link'] == True) or not private
         in_comm_desc = request.json['desc']
         
         # Get user making the new community
