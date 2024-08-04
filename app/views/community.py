@@ -686,7 +686,7 @@ def community_key():
 @app.route('/community/update', methods=['POST'])
 @jwt_required(optional=True)
 def community_update():
-    in_comm_id = request.json['community_id'] #Required
+    in_comm_name = request.json['community_name'] #Required
 
     #Optional Args
     new_name = request.json.get('name')
@@ -697,9 +697,10 @@ def community_update():
     new_active_tag_set_limit = request.json.get('active_tag_set_limit')
 
     # Get Comm
-    comm = Community.query.filter_by(id=in_comm_id).first()
+    comm_name_lower = lower_and_remove_nonalphanumeric(in_comm_name)
+    comm = Community.query.filter_by(name_lowercase=comm_name_lower).first()
     if comm == None:
-        return abort(409, description=f'No community found with id={in_comm_id}')
+        return abort(409, description=f'No community found with name={comm_name_lower}')
 
     #Make sure user is admin of community or Rio admin
     user=get_user(request)
