@@ -689,18 +689,12 @@ def community_update():
     in_comm_id = request.json['community_id'] #Required
 
     #Optional Args
-    name_provided = request.is_json and 'name' in request.json
-    new_name = request.json['name'] if name_provided else None
-    desc_provided = request.is_json and 'desc' in request.json
-    new_desc = request.json['desc'] if desc_provided else None
-    type_provided = request.is_json and 'type' in request.json
-    new_type = request.json['type'] if type_provided else None
-    link_provided = request.is_json and 'link' in request.json
-    new_link = request.json['link'] if link_provided else None
-    private_provided = request.is_json and 'private' in request.json
-    new_private= request.json['private'] if private_provided else None
-    active_tag_set_limit_provided = request.is_json and 'active_tag_set_limit' in request.json
-    new_active_tag_set_limit= request.json['active_tag_set_limit'] if active_tag_set_limit_provided else None
+    new_name = request.json.get('name')
+    new_desc = request.json.get('desc')
+    new_type = request.json.get('type')
+    new_link = request.json.get('link')
+    new_private = request.json.get('private')
+    new_active_tag_set_limit = request.json.get('active_tag_set_limit')
 
     # Get Comm
     comm = Community.query.filter_by(id=in_comm_id).first()
@@ -722,7 +716,7 @@ def community_update():
     
     #User is authorized
     #Begin evaluating actions
-    if name_provided:
+    if new_name is not None:
         #Make sure that tag does not use the same name as an existing tag, comm, or tag_set
         tag_check = Tag.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
         comm_name_check = Community.query.filter_by(name_lowercase=lower_and_remove_nonalphanumeric(new_name)).first()
@@ -743,17 +737,17 @@ def community_update():
         
         comm.name = new_name
         comm.name_lowercase = lower_and_remove_nonalphanumeric(new_name)
-    if desc_provided:
+    if new_desc is not None:
         comm.desc = new_desc
     #Only allow type change if user is Rio admin
-    if type_provided and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
+    if (new_type is not None) and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
         comm.type = new_type
     #Only allow type change if user is Rio admin
-    if active_tag_set_limit_provided and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
+    if (new_active_tag_set_limit is not None) and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
         comm.active_tag_set_limit = new_active_tag_set_limit
-    if private_provided:
+    if new_private is not None:
         comm.private = new_private
-    if link_provided or comm.private == False:
+    if (new_link is not None) or comm.private == False:
         comm.update_link(new_link or comm.private == False)
 
     db.session.add(comm)
