@@ -740,15 +740,23 @@ def community_update():
         comm.name_lowercase = lower_and_remove_nonalphanumeric(new_name)
     if new_desc is not None:
         comm.desc = new_desc
-    #Only allow type change if user is Rio admin
+        #Only allow type change if user is Rio admin
     if (new_type is not None) and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
+        if new_type not in cCOMM_TYPES.values():
+            return abort(415, description='Invalid community type')
         comm.type = new_type
     #Only allow type change if user is Rio admin
     if (new_active_tag_set_limit is not None) and is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
+        if not isinstance(new_active_tag_set_limit, int):
+            return abort(416, description='Invalid active tag set limit. Limit must be an integer.')
         comm.active_tag_set_limit = new_active_tag_set_limit
     if new_private is not None:
+        if new_private not in [True, False]:
+            return abort(417, description='Invalid new private. Input must be true or false.')
         comm.private = new_private
     if (new_link is not None) or comm.private == False:
+        if new_link not in [True, False]:
+            return abort(418, description='Invalid new link. Input must be true or false.')
         comm.update_link(new_link or comm.private == False)
 
     db.session.add(comm)
