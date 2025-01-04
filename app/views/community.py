@@ -356,26 +356,25 @@ def community_invite():
         db.session.commit()
 
         # === Send Email ===
-        subject = 'ProjectRio - You have been invited to a community!'
+        subject = 'ProjectRio - You have been added to a community!'
         html_content = (
             f'''
-                <h1>Congratulations {invited_user.username}! You have been invited to join {comm.name}!</h1>
-                <p>Click the following link to join: </p>
-                <a href={'https://www.projectrio-api-1.api.projectrio.app/community/join/' + comm.name + '/'}>Click here to join!</a>
+                <h1>Congratulations {invited_user.username}!</h1>
+                <p>You were added to the {comm.name} community and can start participating in its game modes!</p>
+                <p>They will appear alongside other game modes in Project Rio. Only other members of this community will be able to join your Netplay rooms for these game modes.</p>
                 <br/>
                 <p>Happy Hitting!</p>
-                <p>Rio Team</p>
+                <p>Project Rio Team</p>
             '''
         )
         text_content = (
             f'''
-                Congratulations {invited_user.username}! You have been invited to join {comm.name}!
-                Click the following link to join:\n
-                https://www.projectrio-api-1.api.projectrio.app/community/join/{comm.name}/
-                \n
-                \n
-                Happy Hitting!\n
-                Project Rio Web Team
+                Congratulations {invited_user.username}!
+                You were added to the {comm.name} community and can start participating in its game modes!
+                They will appear alongside other game modes in Project Rio. Only other members of this community will be able to join your Netplay rooms for these game modes.
+                
+                Happy Hitting!
+                Project Rio Team
             '''
         )
 
