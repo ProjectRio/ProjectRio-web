@@ -478,12 +478,14 @@ def community_manage():
     user=get_user(request)
 
     if comm == None:
-        return abort(409, description='Could not find community with name={in_comm_name}')
+        return abort(409, description=f'Could not find community with name={in_comm_name}')
     if user == None:
         return abort(409, description='No user logged in or associated with RioKey.')
 
     comm_user = CommunityUser.query.filter_by(user_id=user.id, community_id=comm.id).first()
-    if (comm_user == None or comm_user.admin == False):
+
+    authorized_user = (comm_user != None and comm_user.admin) or is_user_in_groups(user.id, ['Admin', 'TrustedUser'])
+    if not authorized_user:
         return abort(409, description='User is not part of this community or not an admin.')
 
     list_of_users_to_manage = request.json['user_list']
