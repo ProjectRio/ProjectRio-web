@@ -757,6 +757,31 @@ def community_update():
     db.session.commit()
     return jsonify('Success')
 
+@app.route('/community/list', methods=['POST'])
+@jwt_required(optional=True)
+def community_list():
+    user = get_user(request)
+
+    user_comm_type = request.json.get('type')
+
+    if user is None:
+        return abort(409, description='No user logged in or associated with RioKey.')
+
+    if user_comm_type and (user_comm_type not in cCOMM_TYPES):
+        return abort(410, description='Invalid community type provided')
+
+    if is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
+        comm_query = Community.query
+    else:
+        comm_query = Community.query.filter_by(private=False)
+
+    if user_comm_type:
+        comm_query = comm_query.filter_by(comm_type=user_comm_type)
+
+    community_info_list = [comm.to_dict() for comm in comm_query]
+
+    return jsonify({'Communities': community_info_list})
+
 def add_all_users_to_comm(comm_id):
     # Do not create duplicate users 
     community_user_list = CommunityUser.query.filter_by(community_id=comm_id)
