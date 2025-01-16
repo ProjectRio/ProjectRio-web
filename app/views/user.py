@@ -364,7 +364,14 @@ def set_privacy():
 #Get id and username of all users
 @app.route('/user/all/', methods = ['GET'])
 def get_users_all():
-    users = RioUser.query.filter_by(verified=True)
+
+    verified = request.args.get('verified', '').lower()
+
+    if verified in ["false", "f", '0']:
+        users = RioUser.query
+    else:
+        # Defaults to returning only verified users
+        users = RioUser.query.filter_by(verified=True)
 
     ret_dict = dict()
     for user in users:
