@@ -9,6 +9,7 @@ from ..glicko2 import Player
 from pprint import pprint
 from random import random
 from ..decorators import api_key_check
+from app.views.user_groups import *
 import os
 from pathlib import Path
 import json
@@ -119,6 +120,14 @@ def prune_ongoing_game():
 @app.route('/populate_db/', methods=['POST'])
 def save_game():
     try:
+        # Will be None if it is a client submit
+        submitting_user = get_user(request)
+        if submitting_user:
+            manual_submit = True
+
+        if manual_submit and not is_user_in_groups(submitting_user.id, ['Admin', 'TrustedUser']):
+            return jsonify({'error': 'User is not authorized to manually submit games'}), 400
+        
         # Parse the JSON data from the request body
         data = request.get_json()
 
@@ -141,9 +150,13 @@ def save_game():
         if data['Home Player'] == "CPU" or data['Away Player'] == "CPU":
             return jsonify({'error': 'Database does not accept CPU games'}), 400
 
-        # Check if rio_keys exist in the db and get associated players
-        home_player = get_user_via_rio_or_comm_key(data['Home Player'])
-        away_player = get_user_via_rio_or_comm_key(data['Away Player'])
+        if manual_submit:
+            home_player = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(data['Home Player'])).first()
+            away_player = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(data['Away Player'])).first()
+        else:
+            # Check if rio_keys exist in the db and get associated players
+            home_player = get_user_via_rio_or_comm_key(data['Home Player'])
+            away_player = get_user_via_rio_or_comm_key(data['Away Player'])
 
         if home_player is None or away_player is None:
             return jsonify({'error': 'Invalid Rio User'}), 400
