@@ -1001,3 +1001,44 @@ def recalc_elo(in_tag_set_id=None, log=False):
     
     db.session.commit()
     return game_calc_dict
+
+@app.route('/reassign_game_history_game_mode/', methods=['POST'])
+@api_key_check(['Admin', 'TrustedUser'])
+def reassign_game_history_game_mode():
+    data = request.get_json()
+
+    game_id = data.get('game_id')
+    new_tag_set_name = data.get('new_tag_set_name')
+
+    if not game_id or isinstance(game_id, int):
+        return abort(409, description="No game id or non-integer game id provided")
+    
+    if not new_tag_set_name:
+        return abort(409, description="No tag set provided")
+    
+    new_tag_set_name = lower_and_remove_nonalphanumeric(new_tag_set_name)
+
+    game = GameHistory.query.filter(GameHistory.game_id == game_id).first()
+
+    if not game:
+        return abort(409, description=f"No game found with id {game_id}")
+    
+    tag_set = TagSet.query.filter_by(name=new_tag_set_name).first()
+
+    if not tag_set:
+        return abort(409, description=f"No tag set found with name {new_tag_set_name}")
+
+    old_tag_set_id = game.tag_set_id
+    new_tag_set_id = tag_set.id
+
+    try:
+        game.tag_set_id = new_tag_set_id
+        db.session.commit()
+
+        recalc_elo(old_tag_set_id)
+        recalc_elo(tag_set.id)
+    except:
+        return abort(500, description="Failed to update game mode")
+
+    return 'Success', 200
+    
