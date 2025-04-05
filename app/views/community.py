@@ -538,7 +538,7 @@ def community_manage():
                 comm_user_to_update.gen_key()
                 db.session.add(comm_user_to_update)
                 db.session.commit()
-                updated_comm_users_list.append(comm_user_to_update.to_dict())
+                updated_comm_users_list.append(comm_user_to_update.to_dict(include_key=True))
                 continue
             elif (user_actions['key'] == False):
                 comm_user_to_update.delete_key()
