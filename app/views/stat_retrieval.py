@@ -1199,16 +1199,16 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'SELECT '
         f"{select_user}"
         f"{select_char}"
-        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
+        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
         'COUNT(CASE WHEN ('
-            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id = NULL) OR'
-            '(pitch_summary.in_strikezone = false AND type_of_swing > 0)'
+            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id IS NULL) OR'
+            '(pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing > 0)'
             ') THEN 1 ELSE NULL END) AS strikes \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN event ON character_game_summary.id = event.pitcher_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
+        'LEFT JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
        f"{where_statement}"
        f"{group_by_statement}"
