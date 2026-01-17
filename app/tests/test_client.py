@@ -6,7 +6,7 @@ from pprint import pprint
 from helpers import *
 from connection import Connection
 
-def test_ongoing_game():
+def test_gen_users():
     wipe_db()
 
     # === SETUP ===
@@ -25,7 +25,7 @@ def test_ongoing_game():
     tagA = Tag(community.founder, community)
     tagA.create()
 
-    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF\n12345678 BEEFBEEF\n'}
+    code_dict = {'gecko_code_desc': 'Code A desc', 'gecko_code': 'DEADBEEF DEADBEEF\n12345678 BEEFBEEF\n'}
 
     # Add tag with admin
     tagB = Tag(community.founder, community, 'Gecko Code', code_dict)
@@ -59,4 +59,5 @@ def test_ongoing_game():
     data = response.json()
     pprint(data)
 
-    assert True == False
+    assert 1 == 0
+

@@ -1,7 +1,8 @@
+import json
 import requests
+from helpers import *
 from connection import Connection
-
-db = Connection()
+from pprint import pprint
 
 # Users we will actually create
 cVALID_USER1 = {"Username": "validuser1", "Password": "123password", "Email": "vld1@test"}
@@ -12,6 +13,27 @@ cINVLD_USER_USERNAME = {"Username": "invld user1", "Password": "123password", "E
 cINVLD_USER_EMAIL = {"Username": "invlduser2", "Password": "123password", "Email": "invld"}
 cINVLD_USER_DUP_EMAIL = {"Username": "invlduser2", "Password": "123password", "Email": "vld1@test"}
 cINVLD_USER_DUP_USERNAME = {"Username": "validuser1", "Password": "123password", "Email": "invld@test"}
+
+def test_user_all():
+    wipe_db()
+    user1 = User()
+    user1.register()
+    user1.verify_user()
+
+    user2 = User()
+    user2.register()
+
+
+    #Get all users
+    #Only vreified users should be returned
+    response = requests.get("http://127.0.0.1:5000/user/all")
+    assert response.status_code == 200
+    assert len(response.json()['users']) == 2
+
+    user2.verify_user()
+    response = requests.get("http://127.0.0.1:5000/user/all")
+    assert response.status_code == 200
+    assert len(response.json()['users']) == 3
 
 # External tests
 '''

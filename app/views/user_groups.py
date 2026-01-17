@@ -1,7 +1,8 @@
-from flask import request, abort
+from flask import request, abort, jsonify
 from flask import current_app as app
+from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import Community, db, RioUser, UserGroup, UserGroupUser
-from ..decorators import api_key_check
+from ..decorators import *
 from ..util import format_list_for_SQL
 import os
 import requests as req
@@ -14,7 +15,7 @@ from ..util import *
 
 # Create UserGroup
 @app.route('/user_group/create', methods=['POST'])
-@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 def create_user_group():
     in_group_name = request.json['group_name']
     in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
@@ -35,63 +36,51 @@ def create_user_group():
         new_group = UserGroup(in_group_name, in_daily_limit, in_weekly_limit, in_sponsor_limit)
         db.session.add(new_group)
         db.session.commit()
-        return 'User Group created.'
+        return jsonify('User Group created.')
     except:
         return abort(400, description='Error creating User Group')
 
 # Add RioUser to UserGroup using RioKey
 @app.route('/user_group/add_user', methods=['POST'])
-#@api_key_check(['Admin'])
+@api_key_check(['Admin', 'TrustedUser'])
 def add_user_to_user_group(in_username = None, in_group_name = None):
-    # If called by project
-    internal_use = (in_username != None and in_group_name != None)
+        
+    in_username = in_username if in_username != None else request.json['username']
+    in_username_lower = lower_and_remove_nonalphanumeric(in_username)
+    in_group_name = in_group_name if in_group_name != None else request.json['group_name']
+    in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
 
-    # If called by endpoint
-    valid_credential = False
+    # Verify User exists
+    user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
+    if not user:
+        return abort(408, description='User does not exist.')
+    if not user.verified:
+        return abort(410, description='User is not verified.')
+
+    # Verify Group exists
+    user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
+    if not user_group:
+        return abort(411, description='UserGroup does not exist.')
+
+    # Verify User is not a member of this group
+    user_group_user = UserGroupUser.query.filter_by(
+        user_id=user.id,
+        user_group_id=user_group.id
+    ).first()
+    if user_group_user:
+        return {200: 'User is already a member of this group.'}
+
+    # Create a UserGroupUser row
     try:
-        valid_credential = request.json['ADMIN_KEY'] == os.getenv('ADMIN_KEY')
-    except:
-        valid_credential = False
-
-    if (valid_credential or internal_use):
-        in_username = in_username if in_username != None else request.json['username']
-        in_username_lower = lower_and_remove_nonalphanumeric(in_username)
-        in_group_name = in_group_name if in_group_name != None else request.json['group_name']
-        in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
-
-        # Verify User exists
-        user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
-        if not user:
-            return abort(408, description='User does not exist.')
-        if not user.verified:
-            return abort(410, description='User is not verified.')
-
-        # Verify Group exists
-        user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
-        if not user_group:
-            return abort(411, description='UserGroup does not exist.')
-
-        # Verify User is not a member of this group
-        user_group_user = UserGroupUser.query.filter_by(
+        new_user_group_user = UserGroupUser(
             user_id=user.id,
             user_group_id=user_group.id
-        ).first()
-        if user_group_user:
-            return {200: 'User is already a member of this group.'}
-
-        # Create a UserGroupUser row
-        try:
-            new_user_group_user = UserGroupUser(
-                user_id=user.id,
-                user_group_id=user_group.id
-            )
-            db.session.add(new_user_group_user)
-            db.session.commit()
-            return 'User added to User Group.'
-        except:
-            return abort(400, description='Error adding User to UserGroup')
-    else:
-        return abort(411, description='Incorrect Password')
+        )
+        db.session.add(new_user_group_user)
+        db.session.commit()
+        return jsonify('User added to User Group.')
+    except:
+        return abort(400, description='Error adding User to UserGroup')
 
 # Check if a single user is a member of a group
 @app.route('/user_group/check_for_member', methods=['GET'])
@@ -157,9 +146,40 @@ def get_groups_for_users():
     return '200'
 
 # Remove user from group
-@app.route('/user_group/remove_member', methods=['GET'])
-def remove_user_from_group():
-    return '200'
+@api_key_check(['Admin', 'TrustedUser'])
+@app.route('/user_group/remove_user', methods=['POST'])
+def remove_user_from_user_group(in_username = None, in_group_name = None):
+        
+    in_username = in_username if in_username != None else request.json['username']
+    in_username_lower = lower_and_remove_nonalphanumeric(in_username)
+    in_group_name = in_group_name if in_group_name != None else request.json['group_name']
+    in_group_name_lower = lower_and_remove_nonalphanumeric(in_group_name)
+
+    # Verify User exists
+    user = RioUser.query.filter_by(username_lowercase=in_username_lower).first()
+    if not user:
+        return abort(408, description='User does not exist.')
+    if not user.verified:
+        return abort(410, description='User is not verified.')
+    if in_group_name == 'Admin':
+        return abort(409, description='Cannot remove Admin from UserGroup')
+
+    # Verify Group exists
+    user_group = UserGroup.query.filter_by(name_lowercase=in_group_name_lower).first()
+    if not user_group:
+        return abort(411, description='UserGroup does not exist.')
+
+    # Verify User is not a member of this group
+    user_group_user = UserGroupUser.query.filter_by(
+        user_id=user.id,
+        user_group_id=user_group.id
+    ).first()
+    if user_group_user == None:
+        return abort(412, description='User is not in UserGroup')
+    else:
+        db.session.delete(user_group_user)
+        db.session.commit()
+        return jsonify('User removed from UserGroup.')
 
 def is_user_in_groups(user_id, group_list, all=False):
     group_list = [lower_and_remove_nonalphanumeric(group) for group in group_list]
@@ -193,10 +213,11 @@ def wipe_patrons():
     db.session.execute(cmd)
 
 # Get groups for users
-@app.route('/patreon/refresh/', methods=['GET'])
+@app.route('/patreon/refresh/', methods=['POST', 'GET'])
+@jwt_required(optional=True)
 @api_key_check(['Admin'])
 def refresh_patrons():
-    wipe_patrons()
+    #wipe_patrons()
 
     campaign_api_url = 'https://www.patreon.com/api/oauth2/api/current_user/campaigns'
     header = {'Authorization': 'Bearer ' + os.getenv('PATREON_API_KEY')}
@@ -220,7 +241,7 @@ def refresh_patrons():
                 user_dict[patron_id] = dict()
                 user_dict[patron_id]['id'] = patron_id
                 user_dict[patron_id]['name'] = entry['attributes']['first_name']
-                user_dict[patron_id]['email'] = entry['attributes']['email']
+                user_dict[patron_id]['email'] = entry['attributes']['email'].lower()
                 # print('\n')
             # Garbage reward tiers have id of -1 and 0, not sure why
             elif entry['type'] == 'reward' and int(entry['id']) > 0:
@@ -258,6 +279,7 @@ def refresh_patrons():
     patron_dict = get_patrons_from_page(data, dict(), dict())
     
     # pprint(patron_dict)
+    ret_list = list()
     # Associate users with a tier (work around because Patreon API has a bug)
     for user in patron_dict['users'].values():
         if not user.get('amount'):
@@ -279,6 +301,7 @@ def refresh_patrons():
         if rio_user == None:
             continue
         add_user_to_user_group(rio_user.username, group_name)
+        ret_list.append({'username': rio_user.username, 'tier': group_name})
 
     # Iterate through each community to see if the sponsor is a patron and within their limits. If not, remove sponsor
     query = (
@@ -295,7 +318,6 @@ def refresh_patrons():
     results = db.session.execute(query).all()
     for result_row in results:
         result_dict = result_row._asdict()
-        pprint(result_dict)
         if result_dict['communities_sponsored'] > result_dict['sponsor_limit']:
             num_comms_to_remove_sponsorship_from = result_dict['communities_sponsored'] - result_dict['sponsor_limit']
             comm_list = Community.query.filter_by(sponsor_id=result_dict['id']).order_by(Community.date_created)
@@ -308,7 +330,32 @@ def refresh_patrons():
                 if num_comms_to_remove_sponsorship_from == 0:
                     break
 
-    return 200
+    return {'patrons': ret_list}
+
+@app.route('/patreon/list', methods=['POST', 'GET'])
+@jwt_required(optional=True)
+@api_key_check(['Admin'])
+def list_patrons():
+    sql_tier_list, empty = format_list_for_SQL(cPATREON_TIERS)
+    query = (
+        'SELECT \n'
+        'username as username, \n'
+        'user_group.name as tier\n'
+        'from rio_user \n'
+        'LEFT JOIN user_group_user ON rio_user.id = user_group_user.user_id \n'
+        'LEFT JOIN user_group ON user_group_user.user_group_id = user_group.id \n'
+       f"WHERE user_group.name IN {sql_tier_list} \n"
+        'GROUP BY rio_user.id, user_group.name \n'
+    )
+
+    results = db.session.execute(query).all()
+    if not results:
+        return '', 202
+    ret_list = list()
+    for result_row in results:
+        print(result_row._asdict())
+        ret_list.append(result_row._asdict())
+    return jsonify({'patrons': ret_list})
             
 # Add all users to a single group
 @app.route('/user_group/add_all_users', methods=['POST'])

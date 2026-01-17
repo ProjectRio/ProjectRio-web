@@ -28,6 +28,10 @@ cPLAY_RESULT_BUNT = {0xD: 'Bunt'}
 cCharacters = 1
 cCaptains = 2
 
+cDefaultEloRating = 1500
+cDefaultEloRd = 300
+cDefaultEloVol = 0.06
+
 cTYPE_OF_SWING = {
     0: "None",
     1: "Slap",

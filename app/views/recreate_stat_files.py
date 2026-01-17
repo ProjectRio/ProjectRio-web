@@ -2,7 +2,7 @@ from flask import request, jsonify, abort
 from flask import current_app as app
 from ..models import db, Game, Event, RioUser, CharacterGameSummary
 from .stat_retrieval import endpoint_games, endpoint_event
-from ..util import format_tuple_for_SQL, sanatize_ints
+from ..util import format_tuple_for_SQL, sanitize_ints
 import json
 import itertools
 
@@ -247,7 +247,7 @@ def recreate_stat_file():
 def recreate_events():
   if request.args.get("event_ids") is not None:
     try:
-      event_ids = sanatize_ints(request.args.get("event_ids"))
+      event_ids = sanitize_ints(request.args.get("event_ids"))
       list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(event_ids)).all()
       list_of_event_ids = list(itertools.chain(*list_of_event_id_tuples))
       tuple_event_ids = tuple(list_of_event_ids)

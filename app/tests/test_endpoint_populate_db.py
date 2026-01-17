@@ -45,7 +45,7 @@ def test_populate_db():
     data = dict()
     tag_list = list()
 
-    with open('app/tests/data/game_785756763.json') as file:
+    with open('app/tests/data/20230315T212151_MaybeJon-Vs-PeacockSlayer_1867546158.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
@@ -75,19 +75,19 @@ def test_populate_db():
     # ============================================================
     # Now check manual submit
     # Give the away player from the file 2 wins. Elo should be higher than home
-    game1 = {'Winner Username': player_away.username, 'Winner Score': 10, 
-             'Loser Username': player_home.username, 'Loser Score': 0}
-    game2 = {'Winner Username': player_away.username, 'Winner Score': 10, 
-             'Loser Username': player_home.username, 'Loser Score': 0}
-    game1['TagSet'] = tagset.name
-    game2['TagSet'] = tagset.name
-    game1['Submitter Rio Key'] = player_away.rk
-    game2['Submitter Rio Key'] = player_away.rk
+    game1 = {'winner_username': player_away.username, 'winner_score': 10, 
+             'loser_username': player_home.username, 'loser_score': 0}
+    game2 = {'winner_username': player_away.username, 'winner_score': 10, 
+             'loser_username': player_home.username, 'loser_score': 0}
+    game1['tag_set'] = tagset.name
+    game2['tag_set'] = tagset.name
+    game1['submitter_rio_key'] = player_away.rk
+    game2['submitter_rio_key'] = player_away.rk
 
-    game1_response = requests.post("http://127.0.0.1:5000/submit_game/", json=game1)
+    game1_response = requests.post("http://127.0.0.1:5000/manual_submit_game/", json=game1)
     assert game1_response.status_code == 200
 
-    game2_response = requests.post("http://127.0.0.1:5000/submit_game/", json=game2)
+    game2_response = requests.post("http://127.0.0.1:5000/manual_submit_game/", json=game2)
     assert game2_response.status_code == 200
 
     # No change until the players accept
@@ -100,9 +100,9 @@ def test_populate_db():
     assert data[player_home.username]['rating'] == home_user_rating
 
     # Confirm/Reject the games
-    game1_winner_confirm = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_away.rk, 'Accept': 1}
-    game1_loser_reject   = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 0}
-    game1_loser_confirm  = {'GameHistoryID': game1_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 1}
+    game1_winner_confirm = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': True}
+    game1_loser_reject   = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': False}
+    game1_loser_confirm  = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': True}
 
     # Winner confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game1_winner_confirm)
@@ -135,8 +135,8 @@ def test_populate_db():
 
     # ============================================================
     # Game 2
-    game2_winner_confirm = {'GameHistoryID': game2_response.json()['GameHistoryID'], 'Rio Key': player_away.rk, 'Accept': 1}
-    game2_loser_confirm  = {'GameHistoryID': game2_response.json()['GameHistoryID'], 'Rio Key': player_home.rk, 'Accept': 1}
+    game2_winner_confirm = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': True}
+    game2_loser_confirm  = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': True}
 
     # Winner confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game2_winner_confirm)
@@ -159,12 +159,13 @@ def test_populate_db():
     home_user_rating = data[player_home.username]['rating']
 
     # Submit game as admin, check that it changes the ELOs
-    game3 = {'Winner Username': player_away.username, 'Winner Score': 10, 
-             'Loser Username': player_home.username, 'Loser Score': 0}
-    game3['TagSet'] = tagset.name
-    game3['Submitter Rio Key'] = sponsor.rk
+    game3 = {'winner_username': player_away.username, 'winner_score': 10, 
+             'loser_username': player_home.username, 'loser_score': 0}
+    game3['tag_set'] = tagset.name
+    game3['submitter_rio_key'] = sponsor.rk
+    game3['recalc'] = True
 
-    game3_response = requests.post("http://127.0.0.1:5000/submit_game/", json=game3)
+    game3_response = requests.post("http://127.0.0.1:5000/manual_submit_game/", json=game3)
     assert game3_response.status_code == 200
 
     # Inspect Ladder
@@ -183,12 +184,12 @@ def test_populate_db():
     home_user_rating = data[player_home.username]['rating']
 
     # Submit game as admin, check that it changes the ELOs
-    game4 = {'Winner Username': player_away.username, 'Winner Score': 10, 
-             'Loser Username': player_home.username, 'Loser Score': 0}
-    game4['TagSet'] = tagset.name
-    game4['Submitter Rio Key'] = player_away.rk
+    game4 = {'winner_username': player_away.username, 'winner_score': 10, 
+             'loser_username': player_home.username, 'loser_score': 0}
+    game4['tag_set'] = tagset.name
+    game4['submitter_rio_key'] = player_away.rk
 
-    game4_response = requests.post("http://127.0.0.1:5000/submit_game/", json=game4)
+    game4_response = requests.post("http://127.0.0.1:5000/manual_submit_game/", json=game4)
     assert game4_response.status_code == 200
 
     # Inspect Ladder - should be no change
@@ -200,7 +201,7 @@ def test_populate_db():
     assert data[player_home.username]['rating'] == home_user_rating
 
     # Game 4 - admin confirm
-    game4_admin_confirm = {'GameHistoryID': game4_response.json()['GameHistoryID'], 'Rio Key': sponsor.rk, 'Accept': 1}
+    game4_admin_confirm = {'game_history_id': game4_response.json()['game_history_id'], 'rio_key': sponsor.rk, 'accept': True}
 
     # Admin confirm game
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game4_admin_confirm)
@@ -223,7 +224,7 @@ def test_populate_db():
 
     # Admin reconfirm game - shouldn't update elo
     response = requests.post("http://127.0.0.1:5000/update_game_status/", json=game4_admin_confirm)
-    assert response.status_code == 411
+    assert response.status_code == 412
 
     # Inspect Ladder
     response = requests.post("http://127.0.0.1:5000/tag_set/ladder/", json={'TagSet': tagset.name})
@@ -269,7 +270,7 @@ def test_ongoing_game():
 
     #Send a game
     game = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Away Player': player_away.rk,
         'Home Player': player_home.rk,
         'TagSetID': tagset.pk,
@@ -328,7 +329,7 @@ def test_ongoing_game():
 
     #Update game
     game_update = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Inning': 1,
         'Half Inning': 0,
         'Away Score': 2,
@@ -350,7 +351,7 @@ def test_ongoing_game():
     assert response.status_code == 200
     assert response.json()['ongoing_games'][0]['inning'] == 1
 
-    with open('app/tests/data/game_785756763.json') as file:
+    with open('app/tests/data/20230315T212151_MaybeJon-Vs-PeacockSlayer_1867546158.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
@@ -405,7 +406,7 @@ def test_ongoing_game_with_man_submit():
 
     #Send a game
     game = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Away Player': player_away.rk,
         'Home Player': player_home.rk,
         'TagSetID': tagset.pk,
@@ -464,7 +465,7 @@ def test_ongoing_game_with_man_submit():
 
     #Update game
     game_update = {
-        'GameID': '785756763',
+        'GameID': '1867546158',
         'Inning': 1,
         'Half Inning': 0,
         'Away Score': 2,
@@ -485,14 +486,19 @@ def test_ongoing_game_with_man_submit():
     # ============================================================
     # Now manual submit
     # Give the away player from the file 2 wins. Elo should be higher than home
-    man_game = {'Winner Username': player_away.username, 'Winner Score': 10, 
-             'Loser Username': player_home.username, 'Loser Score': 0}
-    man_game['TagSet'] = tagset.name
-    man_game['GameID'] = '785756763'
-    man_game['Submitter Rio Key'] = player_away.rk
+    man_game = {'winner_username': player_away.username, 'winner_score': 10, 
+             'loser_username': player_home.username, 'loser_score': 0}
+    man_game['tag_set'] = tagset.name
+    man_game['game_id_hex'] = '1867546158'
+    man_game['submitter_rio_key'] = player_away.rk
 
-    man_game_response = requests.post("http://127.0.0.1:5000/submit_game/", json=man_game)
+    #Confirm Ongoing game is still there
+    response = requests.get("http://127.0.0.1:5000/populate_db/ongoing_game/")
     assert response.status_code == 200
+    assert len(response.json()['ongoing_games']) == 1
+
+    man_game_response = requests.post("http://127.0.0.1:5000/manual_submit_game/", json=man_game)
+    assert man_game_response.status_code == 200
     response = requests.get("http://127.0.0.1:5000/populate_db/ongoing_game/")
     assert response.status_code == 200
     assert len(response.json()['ongoing_games']) == 0
@@ -535,7 +541,7 @@ def test_populate_db():
 
     # Read dummy game
     data = dict()
-    with open('app/tests/data/game_785756763.json') as file:
+    with open('app/tests/data/game_1867546158.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk

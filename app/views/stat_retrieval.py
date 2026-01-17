@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, ChemistryTable, Tag, Event
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet
 from ..consts import *
 from ..util import *
 import pprint
@@ -69,6 +69,92 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
         return int_list, ''
     except:
         return None, error_msg
+    
+def get_rosters_from_game(game_id):
+    query = (
+        " SELECT  \n"
+        "    away_0.char_id AS away_0, \n"
+        "    away_1.char_id AS away_1, \n"
+        "    away_2.char_id AS away_2, \n"
+        "    away_3.char_id AS away_3, \n"
+        "    away_4.char_id AS away_4, \n"
+        "    away_5.char_id AS away_5, \n"
+        "    away_6.char_id AS away_6, \n"
+        "    away_7.char_id AS away_7, \n"
+        "    away_8.char_id AS away_8, \n"
+        "    home_0.char_id AS home_0, \n"
+        "    home_1.char_id AS home_1, \n"
+        "    home_2.char_id AS home_2, \n"
+        "    home_3.char_id AS home_3, \n"
+        "    home_4.char_id AS home_4, \n"
+        "    home_5.char_id AS home_5, \n"
+        "    home_6.char_id AS home_6, \n"
+        "    home_7.char_id AS home_7, \n"
+        "    home_8.char_id AS home_8 \n"
+        "    FROM  \n"
+        "        game \n"
+        "    LEFT JOIN character_game_summary AS away_0 ON game.game_id = away_0.game_id \n"
+        "        AND away_0.team_id = 0 AND away_0.roster_loc = 0 \n"
+        "    LEFT JOIN character_game_summary AS away_1 ON game.game_id = away_1.game_id \n"
+        "        AND away_1.team_id = 0 AND away_1.roster_loc = 1 \n"
+        "    LEFT JOIN character_game_summary AS away_2 ON game.game_id = away_2.game_id \n"
+        "        AND away_2.team_id = 0 AND away_2.roster_loc = 2 \n"
+        "    LEFT JOIN character_game_summary AS away_3 ON game.game_id = away_3.game_id \n"
+        "        AND away_3.team_id = 0 AND away_3.roster_loc = 3 \n"
+        "    LEFT JOIN character_game_summary AS away_4 ON game.game_id = away_4.game_id \n"
+        "        AND away_4.team_id = 0 AND away_4.roster_loc = 4 \n"
+        "    LEFT JOIN character_game_summary AS away_5 ON game.game_id = away_5.game_id \n"
+        "        AND away_5.team_id = 0 AND away_5.roster_loc = 5 \n"
+        "    LEFT JOIN character_game_summary AS away_6 ON game.game_id = away_6.game_id \n"
+        "        AND away_6.team_id = 0 AND away_6.roster_loc = 6 \n"
+        "    LEFT JOIN character_game_summary AS away_7 ON game.game_id = away_7.game_id \n"
+        "        AND away_7.team_id = 0 AND away_7.roster_loc = 7 \n"
+        "    LEFT JOIN character_game_summary AS away_8 ON game.game_id = away_8.game_id \n"
+        "        AND away_8.team_id = 0 AND away_8.roster_loc = 8 \n"
+        "    LEFT JOIN character_game_summary AS home_0 ON game.game_id = home_0.game_id \n"
+        "        AND home_0.team_id = 1 AND home_0.roster_loc = 0 \n"
+        "    LEFT JOIN character_game_summary AS home_1 ON game.game_id = home_1.game_id \n"
+        "        AND home_1.team_id = 1 AND home_1.roster_loc = 1 \n"
+        "    LEFT JOIN character_game_summary AS home_2 ON game.game_id = home_2.game_id \n"
+        "        AND home_2.team_id = 1 AND home_2.roster_loc = 2 \n"
+        "    LEFT JOIN character_game_summary AS home_3 ON game.game_id = home_3.game_id \n"
+        "        AND home_3.team_id = 1 AND home_3.roster_loc = 3 \n"
+        "    LEFT JOIN character_game_summary AS home_4 ON game.game_id = home_4.game_id \n"
+        "        AND home_4.team_id = 1 AND home_4.roster_loc = 4 \n"
+        "    LEFT JOIN character_game_summary AS home_5 ON game.game_id = home_5.game_id \n"
+        "        AND home_5.team_id = 1 AND home_5.roster_loc = 5 \n"
+        "    LEFT JOIN character_game_summary AS home_6 ON game.game_id = home_6.game_id \n"
+        "        AND home_6.team_id = 1 AND home_6.roster_loc = 6 \n"
+        "    LEFT JOIN character_game_summary AS home_7 ON game.game_id = home_7.game_id \n"
+        "        AND home_7.team_id = 1 AND home_7.roster_loc = 7 \n"
+        "    LEFT JOIN character_game_summary AS home_8 ON game.game_id = home_8.game_id \n"
+        "        AND home_8.team_id = 1 AND home_8.roster_loc = 8 \n"
+        "    WHERE  \n"
+       f"        game.game_id = {game_id} \n"
+    )
+
+    results = db.session.execute(query).all()
+
+    away_dict = {0: results[0]['away_0'],
+                 1: results[0]['away_1'],
+                 2: results[0]['away_2'],
+                 3: results[0]['away_3'],
+                 4: results[0]['away_4'],
+                 5: results[0]['away_5'],
+                 6: results[0]['away_6'],
+                 7: results[0]['away_7'],
+                 8: results[0]['away_8']}
+    
+    home_dict = {0: results[0]['home_0'],
+                 1: results[0]['home_1'],
+                 2: results[0]['home_2'],
+                 3: results[0]['home_3'],
+                 4: results[0]['home_4'],
+                 5: results[0]['home_5'],
+                 6: results[0]['home_6'],
+                 7: results[0]['home_7'],
+                 8: results[0]['home_8']}
+    return away_dict, home_dict
 
 '''
 @ Description: Returns games that fit the parameters
@@ -84,6 +170,7 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
     - vs_captain - captain name who MUST appear in game along with captain
     - exclude_captian -  captain name to EXLCUDE from results
     - limit_games - Int of number of games || False to return all
+    - include_teams - bool to iclude team roster dicts (TODO likely not performant)
 
 @ Output:
     - List of games and highlevel info based on flags
@@ -98,8 +185,8 @@ def endpoint_games(called_internally=False):
         tags = request.args.getlist('tag')
         tags_lowercase = tuple([lower_and_remove_nonalphanumeric(tag) for tag in tags])
         tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(tags_lowercase)).all()
-        tag_ids = tuple([str(tag.id) for tag in tag_rows])
-        if len(tag_ids) != len(tags):
+        include_tag_ids = tuple([str(tag.id) for tag in tag_rows])
+        if len(include_tag_ids) != len(tags):
             abort(400)
 
         # Check if exclude_tags are valid and get a list of corresponding ids
@@ -158,6 +245,9 @@ def endpoint_games(called_internally=False):
         list_of_exclude_captain_ids =list(itertools.chain(*list_of_exclude_captain_id_tuples))
         tuple_exclude_captain_ids = tuple(list_of_exclude_captain_ids)
 
+        stadium = request.args.getlist('stadium')
+        tuple_stadium_ids = tuple(stadium)
+
         limit = int()
         try:
             if request.args.get('limit_games') is None:
@@ -200,37 +290,38 @@ def endpoint_games(called_internally=False):
 
 
     # === Set dynamic query values ===
-    count_matching_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(tag_ids)}) THEN 1 ELSE 0 END) AS having_tag_count \n" if len(tag_ids) > 0 else ""
-    count_matching_exclude_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(exclude_tag_ids)}) THEN 1 ELSE 0 END) AS exclude_tag_count \n" if len(exclude_tag_ids) > 0 else ""
-    having_matching_tags =  f'having_tag_count = {len(tag_ids)} ' if count_matching_tags != "" else ""
-    having_exclude_tags = f'exclude_tag_count = 0' if count_matching_exclude_tags != "" else ""
+    # count_matching_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(tag_ids)}) THEN 1 ELSE 0 END) AS having_tag_count \n" if len(tag_ids) > 0 else ""
+    # count_matching_exclude_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(exclude_tag_ids)}) THEN 1 ELSE 0 END) AS exclude_tag_count \n" if len(exclude_tag_ids) > 0 else ""
+    # having_matching_tags =  f'having_tag_count = {len(tag_ids)} ' if count_matching_tags != "" else ""
+    # having_exclude_tags = f'exclude_tag_count = 0' if count_matching_exclude_tags != "" else ""
     
-    with_tags = str()
-    where_tags = str()
-    if count_matching_tags != "" or count_matching_exclude_tags != "":
-        with_tags = (
-            'WITH game_id_and_tag_counts AS ( \n'
-            '   SELECT \n' 
-            '       game_id, \n'
-                    f'{count_matching_tags}'
-                    f'{", " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
-                    f'{count_matching_exclude_tags}'
-            '   FROM game_tag \n'
-            '   GROUP BY game_id \n'
-            ')  \n'
-        )
-        where_tags = (
-            'AND game.game_id IN ( \n'
-            '  SELECT game_id  \n'
-            '  FROM game_id_and_tag_counts \n'
-            '  WHERE ' 
-            f'{having_matching_tags}'
-            f'{" AND " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
-            f'{having_exclude_tags}'
-            '\n)\n '
-        )
+    # with_tags = str()
+    # where_tags = str()
+    # if count_matching_tags != "" or count_matching_exclude_tags != "":
+    #     with_tags = (
+    #         'WITH game_id_and_tag_counts AS ( \n'
+    #         '   SELECT \n' 
+    #         '       game_id, \n'
+    #                 f'{count_matching_tags}'
+    #                 f'{", " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
+    #                 f'{count_matching_exclude_tags}'
+    #         '   FROM game_tag \n'
+    #         '   GROUP BY game_id \n'
+    #         ')  \n'
+    #     )
+    #     where_tags = (
+    #         'AND game.game_id IN ( \n'
+    #         '  SELECT game_id  \n'
+    #         '  FROM game_id_and_tag_counts \n'
+    #         '  WHERE ' 
+    #         f'{having_matching_tags}'
+    #         f'{" AND " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
+    #         f'{having_exclude_tags}'
+    #         '\n)\n '
+    #     )
+    #     where_statement += where_tags
 
-        where_statement += where_tags
+
 
     #Build User strings
     user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
@@ -256,10 +347,27 @@ def endpoint_games(called_internally=False):
     if (not exclude_captain_empty):
         where_statement += f"AND away_captain.char_id NOT IN {exclude_captain_id_string} AND home_captain.char_id NOT IN {exclude_captain_id_string} \n"
 
+    #Build Tag strings
+    include_tag_id_string, include_tag_empty = format_tuple_for_SQL(include_tag_ids)
+    exclude_tag_id_string, exclude_tag_empty = format_tuple_for_SQL(exclude_tag_ids)
+    if (not include_tag_empty):
+        where_statement += f"AND tag.id IN {include_tag_id_string} \n"
+    if (not exclude_tag_empty):
+        where_statement += f"AND tag.id NOT IN {exclude_tag_id_string} \n"
+
+    #Stadium args
+    stadium_id_string, stadium_empty = format_tuple_for_SQL(tuple_stadium_ids)
+    if (not stadium_empty):
+        where_statement += f"AND game.stadium_id IN {stadium_id_string} \n"
+
+    #Include_team args
+    include_teams = (request.args.get('include_teams') == '1')
+
+
     # === Construct query === 
     query = (
-        f'{with_tags}'
         'SELECT game.game_id, \n'
+        '   game.stadium_id AS stadium, \n'
         '   game.date_time_start AS date_time_start, \n'
         '   game.date_time_end AS date_time_end, \n'
         '   game.away_score AS away_score, \n'
@@ -269,26 +377,36 @@ def endpoint_games(called_internally=False):
         '   away_player.username AS away_player, \n'
         '   home_player.username AS home_player, \n'
         '   away_captain.name AS away_captain, \n'
-        '   home_captain.name AS home_captain \n'
+        '   home_captain.name AS home_captain, \n'
+        '   game_history.winner_incoming_elo AS winner_incoming_elo, \n'
+        '   game_history.loser_incoming_elo AS loser_incoming_elo, \n'
+        '   game_history.winner_result_elo AS winner_result_elo, \n'
+        '   game_history.loser_result_elo AS loser_result_elo, \n'
+        '   game_history.tag_set_id AS tag_set \n'
         'FROM game \n'
+        'LEFT JOIN game_history ON game.game_id = game_history.game_id \n'
+        'LEFT JOIN tag_set ON game_history.tag_set_id = tag_set.id \n'
+        'LEFT JOIN tag_set_tag AS tst ON tag_set.id = tst.tagset_id \n'
+        'LEFT JOIN tag ON tst.tag_id = tag.id \n'
         'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
         'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
-        'LEFT JOIN character_game_summary AS away_captain_cgs \n'
-        '   ON game.game_id = away_captain_cgs.game_id \n'
-        '   AND away_captain_cgs.user_id = away_player.id \n'
-        '   AND away_captain_cgs.captain = True \n'
-        'LEFT JOIN character_game_summary AS home_captain_cgs \n'
-        '	ON game.game_id = home_captain_cgs.game_id \n'
-        '   AND home_captain_cgs.user_id = home_player.id \n'
-        '   AND home_captain_cgs.captain = True \n'
-        'LEFT JOIN character AS away_captain ON away_captain_cgs.char_id = away_captain.char_id \n'
-        'LEFT JOIN character AS home_captain ON home_captain_cgs.char_id = home_captain.char_id \n'
-        f'{where_statement} '
+        'JOIN character_game_summary AS away_cgs \n'
+        '	ON game.game_id = away_cgs.game_id \n'
+        '   AND away_cgs.user_id = away_player.id \n'
+        'JOIN character AS away_captain \n'
+        '   ON away_cgs.char_id = away_captain.char_id \n'
+        '   AND away_cgs.captain = True \n'
+        'JOIN character_game_summary AS home_cgs \n'
+        '	ON game.game_id = home_cgs.game_id \n'
+        '   AND home_cgs.user_id = home_player.id \n'
+        'JOIN character AS home_captain \n'
+        '   ON home_cgs.char_id = home_captain.char_id \n'
+        '   AND home_cgs.captain = True \n'
+        f'{where_statement} \n'
+        'GROUP BY game.game_id, stadium, away_player, home_player, away_captain, home_captain, winner_incoming_elo, loser_incoming_elo, winner_result_elo, loser_result_elo, tag_set \n'
         'ORDER BY game.date_time_start DESC \n'
         f"{('LIMIT ' + str(limit)) if limit != None else ''}"
     )
-
-    print(query)
 
     results = db.session.execute(query).all()
     
@@ -300,53 +418,33 @@ def endpoint_games(called_internally=False):
         return { "game_ids": game_ids }
     else:
         for game in results:
-            game_ids.append(game.game_id)
-
-            games.append({
-                'Id': game.game_id,
+            game_dict = {
+                'game_id': game.game_id,
+                'stadium': game.stadium,
                 'date_time_start': game.date_time_start,
                 'date_time_end': game.date_time_end,
-                'Away User': game.away_player,
-                'Away Captain': game.away_captain,
-                'Away Score': game.away_score,
-                'Home User': game.home_player,
-                'Home Captain': game.home_captain,
-                'Home Score': game.home_score,
-                'Innings Played': game.innings_played,
-                'Innings Selected': game.innings_selected,
-                'Tags': []
-            })
-
-        # If there are games with matching tags, get all additional tags they have
-        if game_ids:
-            where_game_id = str()
-            if len(game_ids) == 1:
-                where_game_id = f'WHERE game_tag.game_id = {game_ids[0]} '
-            else:
-                where_game_id = f'WHERE game_tag.game_id IN {tuple(game_ids)} '
-
-            tags_query = (
-                'SELECT '
-                'game_tag.game_id as game_id, '
-                'game_tag.tag_id as tag_id, '
-                'tag.name as name '
-                'FROM game_tag '
-                'LEFT JOIN tag ON game_tag.tag_id = tag.id '
-                f'{where_game_id}'
-                'GROUP BY game_id, tag_id, name'
-            )
-
-            tag_results = db.session.execute(tags_query).all()
-            for tag in tag_results:
-                for game in games:
-                    if game['Id'] == tag.game_id:
-                        game['Tags'].append(tag.name)
+                'away_user': game.away_player,
+                'away_captain': game.away_captain,
+                'away_score': game.away_score,
+                'home_user': game.home_player,
+                'home_captain': game.home_captain,
+                'home_score': game.home_score,
+                'innings_played': game.innings_played,
+                'innings_selected': game.innings_selected,
+                'winner_incoming_elo': game.winner_incoming_elo,
+                'loser_incoming_elo': game.loser_incoming_elo,
+                'winner_result_elo': game.winner_result_elo,
+                'loser_result_elo': game.loser_result_elo,
+                'game_mode': game.tag_set
+            }
+            if (include_teams):
+                away_roster_dict, home_roster_dict = get_rosters_from_game(game.game_id)
+                game_dict['away_roster'] = away_roster_dict
+                game_dict['home_roster'] = home_roster_dict
+            games.append(game_dict)
 
         return {'games': games}
 
-
-
-# == Functions to return coordinates for graphing ==
 '''
 @Endpoint: Events
 @Description: Used to pick out events that fit the given params
@@ -368,6 +466,8 @@ def endpoint_games(called_internally=False):
     - balls:           [0-3],   balls
     - strikes:         [0-2],   strikes
     - outs:            [0-2],   outs
+    - home_score       [0-50],  home score
+    - away_score       [0-50],  away score
     - star_chance      [0-1],   bool for star chance
     - users_as_batter  [0-1],   bool if you want to only get the events for the given users when they are the batter
     - users_as_pitcher [0-1],   bool if you want to only get the events for the given users when they are the pitcher
@@ -388,7 +488,6 @@ def endpoint_event(called_internally=False):
 
         else:
             games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-            print(games)
             for game_id in games['game_ids']:
                 list_of_game_ids.append(game_id)
     except:
@@ -473,7 +572,7 @@ def endpoint_event(called_internally=False):
         return abort(400, description = error)
 
     #Inning list
-    list_of_innings, error = sanitize_int_list(request.args.getlist('innings'), "Innings not in range", 50)
+    list_of_innings, error = sanitize_int_list(request.args.getlist('inning'), "Inning not in range", 50)
     if list_of_innings == None:
         return abort(400, description = error)
 
@@ -482,7 +581,7 @@ def endpoint_event(called_internally=False):
     if list_of_half_inning == None:
         return abort(400, description = error)
 
-    #Strike list
+    #Balls list
     list_of_balls, error = sanitize_int_list(request.args.getlist('balls'), "Balls not in range", 4)
     if list_of_balls == None:
         return abort(400, description = error)
@@ -494,6 +593,16 @@ def endpoint_event(called_internally=False):
 
     #Outs list
     list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
+    if list_of_outs == None:
+        return abort(400, description = error)
+    
+    #Home scores list
+    list_of_home_scores, error = sanitize_int_list(request.args.getlist('home_score'), "Score not in range", 50)
+    if list_of_outs == None:
+        return abort(400, description = error)
+    
+    #Away scores list
+    list_of_away_scores, error = sanitize_int_list(request.args.getlist('away_score'), "Score not in range", 50)
     if list_of_outs == None:
         return abort(400, description = error)
     
@@ -522,7 +631,8 @@ def endpoint_event(called_internally=False):
         (list_of_balls, 'event.balls', None),
         (list_of_strikes, 'event.strikes', None),
         (list_of_outs, 'event.outs', None),
-        (star_chance_flag, 'event.star_chance', None),
+        (list_of_home_scores, 'event.home_score', None),
+        (list_of_away_scores, 'event.away_score', None),
         (star_chance_flag, 'event.star_chance', None),
         (list_of_batter_user_ids, 'batter.user_id', None),
         (list_of_pitcher_user_ids, 'pitcher.user_id', None),
@@ -589,8 +699,6 @@ def endpoint_event(called_internally=False):
        f'{where_statement}'
        f'{limit_statement}'
     )
-
-    print(query)
 
     result = db.session.execute(query).all()
 
@@ -703,34 +811,34 @@ def endpoint_landing_data():
         'batter_user.username AS batter_username, \n'
         'batter.batting_hand, \n'
         'pitcher.fielding_hand, \n'
-        'contact.ball_power AS ball_power '
-        'contact.ball_horiz_angle AS ball_horiz_angle '
-        'contact.ball_vert_angle AS ball_vert_angle '
-        'contact.contact_absolute AS contact_absolute '
-        'contact.contact_quality AS contact_quality '
-        'contact.rng1 AS rng1 '
-        'contact.rng2 AS rng2 '
-        'contact.rng3 AS rng3 '
-        'contact.ball_x_velocity AS ball_x_velocity '
-        'contact.ball_y_velocity AS ball_y_velocity '
-        'contact.ball_z_velocity AS ball_z_velocity '
-        'contact.ball_x_contact_pos AS ball_x_contact_pos '
-        'contact.ball_y_contact_pos AS ball_y_contact_pos '
-        'contact.ball_z_contact_pos AS ball_z_contact_pos '
-        'contact.bat_x_contact_pos AS bat_x_contact_pos '
-        'contact.bat_y_contact_pos AS bat_y_contact_pos '
-        'contact.bat_z_contact_pos AS bat_z_contact_pos '
-        'contact.ball_x_landing_pos AS ball_x_landing_pos '
-        'contact.ball_y_landing_pos AS ball_y_landing_pos '
-        'contact.ball_z_landing_pos AS ball_z_landing_pos '
+        'contact.ball_power AS ball_power, \n'
+        'contact.ball_horiz_angle AS ball_horiz_angle, \n'
+        'contact.ball_vert_angle AS ball_vert_angle, \n'
+        'contact.contact_absolute AS contact_absolute, \n'
+        'contact.contact_quality AS contact_quality, \n'
+        'contact.rng1 AS rng1, \n'
+        'contact.rng2 AS rng2, \n'
+        'contact.rng3 AS rng3, \n'
+        'contact.ball_x_velocity AS ball_x_velocity, \n'
+        'contact.ball_y_velocity AS ball_y_velocity, \n'
+        'contact.ball_z_velocity AS ball_z_velocity, \n'
+        'contact.ball_x_contact_pos AS ball_x_contact_pos, \n'
+        'contact.ball_z_contact_pos AS ball_z_contact_pos, \n'
+        'contact.ball_x_landing_pos AS ball_x_landing_pos, \n'
+        'contact.ball_y_landing_pos AS ball_y_landing_pos, \n'
+        'contact.ball_z_landing_pos AS ball_z_landing_pos, \n'
         'contact.ball_max_height AS ball_max_height, \n'
         'contact.ball_hang_time AS ball_hang_time, \n'
         'contact.input_direction_stick AS stick_input, \n'
         'contact.charge_power_up AS charge_power_up, \n'
         'contact.charge_power_down AS charge_power_down, \n'
         'contact.frame_of_swing_upon_contact AS frame_of_swing, \n'
+        'pitch.pitch_type, \n'
+        'pitch.charge_pitch_type, \n'
         'pitch.type_of_swing, \n'
         'contact.type_of_contact, \n'
+        'pitch.bat_x_contact_pos, \n'
+        'pitch.bat_z_contact_pos, \n'
         #Add decoded action
         'fielding.position AS fielder_position, \n'
         'fielding.fielder_x_pos AS fielder_x_pos, \n'
@@ -749,8 +857,6 @@ def endpoint_landing_data():
         'JOIN rio_user AS batter_user ON batter.user_id = batter_user.id \n'
        f'WHERE event.id IN {event_id_string}'
     )
-
-    print(query)
 
     result = db.session.execute(query).all()
 
@@ -816,8 +922,6 @@ def endpoint_star_chances():
        f'WHERE event.id IN {event_id_string} and event.result_of_ab != 0 \n'
        f'{group_by_statement}'
     )
-
-    print(query)
 
     result = db.session.execute(query).all()
 
@@ -897,26 +1001,25 @@ def endpoint_star_chances():
     - Output is variable based on the "by_XXX" flags. Helper function update_detailed_stats_dict builds and updates
       the large return dict at each step
 
-@ URL example: http://127.0.0.1:5000/detailed_stats/?username=demouser1&character=1&by_swing=1
+@ URL example: http://127.0.0.1:5000/stats/?username=demouser1&character=1&by_swing=1
 '''
-@app.route('/detailed_stats/', methods = ['GET'])
+@app.route('/stats/', methods = ['GET'])
 def endpoint_detailed_stats():
 
     #Sanitize games params 
-    try:
-        list_of_game_ids = list() # Holds IDs for all the games we want data from
-        if (len(request.args.getlist('games')) != 0):
-            list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
-            list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
-            if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
-                return abort(408, description='Provided GameIDs not found')
+    list_of_game_ids = list() # Holds IDs for all the games we want data from
+    if (len(request.args.getlist('games')) != 0):
+        list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
+        list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
+        if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
+            return abort(408, description='Provided GameIDs not found')
 
-        else:
-            games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-            for game_id in games['game_ids']:
-                list_of_game_ids.append(game_id)
-    except:
-        return abort(408, description='Invalid GameID')
+    else:
+        games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
+        for game_id in games['game_ids']:
+            list_of_game_ids.append(game_id)
+        if len(list_of_game_ids) == 0:
+            return abort(409, description='No games found for provided parameters')
 
     # Sanitize character params
     try:
@@ -1024,8 +1127,6 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
        f"{group_by_statement}"
     )
 
-    print(contact_batting_query)
-
     #Redo groups, removing swing type
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
@@ -1098,16 +1199,16 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
         'SELECT '
         f"{select_user}"
         f"{select_char}"
-        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
+        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
         'COUNT(CASE WHEN ('
-            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id = NULL) OR'
-            '(pitch_summary.in_strikezone = false AND type_of_swing > 0)'
+            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id IS NULL) OR'
+            '(pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing > 0)'
             ') THEN 1 ELSE NULL END) AS strikes \n'
         'FROM character_game_summary \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
         'JOIN event ON character_game_summary.id = event.pitcher_id \n'
         'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
+        'LEFT JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
         'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
        f"{where_statement}"
        f"{group_by_statement}"
@@ -1134,22 +1235,29 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
     groups = ','.join(filter(None,[by_user, by_char]))
     group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
 
+    if group_by_char:
+        divide_by = 1
+    elif len(char_ids) > 0:
+        divide_by = len(char_ids)
+    else:
+        divide_by = 9
+
     query = (
         'SELECT '
        f"{select_user}"
        f"{select_char}"
-       f"COUNT(*){'/9' if group_by_char != True else ''} AS game_appearances, \n "
-       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_wins, \n"
-       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS away_loses, \n"
-       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_wins, \n"
-       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END){'/9' if group_by_char != True else ''} AS home_loses, \n"      
-        'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
-        'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
-        'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
-        'SUM(character_game_summary.offensive_stars_put_in_play) AS offensive_stars_put_in_play, \n'
-        'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
-        'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
-        'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
+       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS away_wins, \n"
+       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS away_loses, \n"
+       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS home_wins, \n"
+       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS home_loses, \n"      
+       f"COUNT(*)/{divide_by} AS game_appearances \n "
+        # 'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
+        # 'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
+        # 'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
+        # 'SUM(character_game_summary.offensive_stars_put_in_play) AS offensive_stars_put_in_play, \n'
+        # 'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
+        # 'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
+        # 'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
         'FROM character_game_summary \n'
         'JOIN game ON character_game_summary.game_id = game.game_id \n'
         'JOIN character ON character_game_summary.char_id = character.char_id \n'
@@ -1355,3 +1463,138 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_b
         if type_of_result not in in_stat_dict:
             in_stat_dict[type_of_result] = {}
         in_stat_dict[type_of_result].update(data_dict)
+
+@app.route('/stats/fix/', methods = ['GET'])
+def fix_event_cgs_ids():
+    all_games = Game.query.filter_by()
+    game_count = 0
+    for game in all_games:
+        all_cgs = CharacterGameSummary.query.filter_by(game_id=game.game_id)
+        cgs_dict = dict()
+        cgs_dict[0] = {}
+        cgs_dict[1] = {}
+        cgs_by_id = dict()
+        for cgs in all_cgs:
+            cgs_dict[cgs.team_id][cgs.roster_loc] = cgs
+
+            cgs_by_id[cgs.id] = cgs
+
+        all_game_events = Event.query.filter_by(game_id=game.game_id)
+        for event in all_game_events:
+            #Fix pitcher_id
+            pitcher_roster_loc = cgs_by_id[event.pitcher_id].roster_loc
+            pitcher_team_id = 1-cgs_by_id[event.pitcher_id].team_id
+            old_pitcher_id = event.pitcher_id
+            event.pitcher_id = cgs_dict[pitcher_team_id][pitcher_roster_loc].id
+
+            #Fix batter_id
+            batter_roster_loc = cgs_by_id[event.batter_id].roster_loc
+            batter_team_id = 1-cgs_by_id[event.batter_id].team_id
+            old_batter_id = event.batter_id
+            event.batter_id = cgs_dict[batter_team_id][batter_roster_loc].id
+
+            print('Count: ', game_count, ' Game: ', game.game_id, ' Pitcher: ', old_pitcher_id, '->', event.pitcher_id, ' Batter: ', old_batter_id, '->', event.batter_id, sep="")
+
+            #Fix catcher_id
+            catcher_roster_loc = cgs_by_id[event.catcher_id].roster_loc
+            catcher_team_id = 1-cgs_by_id[event.catcher_id].team_id
+            event.catcher_id = cgs_dict[catcher_team_id][catcher_roster_loc].id
+        game_count += 1
+
+    db.session.commit()
+
+
+@app.route('/ladder/games/', methods = ['GET'])
+def endpoint_ladder_games():
+    try:
+        # Check if tags are valid and get a list of corresponding ids
+        tag_sets = request.args.getlist('tag_set')
+        tag_set_lowercase = tuple([lower_and_remove_nonalphanumeric(tag) for tag in tag_sets])
+        tag_set_rows = db.session.query(TagSet).filter(TagSet.name_lowercase.in_(tag_set_lowercase)).all()
+        tag_set_ids = tuple([str(tag_set.id) for tag_set in tag_set_rows])
+        if len(tag_set_ids) != len(tag_sets):
+            abort(400)
+    except:
+       return abort(400, 'Invalid TagSet')
+    
+
+    #Get and validate start_time and end_time parameters from URL
+    start_time_unix = 1
+    if (request.args.get('start_time') != None):
+        try:
+            start_time = request.args.get('start_time')
+            start_time_unix = int(start_time)
+        except:
+            return abort(408, 'Invalid start time format')
+    
+    end_time_unix = 0
+    if (request.args.get('end_time') != None):
+        try:
+            end_time = request.args.get('end_time')
+            end_time_unix = int(end_time)
+        except:
+            return abort(408, 'Invalid end time format')
+
+    # Add start and end_time parameters to WHERE statement
+    where_statement = f"WHERE game_history.date_created > {start_time_unix} \n"
+    if (end_time_unix != 0):
+        where_statement += f"AND game_history.date_created < {end_time_unix} \n"
+
+    tag_set_id_string, include_tag_empty = format_tuple_for_SQL(tag_set_ids)
+    if (not include_tag_empty):
+        where_statement += f"AND game_history.tag_set_id IN {tag_set_id_string}"
+    
+    query = (
+        'SELECT \n'
+        '   game.game_id, \n'
+        '   game.stadium_id AS stadium, \n'
+        '   game.date_time_start AS date_time_start, \n'
+        '   game.date_time_end AS date_time_end, \n'
+        '   game.away_score AS away_score, \n'
+        '   game.home_score AS home_score, \n'
+        '   game.innings_played AS innings_played, \n'
+        '   game.innings_selected AS innings_selected, \n'
+        '   away_player.username AS away_player, \n'
+        '   home_player.username AS home_player, \n'
+        '   away_captain.name AS away_captain, \n'
+        '   home_captain.name AS home_captain, \n'
+        '   winner_rio_user.username AS winner_player, \n'
+        '   loser_rio_user.username AS loser_player, \n'
+        '   game_history.winner_incoming_elo AS winner_incoming_elo, \n'
+        '   game_history.loser_incoming_elo AS loser_incoming_elo, \n'
+        '   game_history.winner_result_elo AS winner_result_elo, \n'
+        '   game_history.loser_result_elo AS loser_result_elo, \n'
+        '   game_history.tag_set_id AS tag_set \n'
+        'from game_history \n'
+        'LEFT JOIN game ON game_history.game_id = game.game_id \n'
+        'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
+        'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
+        'LEFT JOIN community_user AS winner_comm_user ON game_history.winner_comm_user_id = winner_comm_user.id \n'
+        'LEFT JOIN community_user AS loser_comm_user ON game_history.loser_comm_user_id = loser_comm_user.id \n'
+        'LEFT JOIN rio_user AS winner_rio_user ON winner_comm_user.user_id = winner_rio_user.id \n'
+        'LEFT JOIN rio_user AS loser_rio_user ON loser_comm_user.user_id = loser_rio_user.id \n'
+        'LEFT JOIN character_game_summary AS away_cgs  \n'
+	    '    ON game.game_id = away_cgs.game_id  \n'
+        '    AND away_cgs.user_id = away_player.id  \n'
+        '    AND away_cgs.captain = True  \n'
+        'LEFT JOIN character AS away_captain  \n'
+        '    ON away_cgs.char_id = away_captain.char_id  \n'
+        'LEFT JOIN character_game_summary AS home_cgs  \n'
+	    '    ON game.game_id = home_cgs.game_id  \n'
+        '    AND home_cgs.user_id = home_player.id  \n'
+        '    AND home_cgs.captain = True  \n'
+        'LEFT JOIN character AS home_captain  \n'
+        '    ON home_cgs.char_id = home_captain.char_id \n'
+        f"{where_statement} \n"
+        'ORDER BY game_history.date_created DESC \n'
+        'LIMIT 50'
+    )
+    print(query)
+
+    results = db.session.execute(query).all()
+    
+    games = []
+    for game in results:
+        games.append(game._asdict())
+    return {'games': games}
+    

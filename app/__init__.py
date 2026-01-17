@@ -6,6 +6,7 @@ from flask_bcrypt import Bcrypt
 from flask_jwt_extended import JWTManager
 from flask_cors import CORS
 import logging
+from pathlib import Path
 from logging.handlers import RotatingFileHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -15,19 +16,27 @@ db = SQLAlchemy()
 bc = Bcrypt()
 jwt = JWTManager()
 sched = BackgroundScheduler(daemon=True)
+migrate = Migrate()
 
 def init_app():
     # Construct core application
     app = Flask(__name__)
     app.config.from_pyfile('config.py')
     app.config['rio_env'] = os.getenv('RIO_ENV')
+    # app.config['SQLALCHEMY_ECHO'] = True
+
+    # Define the folder where you want to save the JSON files
+    UPLOAD_FOLDER = 'games'
+    UPLOAD_PATH = Path(__file__).resolve().parent / UPLOAD_FOLDER
+    app.config['GAMES_UPLOAD_FOLDER'] = UPLOAD_PATH
+
     CORS(app)
 
     # Initialize Plugins
     db.init_app(app)
     bc.init_app(app)
     jwt.init_app(app)
-    migrate = Migrate(app, db)
+    migrate.init_app(app, db)
 
     #Set logger properties
     #Rotating log file
@@ -40,6 +49,7 @@ def init_app():
         from .views import populate_db
         from .views import user
         from .views import db_setup
+        from .views import delete_game
         from .views import recreate_stat_files
         from .views import client_routes
         from .views import stat_retrieval
@@ -54,8 +64,10 @@ def init_app():
         from .views import db_manage
         # from .views import log
 
-        daily_trigger = CronTrigger(year="*", month="*", day="*", hour="6", minute="0", second="0")
-        sched.add_job(sql_exec.gen_woba_data_routine, trigger=daily_trigger, args=[app])
+        # Create a cron trigger for running every minute
+        min_trigger = CronTrigger(year="*", month="*", day="*", hour="*", minute="*", second="0")
+        # Process games every minute on the minute
+        sched.add_job(populate_db.process_all_games_job, trigger=min_trigger, args=[app])
         sched.start()
             
         #create sql tables for data models

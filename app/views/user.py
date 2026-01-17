@@ -1,13 +1,20 @@
 from flask import render_template, request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
-import secrets
 from datetime import datetime, timedelta, timezone
+from pprint import pprint
 from .. import bc
-from ..models import db, RioUser, UserGroup, UserGroupUser
+from ..models import db, RioUser, UserGroup, UserGroupUser, Community, CommunityUser
 from ..util import *
+from ..consts import *
 from app.utils.send_email import send_email
 from app.views.community import add_user_to_all_comms
+from ..decorators import *
+from ..user_util import *
+
+import secrets
+import time
+import pytz
 
 # === User Registration Front End ===
 @app.route('/signup/')
@@ -36,6 +43,8 @@ def register():
         new_user = RioUser(in_username, in_email, in_password)
         db.session.add(new_user)
         db.session.commit()
+
+        update_ip_address_entry(new_user, request)
 
         subject = 'Verify your Project Rio Account'
         html_content = (
@@ -147,11 +156,11 @@ def verify_email(active_url):
 # === Password change endpoints ===
 @app.route('/request_password_change/', methods=['POST'])
 def request_password_change():
-    if '@' in request.json['username or email']:
-        email_lowercase = request.json['username or email'].lower()
+    if '@' in request.json['username_or_email']:
+        email_lowercase = request.json['username_or_email'].lower()
         user = RioUser.query.filter_by(email=email_lowercase).first()
     else:
-        username_lower = lower_and_remove_nonalphanumeric(request.json['username or email'])
+        username_lower = lower_and_remove_nonalphanumeric(request.json['username_or_email'])
         user = RioUser.query.filter_by(username_lowercase=username_lower).first()
 
     if not user:
@@ -214,8 +223,7 @@ def change_password():
     if user.verified == False:
         return abort(401, 'Email unverified')
 
-    user.password = bc.generate_password_hash(password)
-    user.active_url = None
+    user.reset_password(password)
     db.session.add(user)
     db.session.commit()
 
@@ -228,24 +236,26 @@ def change_password():
 # === JWT endpoints ===
 @app.route('/login/', methods=['POST'])
 def login():
-    in_username = lower_and_remove_nonalphanumeric(request.json['Username'])
     in_password = request.json['Password']
     in_email    = request.json['Email'].lower()
 
-    # filter User out of database through username
-    user = RioUser.query.filter_by(username_lowercase=in_username).first()
-
     # filter User out of database through email
-    user_by_email = RioUser.query.filter_by(email=in_email).first()
+    user = RioUser.query.filter_by(email=in_email).first()
 
-    if user == user_by_email:
-        if bc.check_password_hash(user.password, in_password):            
+    if not user.verified:
+        abort(401, description='Please verify your account before logging in')
+
+    if user:
+        if bc.check_password_hash(user.password, in_password):
             # Creating JWT and Cookies
+            access_token = create_access_token(identity=user.username)
+            
             response = jsonify({
                 'msg': 'login successful',
                 'username': user.username,
+                'access_token': access_token
             })
-            access_token = create_access_token(identity=user.username)
+            
             set_access_cookies(response, access_token)
 
             return response
@@ -254,18 +264,19 @@ def login():
     else:
         return abort(408, description='Incorrect Username or Password')
 
-@app.route('/logout/', methods=['POST'])
+@app.route('/logout/', methods=['GET'])
+@jwt_required()
 def logout():    
     response = jsonify({'msg': 'logout successful'})
     unset_jwt_cookies(response)
     return response
 
 @app.route('/validate_JWT/', methods = ['GET'])
-@jwt_required(optional=True)
+@jwt_required()
 def validate_JWT():
     try:
         current_user_username = get_jwt_identity()
-        return jsonify(logged_in_as=current_user_username)
+        return jsonify({"logged_in_as": current_user_username})
     except:
         return 'No JWT...'
 
@@ -347,6 +358,18 @@ def set_privacy():
             'private': current_user.private
         })
 
+#Get id and username of all users
+@app.route('/user/all/', methods = ['GET'])
+def get_users_all():
+    users = RioUser.query.filter_by(verified=True)
+
+    ret_dict = dict()
+    for user in users:
+        ret_dict[user.id] = user.username
+
+    return {
+        "users": ret_dict
+    }, 200
 
 '''
 @ Description: Returns tags available to a user
@@ -416,33 +439,123 @@ def get_users_tags():
 @ Example URL: http://127.0.0.1:5000/user/communities/?username=GenericHomeUser&username=GenericAwayUser
 '''
 
-@app.route('/user/communities/', methods = ['GET'])
+@app.route('/user/community/', methods = ['GET'])
 def get_users_communities():
-    if (app.config['rio_env'] == "production"):
-        return abort(404, description='Endpoint not ready for production')
 
-    in_username_lowercase = lower_and_remove_nonalphanumeric(request.json['username'])
+    in_username_lowercase = lower_and_remove_nonalphanumeric(request.args.get('username'))
+    user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
+
+    if not user:
+        return abort(422, 'Invalid Username')
+    
+    result = db.session.query(
+        Community
+    ).join(
+        CommunityUser
+    ).join(
+        RioUser
+    ).filter(
+        (RioUser.username_lowercase == in_username_lowercase) &
+        (CommunityUser.active == True) &
+        ((CommunityUser.banned == False) | (CommunityUser.banned == None))
+    ).all()
+
+    ret_list = list()
+    for comm in result:
+        ret_list.append(comm.to_dict())
+
+    return {
+        "communities": ret_list
+    }, 200
+
+@app.route('/user/community/sponsor/', methods = ['GET'])
+def get_users_sponsored_communities():
+
+    in_username_lowercase = lower_and_remove_nonalphanumeric(request.args.get('username'))
     user = RioUser.query.filter_by(username_lowercase=in_username_lowercase).first()
 
     if not user:
         return abort(422, 'Invalid Username')
 
-    communities_query = (
-        'SELECT \n '
-        'community.name \n '
-        'FROM community \n'
-        'LEFT JOIN community_user ON community.id = community_user.community_id \n'
-        f'WHERE community_user.user_id = {user.id} \n'
-        'GROUP BY \n'
-        'tag.name \n'
-    )
-    
-    result = db.session.execute(communities_query)
+    communities = Community.query.filter_by(sponsor_id=user.id).all()
 
-    communities = list()
-    for community in result:
-        communities.append(community.name)
+    ret_list = list()
+    for comm in communities:
+        ret_list.append(comm.to_dict())
 
     return {
-        "communities": communities
+        "sponsored_communities": ret_list
     }, 200
+
+# Prune unverified users that were created over a week ago
+@app.route('/user/prune', methods=['POST'])
+@jwt_required(optional=True)
+@api_key_check(['Admin'])
+def prune_users():
+    number_of_secs_in_week = 604800
+    current_unix_time = int(time.time())
+
+    cutoff_unix_time = (current_unix_time-number_of_secs_in_week)
+    unverified_users = RioUser.query.filter(RioUser.verified==False, RioUser.date_created <= cutoff_unix_time)
+
+    deleted_users = list()
+    for user in unverified_users:
+        deleted_users.append({'Username': user.username, 'Verified': user.verified, 'Date Created': datetime.utcfromtimestamp(user.date_created).strftime('%Y-%m-%d %H:%M:%S')})
+        UserGroupUser.query.filter_by(user_id=user.id).delete()
+        CommunityUser.query.filter_by(user_id=user.id).delete()
+        db.session.delete(user)
+        db.session.commit()
+    return jsonify(deleted_users)
+
+@app.route('/user/get_ip_data', methods=['POST'])
+@jwt_required(optional=True)
+@api_key_check(['Admin'])
+def get_ip_data():
+    users = RioUser.query.all()
+    user_data = []
+
+    eastern_timezone = pytz.timezone('US/Eastern')  # Replace with the appropriate timezone
+
+    for user in users:
+        user_groups = [ug.user_group_from_ugu.name for ug in user.user_group_user]
+        user_ip_entries = UserIpAddress.query.filter_by(user_id=user.id).all()
+
+        ip_data = []
+        users_with_same_ip = []
+
+        for entry in user_ip_entries:
+            date_used = datetime.fromtimestamp(entry.last_use_date).astimezone(eastern_timezone)
+            formatted_date = date_used.strftime('%m/%d/%Y %H:%M %Z')
+            ip_data.append({
+                'ip_address': entry.ip_address,
+                'date_used': formatted_date,
+                'count': entry.use_count
+            })
+
+        # Find users with the same IP address
+        users_with_same_ip = db.session.query(RioUser, UserIpAddress).join(UserIpAddress).filter(UserIpAddress.ip_address.in_([ip_entry.ip_address for ip_entry in user_ip_entries]), RioUser.id != user.id).all()
+
+        users_with_same_ip_data = []
+        for other_user, ip_entry in users_with_same_ip:
+            users_with_same_ip_data.append({
+                'ip_address': ip_entry.ip_address,
+                'username': other_user.username
+            })
+            pprint({
+                'ip_address': ip_entry.ip_address,
+                'username': other_user.username
+            })
+
+        date_created = datetime.fromtimestamp(user.date_created).astimezone(eastern_timezone)
+        formatted_date_created = date_created.strftime('%m/%d/%Y %H:%M %Z')
+
+        user_data.append({
+            'username': user.username,
+            'email': user.email,
+            'date_created': formatted_date_created,
+            'user_groups': user_groups,
+            'ip_data': ip_data,
+            'users_with_same_ip': users_with_same_ip_data
+        })
+
+    return jsonify(user_data)

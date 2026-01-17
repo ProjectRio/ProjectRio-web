@@ -71,6 +71,35 @@ def test_community_create_unofficial():
     print('Test', community.get_member(invitee).to_dict())
     assert community.get_member(invitee).active  == False
 
+def test_community_get():
+    wipe_db()
+
+    sponsor = User()
+    sponsor.register()
+    assert sponsor.success == True
+
+    sponsor.verify_user()
+    assert sponsor.add_to_group('patron: mvp') == True
+
+    nonmember = User()
+    nonmember.register()
+    nonmember.verify_user()
+
+    communityA = Community(sponsor, official=False, private=False, link=False)
+    assert communityA.success == True
+    communityB = Community(sponsor, official=False, private=False, link=False)
+    assert communityB.success == True
+
+
+    response = requests.get(f"http://127.0.0.1:5000/user/community/?username={sponsor.username}")
+    assert response.status_code == 200
+    assert len(response.json()['communities']) == 3
+    
+    response = requests.get(f"http://127.0.0.1:5000/user/community/?username={nonmember.username}")
+    assert response.status_code == 200
+    assert len(response.json()['communities']) == 1
+
+
 def test_community_create_private_nolink():
     wipe_db()
 
@@ -296,6 +325,14 @@ def test_community_tags():
     assert tag.type == 'Component'
     assert len(community.tags) == 2
 
+    #Get all tags
+    response = requests.get("http://127.0.0.1:5000/tag/list")
+    assert response.status_code == 200
+    
+    data = response.json()
+    pprint(data)
+    assert len(data['Tags']) == 1 #Only gets the non community tags
+
 def test_community_tagsets():
     wipe_db()
 
@@ -462,24 +499,34 @@ def test_community_sponsor_manage():
     assert community.join_via_request(future_sponsor)
 
     # Try to remove sponsor as regular member
-    assert not community.manage_sponsor(future_sponsor, 'Remove')
+    assert not community.manage_sponsor(future_sponsor, 'remove')
     # print(community.sponsor.to_dict())
     # print(sponsor.to_dict())
     # print(future_sponsor.to_dict())
     assert compare_users(community.sponsor, sponsor)
+
+    #Check that user is sponsor
+    response = requests.get(f"http://127.0.0.1:5000/user/community/sponsor/?username={sponsor.username}")
+    assert response.status_code == 200
+    assert len(response.json()['sponsored_communities']) == 1
     
     # Remove sponsor as sponsor
-    assert community.manage_sponsor(sponsor, 'Remove')
+    assert community.manage_sponsor(sponsor, 'remove')
     assert community.sponsor == None
 
+    #Check that user is not sponsor
+    response = requests.get(f"http://127.0.0.1:5000/user/community/sponsor/?username={sponsor.username}")
+    assert response.status_code == 200
+    assert len(response.json()['sponsored_communities']) == 0
+
     # Add new sponsor, not a patron
-    assert not community.manage_sponsor(future_sponsor, 'Add')
+    assert not community.manage_sponsor(future_sponsor, 'add')
     assert community.sponsor == None
 
     # Add new sponsor who is now patron
     future_sponsor.verify_user()
     assert future_sponsor.add_to_group('patron: mvp') == True
-    assert community.manage_sponsor(future_sponsor, 'Add')
+    assert community.manage_sponsor(future_sponsor, 'add')
     # print(community.sponsor)
     # print(future_sponsor)
     assert compare_users(community.sponsor, future_sponsor)
@@ -497,7 +544,7 @@ def test_community_sponsorless_tagset_create():
     assert community.success == True
 
     # Remove sponsor as sponsor
-    assert community.manage_sponsor(sponsor, 'Remove')
+    assert community.manage_sponsor(sponsor, 'remove')
     assert community.sponsor == None
 
     # Create Tags
@@ -552,7 +599,7 @@ def test_community_gecko_tags():
     # Should just have community tag
     assert len(community.tags) == 1
 
-    code_dict = {'Gecko Code Desc': 'Code A desc', 'Gecko Code': 'DEADBEEF DEADBEEF\n'}
+    code_dict = {'gecko_code_desc': 'Code A desc', 'gecko_code': 'DEADBEEF DEADBEEF\n'}
 
     # Add tag with admin
     tag = Tag(community.founder, community, 'Gecko Code', code_dict)
@@ -603,3 +650,75 @@ def test_community_gecko_tags():
             assert 'gecko_code' in tag.keys()
         else:
             assert 'gecko_code' not in tag.keys()
+
+def test_community_keys():
+    wipe_db()
+
+    sponsor = User()
+    sponsor.register()
+    assert sponsor.success == True
+
+    sponsor.verify_user()
+    assert sponsor.add_to_group('admin') == True
+
+    #### Community #####
+    communityA = Community(sponsor, official=True, private=False, link=False)
+    assert communityA.success == True
+
+    # Add tag with admin
+    tag = Tag(communityA.founder, communityA)
+    tag.create()
+
+    tagset = TagSet(communityA.founder, communityA, [tag], 'League')
+    tagset.create()
+
+    # Refresh to get tags
+    communityA.refresh()
+    #### =================
+
+    #### CommunityB #####
+    communityB = Community(sponsor, official=True, private=False, link=False)
+    assert communityB.success == True
+
+    # Add tag with admin
+    tag = Tag(communityB.founder, communityB)
+    tag.create()
+
+    tagset = TagSet(communityB.founder, communityB, [tag], 'League')
+    tagset.create()
+
+    # Refresh to get tags
+    communityB.refresh()
+    #### =================
+
+    # Two players
+    member = User()
+    member.register()
+
+    member.verify_user()
+
+    payload = {'community_name': communityA.name, 'rio_key': member.rk, 'action': 'generate'}
+    response = requests.post("http://127.0.0.1:5000/community/key", json=payload)
+    assert (response.status_code == 200)
+    pprint(response.json())
+    communityA.refresh()
+
+    comm_key = communityA.get_member(member).ck
+
+    #Test get tag sets with comm key, should be 1
+    payload = {'Rio Key': comm_key}
+    response = requests.post("http://127.0.0.1:5000/tag_set/list", json=payload)
+    assert (response.status_code == 200)
+    pprint(payload)
+    pprint(response.json())
+    assert len(response.json()['Tag Sets']) == 1
+
+    #Tests get tag sets with ri okey, should be both
+    payload = {'Rio Key': member.rk}
+    response = requests.post("http://127.0.0.1:5000/tag_set/list", json=payload)
+    assert (response.status_code == 200)
+    assert len(response.json()['Tag Sets']) == 2
+
+    #Test validate from client
+    response = requests.get(f"http://127.0.0.1:5000/validate_user_from_client/?username={member.username}&rio_key={comm_key}")
+    assert (response.status_code == 200) 

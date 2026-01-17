@@ -1,0 +1,12 @@
+
+{
+    "name": "",
+    "desc": "",
+    "type": "Tournament/League/Season",
+    "community_name": "",
+    "tag_set_id": 0, //ID of TagSet to copy tags from
+    "add_tag_ids": [], //List of tag IDs to add
+    "remove_tag_ids": [],//List of tag IDs to remove
+    "start_date": 1718414206, //Unix time
+    "end_date": 1719115200
+}
