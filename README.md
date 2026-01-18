@@ -14,7 +14,6 @@ With Rio Web you can...
 Please read the [FAQ](#faq) before using the Api.
 
 ## Navigation
-- [Getting Started](#getting-started)
 - [Public Endpoints](#public-endpoints)
 	- [Characters](#characters)
 	- [Games](#games)
@@ -23,7 +22,7 @@ Please read the [FAQ](#faq) before using the Api.
 	- [Landing Data](#landing-data)
 	- [Star Chances](#star-chances)
 	- [Pitch Analysis](#pitch-analysis)
-	- [Detailed Stats](#detailed-stats)
+	- [Stats](#stats)
 - [FAQ](#faq)
 
 
