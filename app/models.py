@@ -617,8 +617,9 @@ class Tag(db.Model):
     desc = db.Column(db.String(1000))
     active = db.Column(db.Boolean)
     date_created = db.Column(db.Integer)
+    game = db.Column(db.String(50), nullable=True)  # New column added here
 
-    def __init__(self, in_comm_id, in_tag_name, in_tag_type, in_desc):
+    def __init__(self, in_comm_id, in_tag_name, in_tag_type, in_desc, in_game = None):
         self.community_id = in_comm_id
         self.name = in_tag_name
         self.name_lowercase = lower_and_remove_nonalphanumeric(in_tag_name)
@@ -626,6 +627,7 @@ class Tag(db.Model):
         self.desc = in_desc
         self.active = True
         self.date_created = int( time.time() )
+        self.game = in_game
     
     def to_dict(self):
         return {
@@ -635,7 +637,8 @@ class Tag(db.Model):
             'type': self.tag_type,
             'desc': self.desc,
             'active': self.active,
-            'date_created': self.date_created
+            'date_created': self.date_created,
+            'game' : self.game
         }
 
 class GeckoCodeTag(db.Model):
@@ -671,18 +674,20 @@ class TagSet(db.Model):
     type = db.Column(db.String(100)) #Season, league, tournament.
     start_date = db.Column(db.Integer)
     end_date = db.Column(db.Integer)
+    game = db.Column(db.String(50), nullable=False)  # New column added here
 
     tags = db.relationship('Tag', secondary=tagsettag, backref='tagset', cascade='delete')
 
     ladder = db.relationship('Ladder', backref='tag_set')
 
-    def __init__(self, in_comm_id, in_name, in_type, in_start, in_end):
+    def __init__(self, in_comm_id, in_name, in_type, in_start, in_end, in_game):
         self.community_id = in_comm_id
         self.name = in_name
         self.name_lowercase = lower_and_remove_nonalphanumeric(in_name)
         self.type = in_type
         self.start_date = in_start
         self.end_date = in_end
+        self.game = in_game
     
     def to_dict(self, include_tags=True):
         ret_dict = {
@@ -692,6 +697,7 @@ class TagSet(db.Model):
             'type': self.type,
             'start_date': self.start_date,
             'end_date': self.end_date,
+            'game' : self.game
         }
         if (include_tags):
             ret_dict['tags'] = self.expand_tag_list()

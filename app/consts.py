@@ -62,9 +62,15 @@ cCOMM_TYPES = {
     1: "Unofficial",
 }
 
+cGAMES = {
+    "GYQE01": "MarioSuperstarBaseball",
+    "GFTE01": "MarioGolfToadstoolTour"
+}
+
 cPATREON_TIERS = ['Patron: Fan', 'Patron: Rookie', 'Patron: MVP', 'Patron: Hall of Famer']
 
 cACTIVE_TAGSET_LIMIT = 5
+
 
 cCHAR_ALIASES = {
     "Mario": 0,

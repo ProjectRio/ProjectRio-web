@@ -20,6 +20,7 @@ def tag_create():
     in_tag_desc = request.json['desc']
     in_tag_comm_name = request.json['community_name']
     in_tag_type = request.json['type']
+    in_game = request.json['game']
 
     #Fields for gecko codes only
     gecko_code_desc_provided = request.is_json and 'gecko_code_desc' in request.json
@@ -66,7 +67,7 @@ def tag_create():
         return abort(409, description='User not a part of community or not an admin')
 
     # === Tag Creation ===
-    new_tag = Tag( in_comm_id=comm.id, in_tag_name=in_tag_name, in_tag_type=in_tag_type, in_desc=in_tag_desc)
+    new_tag = Tag( in_comm_id=comm.id, in_tag_name=in_tag_name, in_tag_type=in_tag_type, in_desc=in_tag_desc, in_game=in_game)
     db.session.add(new_tag)
     db.session.commit()
 
@@ -230,6 +231,7 @@ def tagset_create():
     in_tag_set_desc = request.json['desc']
     in_tag_set_type = request.json['type']
     in_tag_set_comm_name = request.json['community_name']
+    in_game = request.json['game']
 
     # Add new tags to tag_set
     add_tags_provided = request.is_json and 'add_tag_ids' in request.json
@@ -297,9 +299,6 @@ def tagset_create():
         if comm.comm_type != 'Official' and (result_dict['active_tag_sets'] >= result_dict['tag_set_limit']):
             return abort(415, description='Community has reached active tag_set_limit')
 
-    
-
-
     tags = list()
     # If TagSet is provided, get all tags
     if in_tag_set_id != None:
@@ -322,12 +321,12 @@ def tagset_create():
             tags.append(tag)
             
     # === Tag Set Creation ===
-    new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name,in_type=in_tag_set_type, in_start=in_tag_set_start_date, in_end=in_tag_set_end_date)
+    new_tag_set = TagSet(in_comm_id=comm.id, in_name=in_tag_set_name,in_type=in_tag_set_type, in_start=in_tag_set_start_date, in_end=in_tag_set_end_date, in_game=in_game)
     db.session.add(new_tag_set)
     db.session.commit()
 
     # === Tag Creation ===
-    new_tag_set_tag = Tag( in_comm_id=comm.id, in_tag_name=in_tag_set_name, in_tag_type="Competition", in_desc=in_tag_set_desc)
+    new_tag_set_tag = Tag( in_comm_id=comm.id, in_tag_name=in_tag_set_name, in_tag_type="Competition", in_desc=in_tag_set_desc, in_game=in_game)
     db.session.add(new_tag_set_tag)
     db.session.commit()
     tags.append(new_tag_set_tag)
@@ -447,6 +446,11 @@ def tagset_list():
     active_only = request.is_json and 'Active' in request.json and request.json['Active'].lower() in ['yes', 'y', 'true', 't']
     communities_provided = request.is_json and 'Communities' in request.json
     community_id_list = request.json.get('Communities') if communities_provided else list()
+    
+    game_id = request.json['game_id'] if request.is_json and 'game_id' in request.json else None
+    
+    if (game_id == 'GFTE01'):
+        return {"Tag Sets": []} # Do not return TagSets for MGTT yet
 
     return_combined_gecko_codes = request.json['combine_codes'] if request.is_json and 'combine_codes' in request.json else None
 
@@ -582,6 +586,9 @@ def tag_set_update():
     # Remove tags from tag_set
     remove_tags_provided = request.is_json and 'remove_tag_ids' in request.json
     remove_tag_ids = request.json['remove_tag_ids'] if remove_tags_provided else None
+    
+    game_provided = request.is_json and 'game' in request.json
+    game = request.json['game'] if game_provided else None
 
     if (start_date_provided and end_date_provided and new_start_date > new_end_date):
         return abort(412, description='Invalid start/end times')
@@ -599,6 +606,8 @@ def tag_set_update():
         return abort(413, description='Invalid start/end times')
     if (not start_date_provided and end_date_provided and tag_set.start_date > new_end_date):
         return abort(414, description='Invalid start/end times')
+    if game_provided and game not in cGAMES.keys():
+        return abort(415, description='Game not valid')
 
     #Make sure user is admin of community or Rio admin
     user=get_user(request)
@@ -644,6 +653,8 @@ def tag_set_update():
         tag_set.start_date = new_start_date
     if end_date_provided:
         tag_set.end_date = new_end_date
+    if game_provided:
+        tag_set.game = game
     if add_tags_provided:
         # Validate all add_tag_ids
         for id in add_tag_ids:
