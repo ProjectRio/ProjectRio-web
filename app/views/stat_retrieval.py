@@ -1002,38 +1002,50 @@ def endpoint_star_chances():
       the large return dict at each step
 
 @ URL example: http://127.0.0.1:5000/stats/?username=demouser1&character=1&by_swing=1
+
+TODO: Add character name lookup
 '''
 @app.route('/stats/', methods = ['GET'])
 def endpoint_detailed_stats():
 
-    #Sanitize games params 
-    list_of_game_ids = list() # Holds IDs for all the games we want data from
-    if (len(request.args.getlist('games')) != 0):
-        list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
-        list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
-        if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
-            return abort(408, description='Provided GameIDs not found')
+    game_ids_param = request.args.getlist('games')
 
+    if game_ids_param:
+        try:
+            game_ids = set([int(game_id) for game_id in game_ids_param])
+        except ValueError:
+            return abort(400, description='Invalid game ID format. Games must be integers and separated by commas.')
+        
+        # Verify all game IDs exist in database
+        existing_game_ids = {
+            gid for (gid,) in db.session.query(Game.game_id)
+            .filter(Game.game_id.in_(game_ids))
+            .all()
+        }
+        
+        missing_ids = game_ids - existing_game_ids
+        if missing_ids:
+            return abort(404, description=f'Game IDs not found: {missing_ids}')
     else:
-        games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-        for game_id in games['game_ids']:
-            list_of_game_ids.append(game_id)
-        if len(list_of_game_ids) == 0:
-            return abort(409, description='No games found for provided parameters')
+        games = endpoint_games(True)
+        game_ids = list(games['game_ids'])
+        if not game_ids:
+            return abort(404, description='No games found for provided parameters')
 
     # Sanitize character params
-    try:
-        list_of_char_ids = request.args.getlist('char_id')
-        for index, char_id in enumerate(list_of_char_ids):
-            sanitized_id = int(list_of_char_ids[index])
-            if sanitized_id in range (0,55):
-                list_of_char_ids[index] = sanitized_id
-            else:
-                return abort(400, description = "Char ID not in range")
-    except:
-        return abort(400, description="Invalid Char Id")
+    list_of_char_ids = request.args.getlist('char_id')
+    for index, char_id in enumerate(list_of_char_ids):
+        try:
+            sanitized_id = int(char_id)
+        except ValueError:
+            return abort(400, description = f"Char ID {char_id} must be an integer")
+        
+        if sanitized_id in range (0,55):
+            list_of_char_ids[index] = sanitized_id
+        else:
+            return abort(400, description = f"Char ID {char_id} not in range")
 
-    tuple_of_game_ids = tuple(list_of_game_ids)
+    tuple_of_game_ids = tuple(game_ids)
     tuple_char_ids = tuple(list_of_char_ids)
     group_by_user = (request.args.get('by_user') == '1')
     group_by_swing = (request.args.get('by_swing') == '1')
@@ -1046,23 +1058,26 @@ def endpoint_detailed_stats():
     exclude_misc_stats = (request.args.get('exclude_misc') == '1')
     exclude_fielding_stats = (request.args.get('exclude_fielding') == '1')
 
-    usernames = request.args.getlist('username')
-    usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in usernames])
-    #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-    list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
-    # using list comprehension
-    list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
-
-    tuple_user_ids = tuple(list_of_user_id)
-
-    #If we didn't find every user provided in the DB, abort
-    if (len(tuple_user_ids) != len(usernames)):
-        return abort(408, description='Provided Usernames not found')
-
-    #If a char was provided that is not 0-54 abort
-    invalid_chars=[i for i in tuple_char_ids if int(i) not in range(0,55)]
-    if len(invalid_chars) > 0:
-        return abort(408, description='Invalid provided characters')
+    usernames_param = request.args.getlist('username')
+    if usernames_param:
+        usernames_normalized = set([lower_and_remove_nonalphanumeric(username) for username in usernames_param])
+        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
+        tuple_user_ids = set([
+            uid for (uid,) in db.session.query(RioUser.id)
+            .filter(RioUser.username_lowercase.in_(usernames_normalized))
+            .all()
+        ])
+        if len(tuple_user_ids) != len(usernames_param):
+            # Find which usernames weren't found
+            found_usernames = {
+                username for (username,) in db.session.query(RioUser.username)
+                .filter(RioUser.username_lowercase.in_(usernames_normalized))
+                .all()
+            }
+            missing = set(usernames_param) - found_usernames
+            return abort(404, description=f'Users not found: {missing}')
+    else:
+        tuple_user_ids = set()
 
     
     # Individual functions create queries to get their respective stats
