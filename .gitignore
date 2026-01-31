@@ -5,3 +5,4 @@ TODO.md
 local_postgres_setup_instructions.md.rtf
 endpoint_log.log
 Dockerfile
+/venv
