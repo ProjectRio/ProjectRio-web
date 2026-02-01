@@ -1010,12 +1010,14 @@ TODO: Add character name lookup
 def endpoint_detailed_stats():
 
     game_ids_param = request.args.getlist('games')
-
     if game_ids_param:
         try:
-            game_ids = set([int(game_id) for game_id in game_ids_param])
-        except ValueError:
-            return abort(400, description='Invalid game ID format. Games must be integers and separated by commas.')
+            game_ids = {int(game_id) for game_id in game_ids_param}
+        except ValueError as e:
+            abort(
+                400,
+                description=f"Invalid game ID (must be int): {e.args[0]}"
+            )
         
         # Verify all game IDs exist in database
         stmt = select(Game.game_id).where(Game.game_id.in_(game_ids))
@@ -1026,25 +1028,26 @@ def endpoint_detailed_stats():
             return abort(404, description=f'Game IDs not found: {missing_ids}')
     else:
         games = endpoint_games(True)
-        game_ids = list(games['game_ids'])
+        game_ids = set(games['game_ids'])
         if not game_ids:
             return abort(404, description='No games found for provided parameters')
 
     # Sanitize character params
-    list_of_char_ids = request.args.getlist('char_id')
-    for index, char_id in enumerate(list_of_char_ids):
+    char_id_param = request.args.getlist('char_id')
+    char_ids = set()
+    if char_id_param:
         try:
-            sanitized_id = int(char_id)
-        except ValueError:
-            return abort(400, description = f"Char ID {char_id} must be an integer")
+            char_ids = {int(char_id) for char_id in char_id_param}
+        except ValueError as e:
+            abort(
+                400,
+                description=f"Invalid Char ID (must be int): {e.args[0]}"
+            )
         
-        if sanitized_id in range (0,55):
-            list_of_char_ids[index] = sanitized_id
-        else:
-            return abort(400, description = f"Char ID {char_id} not in range")
+        invalid_ids = {cid for cid in char_ids if not 0 <= cid <= 54}
+        if invalid_ids:
+            abort(400, description=f"Char IDs out of range (0–54): {invalid_ids}")
 
-    tuple_of_game_ids = tuple(game_ids)
-    tuple_char_ids = tuple(list_of_char_ids)
     group_by_user = (request.args.get('by_user') == '1')
     group_by_swing = (request.args.get('by_swing') == '1')
     group_by_char = (request.args.get('by_char') == '1')
@@ -1057,6 +1060,7 @@ def endpoint_detailed_stats():
     exclude_fielding_stats = (request.args.get('exclude_fielding') == '1')
 
     usernames_param = request.args.getlist('username')
+    user_ids = set()
     if usernames_param:
         usernames_normalized = set([lower_and_remove_nonalphanumeric(username) for username in usernames_param])
         
@@ -1073,20 +1077,16 @@ def endpoint_detailed_stats():
         if missing_usernames:
             return abort(404, description=f'Users not found: {missing_usernames}')
 
-    else:
-        user_ids = set()
-
     # Individual functions create queries to get their respective stats
     return_dict = {}
     if (not exclude_batting_stats):
-        batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
+        batting_stats = query_detailed_batting_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
     if (not exclude_pitching_stats):
-        pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, user_ids, tuple_char_ids, group_by_user, group_by_char)
+        pitching_stats = query_detailed_pitching_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char)
     if (not exclude_misc_stats):
-        misc_stats = query_detailed_misc_stats(return_dict, tuple_of_game_ids, user_ids, tuple_char_ids, group_by_user, group_by_char)
+        misc_stats = query_detailed_misc_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char)
     if (not exclude_fielding_stats):
-        fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, user_ids, tuple_char_ids, group_by_user, group_by_char)
-
+        fielding_stats = query_detailed_fielding_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char)
     return {
         'Stats': return_dict
     }
