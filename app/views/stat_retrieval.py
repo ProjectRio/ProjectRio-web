@@ -1,10 +1,10 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet, PitchSummary, ContactSummary
 from ..consts import *
 from ..util import *
-from sqlalchemy import select
+from sqlalchemy import select, func, case
 import pprint
 import time
 import datetime
@@ -1046,7 +1046,7 @@ def endpoint_detailed_stats():
         
         invalid_ids = {cid for cid in char_ids if not 0 <= cid <= 54}
         if invalid_ids:
-            abort(400, description=f"Char IDs out of range (0–54): {invalid_ids}")
+            abort(400, description=f"Char IDs out of range (0-54): {invalid_ids}")
 
     group_by_user = (request.args.get('by_user') == '1')
     group_by_swing = (request.args.get('by_swing') == '1')
@@ -1093,75 +1093,90 @@ def endpoint_detailed_stats():
 
 def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False, group_by_swing=False, exclude_nonfair=False):
 
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
+    select_cols = []
+    group_cols = []
 
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    if group_by_user:
+        select_cols.append(RioUser.username.label('username'))
+        group_cols.append(RioUser.username)
 
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
+    if group_by_char:
+        select_cols.append(Character.char_id.label('char_id'))
+        select_cols.append(Character.name.label('char_name'))
+        group_cols.append(Character.char_id)
+        group_cols.append(Character.name)
 
-    by_swing = 'pitch_summary.type_of_swing' if group_by_swing else ''
-    select_swing = 'pitch_summary.type_of_swing AS type_of_swing, \n' if group_by_swing else ''
+    # There will always be game ids
+    filters = [CharacterGameSummary.game_id.in_(game_ids)]
 
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char, by_swing]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-    contact_batting_query = (
+    if user_ids:
+        filters.append(CharacterGameSummary.user_id.in_(user_ids))
+    if char_ids:
+        filters.append(CharacterGameSummary.char_id.in_(char_ids))
         
-        'SELECT \n'
-        f"{select_user}"
-        f"{select_char}"
-        f"{select_swing}"
-        'COUNT(CASE WHEN (contact_summary.primary_result = 0) THEN 1 ELSE NULL END) AS outs, \n'
-        'COUNT(CASE WHEN contact_summary.primary_result = 1 THEN 1 ELSE NULL END) AS foul_hits, \n'
-        'COUNT(CASE WHEN (contact_summary.primary_result = 2 OR contact_summary.primary_result = 3) THEN 1 ELSE NULL END) AS fair_hits, \n'
-        'COUNT(CASE WHEN (contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) THEN 1 ELSE NULL END) AS sour_hits, '
-        'COUNT(CASE WHEN (contact_summary.type_of_contact = 1 OR contact_summary.type_of_contact = 3) THEN 1 ELSE NULL END) AS nice_hits, '
-        'COUNT(CASE WHEN contact_summary.type_of_contact = 2 THEN 1 ELSE NULL END) AS perfect_hits, '
-        'COUNT(CASE WHEN contact_summary.secondary_result = 7 THEN 1 ELSE NULL END) AS singles, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 8 THEN 1 ELSE NULL END) AS doubles, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 9 THEN 1 ELSE NULL END) AS triples, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
-        'COUNT(CASE WHEN event.result_of_ab = 1 THEN 1 ELSE NULL END) AS strikeouts, \n'
-        'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
-        'SUM(event.result_rbi) AS rbi '
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN event ON character_game_summary.id = event.batter_id \n'
-        'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'LEFT JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
-       f"   {'AND contact_summary.primary_result != 1' if exclude_nonfair else ''} \n"
-        'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+    contact_join_condition = (PitchSummary.contact_summary_id == ContactSummary.id)
+    if exclude_nonfair:
+        contact_join_condition = contact_join_condition & (ContactSummary.primary_result != 1)
+
+    non_contact_batting_query = (
+        select(
+            *select_cols,
+            func.sum(CharacterGameSummary.walks_bb).label('summary_walks_bb'),
+            func.sum(CharacterGameSummary.walks_hit).label('summary_walks_hbp'),
+            func.sum(CharacterGameSummary.strikeouts).label('summary_strikeouts'),
+            func.sum(CharacterGameSummary.singles).label('summary_singles'),
+            func.sum(CharacterGameSummary.doubles).label('summary_doubles'),
+            func.sum(CharacterGameSummary.triples).label('summary_triples'),
+            func.sum(CharacterGameSummary.homeruns).label('summary_homeruns'),
+            func.sum(CharacterGameSummary.sac_flys).label('summary_sac_flys'),
+            func.sum(CharacterGameSummary.rbi).label('summary_rbi'),
+            func.sum(CharacterGameSummary.at_bats).label('summary_at_bats'),
+            func.sum(CharacterGameSummary.hits).label('summary_hits'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
 
-    #Redo groups, removing swing type
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-    non_contact_batting_query = ( 
-        'SELECT \n'
-       f"{select_user}"
-       f"{select_char}"
-        'SUM(character_game_summary.walks_bb) AS summary_walks_bb, \n'
-        'SUM(character_game_summary.walks_hit) AS summary_walks_hbp, \n'
-        'SUM(character_game_summary.strikeouts) AS summary_strikeouts, \n'
-        'SUM(character_game_summary.singles) AS summary_singles, \n'
-        'SUM(character_game_summary.doubles) AS summary_doubles, \n'
-        'SUM(character_game_summary.triples) AS summary_triples, \n'
-        'SUM(character_game_summary.homeruns) AS summary_homeruns, \n'
-        'SUM(character_game_summary.sac_flys) AS summary_sac_flys, \n'
-        'SUM(character_game_summary.rbi) AS summary_rbi, \n'
-        'SUM(character_game_summary.at_bats) AS summary_at_bats, \n'
-        'SUM(character_game_summary.hits) AS summary_hits \n'
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+    if group_cols:
+        non_contact_batting_query = non_contact_batting_query.group_by(*group_cols)
+
+    #non contact would not have swing type so we don't add it until here
+    if group_by_swing:
+        select_cols.append(PitchSummary.type_of_swing.label('type_of_swing'))
+        group_cols.append(PitchSummary.type_of_swing)
+
+    contact_batting_query = (
+        select(
+            *select_cols,
+            func.count(case((ContactSummary.primary_result == 0, 1))).label('outs'),
+            func.count(case((ContactSummary.primary_result == 1, 1))).label('foul_hits'),
+            func.count(case(((ContactSummary.primary_result == 2) | (ContactSummary.primary_result == 3), 1))).label('fair_hits'),
+            func.count(case(((ContactSummary.type_of_contact == 0) | (ContactSummary.type_of_contact == 4), 1))).label('sour_hits'),
+            func.count(case(((ContactSummary.type_of_contact == 1) | (ContactSummary.type_of_contact == 3), 1))).label('nice_hits'),
+            func.count(case((ContactSummary.type_of_contact == 2, 1))).label('perfect_hits'),
+            func.count(case((ContactSummary.secondary_result == 7, 1))).label('singles'),
+            func.count(case((ContactSummary.secondary_result == 8, 1))).label('doubles'),
+            func.count(case((ContactSummary.secondary_result == 9, 1))).label('triples'),
+            func.count(case((ContactSummary.secondary_result == 10, 1))).label('homeruns'),
+            func.count(case((ContactSummary.secondary_result == 14, 1))).label('sacflys'),
+            func.count(case((Event.result_of_ab == 1, 1))).label('strikeouts'),
+            func.count(case((Event.result_of_ab != 0, 1))).label('plate_appearances'),
+            func.sum(Event.result_rbi).label('rbi'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(Event, CharacterGameSummary.id == Event.batter_id)
+        .join(PitchSummary, PitchSummary.id == Event.pitch_summary_id)
+        .outerjoin(ContactSummary, contact_join_condition)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        contact_batting_query = contact_batting_query.group_by(*group_cols)
+
     contact_batting_results = db.session.execute(contact_batting_query).all()
     non_contact_batting_results = db.session.execute(non_contact_batting_query).all()
 
