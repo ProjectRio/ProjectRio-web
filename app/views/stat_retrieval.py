@@ -1180,65 +1180,80 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     contact_batting_results = db.session.execute(contact_batting_query).all()
     non_contact_batting_results = db.session.execute(non_contact_batting_query).all()
 
-    batting_stats = {}
     for result_row in contact_batting_results:
         update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char, group_by_swing)
     for result_row in non_contact_batting_results:
         update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char)
 
-    return batting_stats
+    return
 
 def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
 
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
+    select_cols = []
+    group_cols = []
 
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    if group_by_user:
+        select_cols.append(RioUser.username.label('username'))
+        group_cols.append(RioUser.username)
 
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
+    if group_by_char:
+        select_cols.append(Character.char_id.label('char_id'))
+        select_cols.append(Character.name.label('char_name'))
+        group_cols.append(Character.char_id)
+        group_cols.append(Character.name)
 
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    filters = [CharacterGameSummary.game_id.in_(game_ids)]
+
+    if user_ids:
+        filters.append(CharacterGameSummary.user_id.in_(user_ids))
+    if char_ids:
+        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+
     pitching_summary_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'SUM(character_game_summary.batters_faced) AS batters_faced, \n'
-        'SUM(character_game_summary.runs_allowed) AS runs_allowed, \n'
-        'SUM(character_game_summary.hits_allowed) AS hits_allowed, \n'
-        'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, \n'
-        'SUM(character_game_summary.star_pitches_thrown) AS star_pitches_thrown, \n'
-        'SUM(character_game_summary.outs_pitched) AS outs_pitched, \n'
-        'SUM(character_game_summary.batters_walked) AS walks_bb, \n'
-        'SUM(character_game_summary.batters_hit) AS walks_hbp, \n'
-        'SUM(character_game_summary.pitches_thrown) AS total_pitches \n'
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            func.sum(CharacterGameSummary.batters_faced).label('batters_faced'),
+            func.sum(CharacterGameSummary.runs_allowed).label('runs_allowed'),
+            func.sum(CharacterGameSummary.hits_allowed).label('hits_allowed'),
+            func.sum(CharacterGameSummary.strikeouts_pitched).label('strikeouts_pitched'),
+            func.sum(CharacterGameSummary.star_pitches_thrown).label('star_pitches_thrown'),
+            func.sum(CharacterGameSummary.outs_pitched).label('outs_pitched'),
+            func.sum(CharacterGameSummary.batters_walked).label('walks_bb'),
+            func.sum(CharacterGameSummary.batters_hit).label('walks_hbp'),
+            func.sum(CharacterGameSummary.pitches_thrown).label('total_pitches'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        pitching_summary_query = pitching_summary_query.group_by(*group_cols)
 
     pitch_breakdown_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
-        'COUNT(CASE WHEN ('
-            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id IS NULL) OR'
-            '(pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing > 0)'
-            ') THEN 1 ELSE NULL END) AS strikes \n'
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN event ON character_game_summary.id = event.pitcher_id \n'
-        'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'LEFT JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            func.count(case((
+                (PitchSummary.in_strikezone == False) & (PitchSummary.type_of_swing == 0),
+                1
+            ))).label('balls'),
+            func.count(case((
+                ((PitchSummary.in_strikezone == True) & PitchSummary.contact_summary_id.is_(None)) |
+                ((PitchSummary.in_strikezone == False) & (PitchSummary.type_of_swing > 0)),
+                1
+            ))).label('strikes'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(Event, CharacterGameSummary.id == Event.pitcher_id)
+        .join(PitchSummary, PitchSummary.id == Event.pitch_summary_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        pitch_breakdown_query = pitch_breakdown_query.group_by(*group_cols)
 
     pitching_summary_results = db.session.execute(pitching_summary_query).all()
     pitch_breakdown_results = db.session.execute(pitch_breakdown_query).all()
