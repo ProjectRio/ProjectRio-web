@@ -1,7 +1,7 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet, PitchSummary, ContactSummary
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet, PitchSummary, ContactSummary, CharacterPositionSummary, FieldingSummary
 from ..consts import *
 from ..util import *
 from sqlalchemy import select, func, case
@@ -1334,65 +1334,76 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
 
 def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
 
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
+    select_cols = []
+    group_cols = []
 
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    if group_by_user:
+        select_cols.append(RioUser.username.label('username'))
+        group_cols.append(RioUser.username)
 
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
+    if group_by_char:
+        select_cols.append(Character.char_id.label('char_id'))
+        select_cols.append(Character.name.label('char_name'))
+        group_cols.append(Character.char_id)
+        group_cols.append(Character.name)
 
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    filters = [CharacterGameSummary.game_id.in_(game_ids)]
+
+    if user_ids:
+        filters.append(CharacterGameSummary.user_id.in_(user_ids))
+    if char_ids:
+        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+
     position_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'SUM(pitches_at_p) AS pitches_per_p, \n'
-        'SUM(pitches_at_c) AS pitches_per_c, \n'
-        'SUM(pitches_at_1b) AS pitches_per_1b, \n'
-        'SUM(pitches_at_2b) AS pitches_per_2b, \n'
-        'SUM(pitches_at_3b) AS pitches_per_3b, \n'
-        'SUM(pitches_at_ss) AS pitches_per_ss, \n'
-        'SUM(pitches_at_lf) AS pitches_per_lf, \n'
-        'SUM(pitches_at_cf) AS pitches_per_cf, \n'
-        'SUM(pitches_at_rf) AS pitches_per_rf, \n'
-        'SUM(outs_at_p) AS outs_per_p, \n'
-        'SUM(outs_at_c) AS outs_per_c, \n'
-        'SUM(outs_at_1b) AS outs_per_1b, \n'
-        'SUM(outs_at_2b) AS outs_per_2b, \n'
-        'SUM(outs_at_3b) AS outs_per_3b, \n'
-        'SUM(outs_at_ss) AS outs_per_ss, \n'
-        'SUM(outs_at_lf) AS outs_per_lf, \n'
-        'SUM(outs_at_cf) AS outs_per_cf, \n'
-        'SUM(outs_at_rf) AS outs_per_rf \n'
-        #SUM( Insert other stats once questions addressed
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN character_position_summary ON character_position_summary.id = character_game_summary.character_position_summary_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            func.sum(CharacterPositionSummary.pitches_at_p).label('pitches_per_p'),
+            func.sum(CharacterPositionSummary.pitches_at_c).label('pitches_per_c'),
+            func.sum(CharacterPositionSummary.pitches_at_1b).label('pitches_per_1b'),
+            func.sum(CharacterPositionSummary.pitches_at_2b).label('pitches_per_2b'),
+            func.sum(CharacterPositionSummary.pitches_at_3b).label('pitches_per_3b'),
+            func.sum(CharacterPositionSummary.pitches_at_ss).label('pitches_per_ss'),
+            func.sum(CharacterPositionSummary.pitches_at_lf).label('pitches_per_lf'),
+            func.sum(CharacterPositionSummary.pitches_at_cf).label('pitches_per_cf'),
+            func.sum(CharacterPositionSummary.pitches_at_rf).label('pitches_per_rf'),
+            func.sum(CharacterPositionSummary.outs_at_p).label('outs_per_p'),
+            func.sum(CharacterPositionSummary.outs_at_c).label('outs_per_c'),
+            func.sum(CharacterPositionSummary.outs_at_1b).label('outs_per_1b'),
+            func.sum(CharacterPositionSummary.outs_at_2b).label('outs_per_2b'),
+            func.sum(CharacterPositionSummary.outs_at_3b).label('outs_per_3b'),
+            func.sum(CharacterPositionSummary.outs_at_ss).label('outs_per_ss'),
+            func.sum(CharacterPositionSummary.outs_at_lf).label('outs_per_lf'),
+            func.sum(CharacterPositionSummary.outs_at_cf).label('outs_per_cf'),
+            func.sum(CharacterPositionSummary.outs_at_rf).label('outs_per_rf'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(CharacterPositionSummary, CharacterPositionSummary.id == CharacterGameSummary.character_position_summary_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        position_query = position_query.group_by(*group_cols)
 
     fielding_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'COUNT(CASE WHEN fielding_summary.action = 1 THEN 1 ELSE NULL END) AS jump_catches, \n'
-        'COUNT(CASE WHEN fielding_summary.action = 2 THEN 1 ELSE NULL END) AS diving_catches, \n'
-        'COUNT(CASE WHEN fielding_summary.action = 3 THEN 1 ELSE NULL END) AS wall_jumps, \n'
-        'SUM(CASE WHEN fielding_summary.swap = True THEN 1 ELSE 0 END) AS swap_successes, \n'
-        'COUNT(CASE WHEN fielding_summary.bobble != 0 THEN 1 ELSE NULL END) AS bobbles \n'
-        #SUM( Insert other stats once questions addressed
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN fielding_summary ON fielding_summary.fielder_character_game_summary_id = character_game_summary.id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            func.count(case((FieldingSummary.action == 1, 1))).label('jump_catches'),
+            func.count(case((FieldingSummary.action == 2, 1))).label('diving_catches'),
+            func.count(case((FieldingSummary.action == 3, 1))).label('wall_jumps'),
+            func.sum(case((FieldingSummary.swap == True, 1), else_=0)).label('swap_successes'),
+            func.count(case((FieldingSummary.bobble != 0, 1))).label('bobbles'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(FieldingSummary, FieldingSummary.fielder_character_game_summary_id == CharacterGameSummary.id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        fielding_query = fielding_query.group_by(*group_cols)
 
     position_results = db.session.execute(position_query).all()
     fielding_results = db.session.execute(fielding_query).all()
