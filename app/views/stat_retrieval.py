@@ -1264,48 +1264,67 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     return
 
 def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
 
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    select_cols = []
+    group_cols = []
 
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
-
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    if group_by_user:
+        select_cols.append(RioUser.username.label('username'))
+        group_cols.append(RioUser.username)
 
     if group_by_char:
-        divide_by = 1
+        select_cols.append(Character.char_id.label('char_id'))
+        select_cols.append(Character.name.label('char_name'))
+        group_cols.append(Character.char_id)
+        group_cols.append(Character.name)
+
+    filters = [CharacterGameSummary.game_id.in_(game_ids)]
+
+    if user_ids:
+        filters.append(CharacterGameSummary.user_id.in_(user_ids))
+    if char_ids:
+        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+
+    # CharacterGameSummary stores 9 rows per game (one per character).
+    # When filtering by specific chars: count "character-wins" (each char gets credit per win)
+    # When viewing all chars: normalize to "games won" (avoid counting same game 9 times)
+    if group_by_char:
+        divide_by = 1  # Each char gets separate row - no normalization needed
     elif len(char_ids) > 0:
-        divide_by = len(char_ids)
+        divide_by = 1  # Sum character-wins - each filtered char gets credit for each win
     else:
-        divide_by = 9
+        divide_by = 9  # Normalize to games won (9 char-rows per game → 1 game)
 
     query = (
-        'SELECT '
-       f"{select_user}"
-       f"{select_char}"
-       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS away_wins, \n"
-       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS away_loses, \n"
-       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS home_wins, \n"
-       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS home_loses, \n"      
-       f"COUNT(*)/{divide_by} AS game_appearances \n "
-        # 'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
-        # 'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
-        # 'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
-        # 'SUM(character_game_summary.offensive_stars_put_in_play) AS offensive_stars_put_in_play, \n'
-        # 'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
-        # 'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
-        # 'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
-        'FROM character_game_summary \n'
-        'JOIN game ON character_game_summary.game_id = game.game_id \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            (func.sum(case((
+                (Game.away_score > Game.home_score) & (Game.away_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('away_wins'),
+            (func.sum(case((
+                (Game.away_score < Game.home_score) & (Game.away_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('away_loses'),
+            (func.sum(case((
+                (Game.home_score > Game.away_score) & (Game.home_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('home_wins'),
+            (func.sum(case((
+                (Game.home_score < Game.away_score) & (Game.home_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('home_loses'),
+            (func.count() / divide_by).label('game_appearances'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Game, CharacterGameSummary.game_id == Game.game_id)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        query = query.group_by(*group_cols)
 
     results = db.session.execute(query).all()
     for result_row in results:
