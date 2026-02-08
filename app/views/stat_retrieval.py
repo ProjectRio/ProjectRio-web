@@ -5,7 +5,6 @@ from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Ev
 from ..consts import *
 from ..util import *
 from sqlalchemy import select, func, case
-import pprint
 import time
 import datetime
 import itertools
@@ -1414,126 +1413,46 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
     return
 
 def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_by_user=False, group_by_char=False, group_by_swing=False):
-    
-    #Transform SQLAlchemy result_row into a dict and remove extra fields
+    """
+    Update nested stat dictionary with result row data.
+
+    Builds nested dict structure: [username]? → [char_name]? → type_of_result → [swing_type]? → stat_data
+    Easy to extend with new grouping dimensions by adding to the path.
+    """
+    # Extract stat data and build navigation path
     data_dict = result_row._asdict()
-    if ('username' in data_dict): data_dict.pop('username')
-    if ('user_id' in data_dict): data_dict.pop('user_id')
-    if ('char_name' in data_dict): data_dict.pop('char_name')
-    if ('char_id' in data_dict): data_dict.pop('char_id')
-    if ('type_of_swing' in data_dict): data_dict.pop('type_of_swing')
+    path = []
 
+    # Add username level if grouping by user
     if group_by_user:
-        if result_row.username not in in_stat_dict:
-            in_stat_dict[result_row.username] = {}
+        path.append(result_row.username)
+        data_dict.pop('username', None)
+        data_dict.pop('user_id', None)
 
-        USER_DICT = in_stat_dict[result_row.username]
-    
-        #User=1, Char=1, Swing=X
-        if group_by_char:
-            if result_row.char_name not in USER_DICT:
-                USER_DICT[result_row.char_name] = {}
+    # Add char_name level if grouping by character
+    if group_by_char:
+        path.append(result_row.char_name)
+        data_dict.pop('char_name', None)
+        data_dict.pop('char_id', None)
 
-            CHAR_DICT = USER_DICT[result_row.char_name]
+    # Always add type_of_result level (Batting/Pitching/Fielding/Misc)
+    path.append(type_of_result)
 
-            #Look at result type
-            if (type_of_result == 'Batting'):
+    # Add swing_type level if grouping by swing (Batting only)
+    if group_by_swing and type_of_result == 'Batting':
+        swing_name = cTYPE_OF_SWING[result_row.type_of_swing]
+        path.append(swing_name)
+        data_dict.pop('type_of_swing', None)
 
-                if type_of_result not in CHAR_DICT:
-                    CHAR_DICT[type_of_result] = {}
+    # Navigate to target dict, creating nested dicts as needed
+    current_dict = in_stat_dict
+    for key in path:
+        if key not in current_dict:
+            current_dict[key] = {}
+        current_dict = current_dict[key]
 
-                #User=1, Char=1, Swing=1
-                if group_by_swing:
-                    BATTING_DICT = CHAR_DICT[type_of_result]
-
-                    if cTYPE_OF_SWING[result_row.type_of_swing] not in BATTING_DICT:
-                        BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-                    elif cTYPE_OF_SWING[result_row.type_of_swing] in BATTING_DICT:
-                        print('ERROR: FOUND PREVIOUS SWING TYPE')
-                        
-                    BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
-                
-                #User=1, Char=1, Swing=0
-                else:
-                    CHAR_DICT[type_of_result].update(data_dict)
-            
-            elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Misc'):
-                if type_of_result not in CHAR_DICT:
-                    CHAR_DICT[type_of_result] = {}
-                CHAR_DICT[type_of_result].update(data_dict)
-
-        #User=1, Char=0, Swing=1
-        elif group_by_swing and type_of_result == 'Batting':
-            if type_of_result not in USER_DICT:
-                USER_DICT[type_of_result] = {}
-            
-            if cTYPE_OF_SWING[result_row.type_of_swing] not in USER_DICT[type_of_result]:
-                USER_DICT[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-            elif USER_DICT[cTYPE_OF_SWING[result_row.type_of_swing]]:
-                print('ERROR: FOUND PREVIOUS SWING TYPE')
-                pprint(result_row._asdict())
-                
-            USER_DICT[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
-
-        #User=1, Char=0, Swing=0 if batting
-        else:
-            if type_of_result not in USER_DICT:
-                USER_DICT[type_of_result] = {}
-
-            USER_DICT[type_of_result].update(data_dict)
-
-    #User=0, Char=1, Swing=X
-    elif group_by_char:
-        if result_row.char_name not in in_stat_dict:
-            in_stat_dict[result_row.char_name] = {}
-
-        CHAR_DICT = in_stat_dict[result_row.char_name]
-
-        #Look at result type
-        if (type_of_result == 'Batting'):
-
-            #Build batting
-            if type_of_result not in CHAR_DICT:
-                CHAR_DICT[type_of_result] = {}
-
-            #User=0, Char=1, Swing=1
-            if group_by_swing:
-                BATTING_DICT = CHAR_DICT[type_of_result]
-
-                if cTYPE_OF_SWING[result_row.type_of_swing] not in BATTING_DICT:
-                    BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-                elif cTYPE_OF_SWING[result_row.type_of_swing] in BATTING_DICT:
-                    print('ERROR: FOUND PREVIOUS SWING TYPE')
-                    
-                BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
-            
-            #User=0, Char=1, Swing=0
-            else:
-                CHAR_DICT[type_of_result].update(data_dict)
-
-        elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Misc'):
-            if type_of_result not in CHAR_DICT:
-                CHAR_DICT[type_of_result] = {}
-            CHAR_DICT[type_of_result].update(data_dict)
-    
-    #User=0, Char=0, Swing=1
-    elif group_by_swing and type_of_result == 'Batting':
-        #Build batting
-        if type_of_result not in in_stat_dict:
-            in_stat_dict[type_of_result] = {}
-
-        if cTYPE_OF_SWING[result_row.type_of_swing] not in in_stat_dict[type_of_result]:
-            in_stat_dict[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-        elif cTYPE_OF_SWING[result_row.type_of_swing] in in_stat_dict[type_of_result]:
-            print('ERROR: FOUND PREVIOUS SWING TYPE')
-            
-        in_stat_dict[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
-
-    #User=0, Char=0, Swing=0
-    else:
-        if type_of_result not in in_stat_dict:
-            in_stat_dict[type_of_result] = {}
-        in_stat_dict[type_of_result].update(data_dict)
+    # Update final dict with stat data
+    current_dict.update(data_dict)
 
 @app.route('/stats/fix/', methods = ['GET'])
 def fix_event_cgs_ids():
