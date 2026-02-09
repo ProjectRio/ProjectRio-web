@@ -9,6 +9,82 @@ import time
 import datetime
 import itertools
 
+# === Parameterized Grouping Configuration ===
+# Universal grouping dimensions that apply to all stat types (Batting, Pitching, Fielding, Misc)
+# Stat-specific dimensions (e.g., by_swing for Batting) are handled separately in their respective functions
+#
+# To add a new universal grouping dimension (e.g., by_position, by_team):
+# 1. Add new entry to GROUPING_DIMENSIONS config below
+# 2. Add dimension name to GROUPING_ORDER list (order determines nesting depth)
+# 3. Add to active_dimensions dict in endpoint_detailed_stats() where request args are parsed
+#    Example: 'position': (request.args.get('by_position') == '1')
+# That's it! The dimension automatically flows through all query functions and update_detailed_stats_dict
+
+# Order of dimensions in the nested dict structure: user → char → stat_type → (stat-specific)
+GROUPING_ORDER = ['user', 'char']
+
+# Config field descriptions:
+# - select_cols: SQLAlchemy column expressions to include in SELECT clause (e.g., Character.name.label('char_name'))
+# - group_cols: SQLAlchemy columns for GROUP BY clause (must match select_cols for aggregation to work)
+# - path_key: Result row attribute name whose value becomes a dict key in the nested structure
+#             (e.g., 'char_name' → result_row.char_name = "Mario" → nested dict key: {"Mario": {...}})
+# - data_keys_to_remove: Keys to remove from stat data after using them for path navigation
+#                        (prevents duplication - "Mario" is a dict key, so remove from stat values)
+
+GROUPING_DIMENSIONS = {
+    'user': {
+        'select_cols': [RioUser.username.label('username')],
+        'group_cols': [RioUser.username],
+        'path_key': 'username',
+        'data_keys_to_remove': ['username', 'user_id'],
+    },
+    'char': {
+        'select_cols': [
+            Character.char_id.label('char_id'),
+            Character.name.label('char_name')
+        ],
+        'group_cols': [Character.char_id, Character.name],
+        'path_key': 'char_name',
+        'data_keys_to_remove': ['char_name', 'char_id'],
+    },
+}
+
+def _build_base_query_components(active_dimensions, game_ids, user_ids, char_ids):
+    """
+    Build common select_cols, group_cols, and filters for stat queries.
+
+    This extracts the repetitive setup logic shared across all stat query functions.
+    Uses GROUPING_DIMENSIONS config to dynamically build query components based on grouping flags.
+
+    Args:
+        active_dimensions: Dict of dimension_name -> bool (e.g., {'user': True, 'char': False})
+        game_ids: Set of game IDs to filter by (required)
+        user_ids: Set of user IDs to filter by (optional)
+        char_ids: Set of character IDs to filter by (optional)
+
+    Returns:
+        tuple: (select_cols, group_cols, filters) ready to use in SQLAlchemy queries
+    """
+    select_cols = []
+    group_cols = []
+
+    # Build select and group columns based on active grouping dimensions
+    # Iterate through dimensions in defined order
+    for dim_name in GROUPING_ORDER:
+        if active_dimensions.get(dim_name):
+            select_cols.extend(GROUPING_DIMENSIONS[dim_name]['select_cols'])
+            group_cols.extend(GROUPING_DIMENSIONS[dim_name]['group_cols'])
+
+    # Build filters - game_ids is always present
+    filters = [CharacterGameSummary.game_id.in_(game_ids)]
+
+    if user_ids:
+        filters.append(CharacterGameSummary.user_id.in_(user_ids))
+    if char_ids:
+        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+
+    return select_cols, group_cols, filters
+
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
     characters = []
@@ -1047,12 +1123,17 @@ def endpoint_detailed_stats():
         if invalid_ids:
             abort(400, description=f"Char IDs out of range (0-54): {invalid_ids}")
 
-    group_by_user = (request.args.get('by_user') == '1')
+    # Parse grouping dimension flags - centralized location for adding new dimensions
+    active_dimensions = {
+        'user': (request.args.get('by_user') == '1'),
+        'char': (request.args.get('by_char') == '1'),
+    }
+
+    # Stat-specific grouping flags
     group_by_swing = (request.args.get('by_swing') == '1')
-    group_by_char = (request.args.get('by_char') == '1')
     exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
 
-    #Stat exclussion flags
+    # Stat exclusion flags
     exclude_batting_stats = (request.args.get('exclude_batting') == '1')
     exclude_pitching_stats = (request.args.get('exclude_pitching') == '1')
     exclude_misc_stats = (request.args.get('exclude_misc') == '1')
@@ -1062,7 +1143,7 @@ def endpoint_detailed_stats():
     user_ids = set()
     if usernames_param:
         usernames_normalized = set([lower_and_remove_nonalphanumeric(username) for username in usernames_param])
-        
+
         stmt = select(RioUser.id, RioUser.username_lowercase).where(RioUser.username_lowercase.in_(usernames_normalized))
         results = db.session.execute(stmt).all()
 
@@ -1079,39 +1160,22 @@ def endpoint_detailed_stats():
     # Individual functions create queries to get their respective stats
     return_dict = {}
     if (not exclude_batting_stats):
-        batting_stats = query_detailed_batting_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
+        batting_stats = query_detailed_batting_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing, exclude_nonfair)
     if (not exclude_pitching_stats):
-        pitching_stats = query_detailed_pitching_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char)
+        pitching_stats = query_detailed_pitching_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions)
     if (not exclude_misc_stats):
-        misc_stats = query_detailed_misc_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char)
+        misc_stats = query_detailed_misc_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions)
     if (not exclude_fielding_stats):
-        fielding_stats = query_detailed_fielding_stats(return_dict, game_ids, user_ids, char_ids, group_by_user, group_by_char)
+        fielding_stats = query_detailed_fielding_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions)
     return {
         'Stats': return_dict
     }
 
-def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False, group_by_swing=False, exclude_nonfair=False):
+def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing=False, exclude_nonfair=False):
 
-    select_cols = []
-    group_cols = []
-
-    if group_by_user:
-        select_cols.append(RioUser.username.label('username'))
-        group_cols.append(RioUser.username)
-
-    if group_by_char:
-        select_cols.append(Character.char_id.label('char_id'))
-        select_cols.append(Character.name.label('char_name'))
-        group_cols.append(Character.char_id)
-        group_cols.append(Character.name)
-
-    # There will always be game ids
-    filters = [CharacterGameSummary.game_id.in_(game_ids)]
-
-    if user_ids:
-        filters.append(CharacterGameSummary.user_id.in_(user_ids))
-    if char_ids:
-        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids
+    )
         
     contact_join_condition = (PitchSummary.contact_summary_id == ContactSummary.id)
     if exclude_nonfair:
@@ -1141,7 +1205,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     if group_cols:
         non_contact_batting_query = non_contact_batting_query.group_by(*group_cols)
 
-    #non contact would not have swing type so we don't add it until here
+    # Stat-specific grouping: by_swing only applies to contact batting (not walks/HBP/strikeouts)
+    # This is added AFTER non_contact query since non-contact events don't have swing data
     if group_by_swing:
         select_cols.append(PitchSummary.type_of_swing.label('type_of_swing'))
         group_cols.append(PitchSummary.type_of_swing)
@@ -1180,33 +1245,17 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_
     non_contact_batting_results = db.session.execute(non_contact_batting_query).all()
 
     for result_row in contact_batting_results:
-        update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char, group_by_swing)
+        update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions, group_by_swing)
     for result_row in non_contact_batting_results:
-        update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions)
 
     return
 
-def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions):
 
-    select_cols = []
-    group_cols = []
-
-    if group_by_user:
-        select_cols.append(RioUser.username.label('username'))
-        group_cols.append(RioUser.username)
-
-    if group_by_char:
-        select_cols.append(Character.char_id.label('char_id'))
-        select_cols.append(Character.name.label('char_name'))
-        group_cols.append(Character.char_id)
-        group_cols.append(Character.name)
-
-    filters = [CharacterGameSummary.game_id.in_(game_ids)]
-
-    if user_ids:
-        filters.append(CharacterGameSummary.user_id.in_(user_ids))
-    if char_ids:
-        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids
+    )
 
     pitching_summary_query = (
         select(
@@ -1257,37 +1306,21 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group
     pitching_summary_results = db.session.execute(pitching_summary_query).all()
     pitch_breakdown_results = db.session.execute(pitch_breakdown_query).all()
     for result_row in pitching_summary_results:
-        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
     for result_row in pitch_breakdown_results:
-        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
     return
 
-def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions):
 
-    select_cols = []
-    group_cols = []
-
-    if group_by_user:
-        select_cols.append(RioUser.username.label('username'))
-        group_cols.append(RioUser.username)
-
-    if group_by_char:
-        select_cols.append(Character.char_id.label('char_id'))
-        select_cols.append(Character.name.label('char_name'))
-        group_cols.append(Character.char_id)
-        group_cols.append(Character.name)
-
-    filters = [CharacterGameSummary.game_id.in_(game_ids)]
-
-    if user_ids:
-        filters.append(CharacterGameSummary.user_id.in_(user_ids))
-    if char_ids:
-        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids
+    )
 
     # CharacterGameSummary stores 9 rows per game (one per character).
     # When filtering by specific chars: count "character-wins" (each char gets credit per win)
     # When viewing all chars: normalize to "games won" (avoid counting same game 9 times)
-    if group_by_char:
+    if active_dimensions.get('char'):
         divide_by = 1  # Each char gets separate row - no normalization needed
     elif len(char_ids) > 0:
         divide_by = 1  # Sum character-wins - each filtered char gets credit for each win
@@ -1327,31 +1360,15 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_
 
     results = db.session.execute(query).all()
     for result_row in results:
-        update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Misc', result_row, active_dimensions)
 
     return
 
-def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions):
 
-    select_cols = []
-    group_cols = []
-
-    if group_by_user:
-        select_cols.append(RioUser.username.label('username'))
-        group_cols.append(RioUser.username)
-
-    if group_by_char:
-        select_cols.append(Character.char_id.label('char_id'))
-        select_cols.append(Character.name.label('char_name'))
-        group_cols.append(Character.char_id)
-        group_cols.append(Character.name)
-
-    filters = [CharacterGameSummary.game_id.in_(game_ids)]
-
-    if user_ids:
-        filters.append(CharacterGameSummary.user_id.in_(user_ids))
-    if char_ids:
-        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids
+    )
 
     position_query = (
         select(
@@ -1407,38 +1424,41 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group
     position_results = db.session.execute(position_query).all()
     fielding_results = db.session.execute(fielding_query).all()
     for result_row in position_results:
-        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, active_dimensions)
     for result_row in fielding_results:
-        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, active_dimensions)
     return
 
-def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_by_user=False, group_by_char=False, group_by_swing=False):
+def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_dimensions, group_by_swing=False):
     """
     Update nested stat dictionary with result row data.
 
     Builds nested dict structure: [username]? → [char_name]? → type_of_result → [swing_type]? → stat_data
-    Easy to extend with new grouping dimensions by adding to the path.
+    Uses GROUPING_DIMENSIONS config for universal dimensions, special handling for stat-specific dimensions.
+
+    Args:
+        in_stat_dict: The dictionary to update (modified in place)
+        type_of_result: The stat category ('Batting', 'Pitching', 'Fielding', 'Misc')
+        result_row: SQLAlchemy result row containing stat data
+        active_dimensions: Dict of dimension_name -> bool (e.g., {'user': True, 'char': False})
+        group_by_swing: Whether swing grouping is active (Batting only, stat-specific)
     """
     # Extract stat data and build navigation path
     data_dict = result_row._asdict()
     path = []
 
-    # Add username level if grouping by user
-    if group_by_user:
-        path.append(result_row.username)
-        data_dict.pop('username', None)
-        data_dict.pop('user_id', None)
-
-    # Add char_name level if grouping by character
-    if group_by_char:
-        path.append(result_row.char_name)
-        data_dict.pop('char_name', None)
-        data_dict.pop('char_id', None)
+    # Universal grouping dimensions (iterate through config in defined order)
+    for dim_name in GROUPING_ORDER:
+        if active_dimensions.get(dim_name):
+            config = GROUPING_DIMENSIONS[dim_name]
+            path.append(getattr(result_row, config['path_key']))
+            for key in config['data_keys_to_remove']:
+                data_dict.pop(key, None)
 
     # Always add type_of_result level (Batting/Pitching/Fielding/Misc)
     path.append(type_of_result)
 
-    # Add swing_type level if grouping by swing (Batting only)
+    # Stat-specific grouping: by_swing only applies to Batting
     if group_by_swing and type_of_result == 'Batting':
         swing_name = cTYPE_OF_SWING[result_row.type_of_swing]
         path.append(swing_name)
