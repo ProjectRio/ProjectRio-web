@@ -20,8 +20,8 @@ import itertools
 #    Example: 'position': (request.args.get('by_position') == '1')
 # That's it! The dimension automatically flows through all query functions and update_detailed_stats_dict
 
-# Order of dimensions in the nested dict structure: user → char → stat_type → (stat-specific)
-GROUPING_ORDER = ['user', 'char']
+# Order of dimensions in the nested dict structure: user → char → game → roster_order → stat_type → (stat-specific)
+GROUPING_ORDER = ['user', 'char', 'game', 'roster_order']
 
 # Config field descriptions:
 # - select_cols: SQLAlchemy column expressions to include in SELECT clause (e.g., Character.name.label('char_name'))
@@ -46,6 +46,18 @@ GROUPING_DIMENSIONS = {
         'group_cols': [Character.char_id, Character.name],
         'path_key': 'char_name',
         'data_keys_to_remove': ['char_name', 'char_id'],
+    },
+    'game': {
+        'select_cols': [CharacterGameSummary.game_id.label('game_id')],
+        'group_cols': [CharacterGameSummary.game_id],
+        'path_key': 'game_id',
+        'data_keys_to_remove': ['game_id'],
+    },
+    'roster_order': {
+        'select_cols': [CharacterGameSummary.roster_loc.label('roster_loc')],
+        'group_cols': [CharacterGameSummary.roster_loc],
+        'path_key': 'roster_loc',
+        'data_keys_to_remove': ['roster_loc'],
     },
 }
 
@@ -1127,6 +1139,8 @@ def endpoint_detailed_stats():
     active_dimensions = {
         'user': (request.args.get('by_user') == '1'),
         'char': (request.args.get('by_char') == '1'),
+        'game': (request.args.get('by_game') == '1'),
+        'roster_order': (request.args.get('by_roster_order') == '1'),
     }
 
     # Stat-specific grouping flags
@@ -1320,10 +1334,11 @@ def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, active_di
     # CharacterGameSummary stores 9 rows per game (one per character).
     # When filtering by specific chars: count "character-wins" (each char gets credit per win)
     # When viewing all chars: normalize to "games won" (avoid counting same game 9 times)
-    if active_dimensions.get('char'):
+    # When grouping by_game or by_roster_order: each row is already per-character, no normalization needed
+    if active_dimensions.get('char') or active_dimensions.get('roster_order'):
         divide_by = 1  # Each char gets separate row - no normalization needed
-    elif len(char_ids) > 0:
-        divide_by = 1  # Sum character-wins - each filtered char gets credit for each win
+    elif active_dimensions.get('game') or len(char_ids) > 0:
+        divide_by = 1  # Per-game grouping or char filter - no normalization needed
     else:
         divide_by = 9  # Normalize to games won (9 char-rows per game → 1 game)
 
@@ -1433,7 +1448,7 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     """
     Update nested stat dictionary with result row data.
 
-    Builds nested dict structure: [username]? → [char_name]? → type_of_result → [swing_type]? → stat_data
+    Builds nested dict structure: [username]? → [char_name]? → [game_id]? → [roster_loc]? → type_of_result → [swing_type]? → stat_data
     Uses GROUPING_DIMENSIONS config for universal dimensions, special handling for stat-specific dimensions.
 
     Args:
