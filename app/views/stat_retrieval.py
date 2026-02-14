@@ -1239,6 +1239,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
             func.count(case((ContactSummary.secondary_result == 9, 1))).label('triples'),
             func.count(case((ContactSummary.secondary_result == 10, 1))).label('homeruns'),
             func.count(case((ContactSummary.secondary_result == 14, 1))).label('sacflys'),
+            func.count(case((ContactSummary.secondary_result == 15, 1))).label('gidps'),
             func.count(case((Event.result_of_ab == 1, 1))).label('strikeouts'),
             func.count(case((Event.result_of_ab != 0, 1))).label('plate_appearances'),
             func.sum(Event.result_rbi).label('rbi'),
