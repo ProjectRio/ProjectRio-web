@@ -1010,7 +1010,7 @@ def reassign_game_history_game_mode():
     game_id = data.get('game_id')
     new_tag_set_name = data.get('new_tag_set_name')
 
-    if not game_id or isinstance(game_id, int):
+    if not game_id or not isinstance(game_id, int):
         return abort(409, description="No game id or non-integer game id provided")
     
     if not new_tag_set_name:
