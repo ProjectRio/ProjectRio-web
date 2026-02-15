@@ -985,6 +985,9 @@ def recalc_elo(in_tag_set_id=None, log=False):
                 db.session.add(loser_ladder)
                 db.session.commit()
 
+            game.winner_incoming_elo = winner_ladder.rating
+            game.loser_incoming_elo = loser_ladder.rating
+            
             # print(f"GameHistoryId={game.id}")
             ratings = calc_elo(winner_ladder, loser_ladder)
 
