@@ -657,7 +657,7 @@ def process_game(game_json):
 
             if (pitch_summary.star_pitch):
                 pitcher_summary.defensive_star_pitches += 1
-                if (pitch_summary.pitch_result >= 3 and pitch_summary.pitch_result >= 5):
+                if pitch_summary.in_strikezone and 'Contact' not in event_data['Pitch']:
                     pitcher_summary.defensive_star_successes += 1
 
                 if (pitcher_captainable_char and pitcher_summary.captain == False):
