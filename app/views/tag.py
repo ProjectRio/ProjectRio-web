@@ -651,7 +651,7 @@ def tag_set_update():
             if add_tag is None:
                 return abort(419, f'Tag with ID={id} not found for appending')
             if (add_tag.tag_type == "Community" or add_tag.tag_type == "Competition") and not is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
-                return abort(420, f'User does not have permission to add tag with ID={id} becasue of its type')
+                return abort(420, f'User does not have permission to add tag with ID={id} because of its type')
             
             # Check if the tag is already in the tag_set to avoid duplicates
             if add_tag not in tag_set.tags:
@@ -662,8 +662,7 @@ def tag_set_update():
             remove_tag = Tag.query.filter_by(id=id).first()
             if remove_tag and remove_tag in tag_set.tags:
                 if (remove_tag.tag_type == "Community" or remove_tag.tag_type == "Competition") and not is_user_in_groups(user.id, ['Admin', 'TrustedUser']):
-                    return abort(420, f'User does not have permission to remove tag with ID={id} becasue of its type')
-                
+                    return abort(420, f'User does not have permission to remove tag with ID={id} because of its type')
                 # The tag exists and is part of the tag_set, so remove it
                 tag_set.tags.remove(remove_tag)
             # If the tag does not exist or is not part of the tag_set, do nothing (skip it)
