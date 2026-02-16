@@ -91,7 +91,12 @@ def _calculate_pitcher_wins_batch(game_ids: list) -> dict:
             continue
 
         events = events_by_game.get(game_id, [])
+
+        # Determine winning team for validation
+        winning_team_id = 0 if game.away_score > game.home_score else 1
+
         if not events:
+            # No events - can't determine pitcher win
             continue
 
         # Find lead changes
@@ -111,6 +116,7 @@ def _calculate_pitcher_wins_batch(game_ids: list) -> dict:
             prev_score_diff = score_diff
 
         if not lead_change_events:
+            # No lead changes found - can't determine pitcher win
             continue
 
         last_lead_change = lead_change_events[-1]
@@ -138,10 +144,12 @@ def _calculate_pitcher_wins_batch(game_ids: list) -> dict:
                 break
 
         if not pitcher_of_record_event:
+            # Can't find pitcher of record - skip this game
             continue
 
         pitcher_of_record_cgs = cgs_by_game[game_id].get(pitcher_of_record_event.pitcher_id)
         if not pitcher_of_record_cgs:
+            # Pitcher of record CGS not found - skip this game
             continue
 
         # Find starting pitcher
@@ -152,10 +160,12 @@ def _calculate_pitcher_wins_batch(game_ids: list) -> dict:
                 break
 
         if not starting_pitcher_event:
+            # Can't find starting pitcher event - skip this game
             continue
 
         starting_pitcher_cgs = cgs_by_game[game_id].get(starting_pitcher_event.pitcher_id)
         if not starting_pitcher_cgs:
+            # Starting pitcher CGS not found - skip this game
             continue
 
         full_nine_played = game.innings_played == 9
@@ -185,5 +195,11 @@ def _calculate_pitcher_wins_batch(game_ids: list) -> dict:
         else:
             # Relief pitcher was pitcher of record
             winning_pitcher_by_game[game_id] = pitcher_of_record_cgs.id
+
+        # Validate: ensure winning pitcher is on the winning team
+        assigned_cgs = cgs_by_game[game_id].get(winning_pitcher_by_game[game_id])
+        if assigned_cgs and assigned_cgs.team_id != winning_team_id:
+            # Wrong team! Don't assign a win for this game
+            del winning_pitcher_by_game[game_id]
 
     return winning_pitcher_by_game
