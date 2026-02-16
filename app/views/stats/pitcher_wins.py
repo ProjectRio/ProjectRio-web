@@ -197,6 +197,7 @@ def _calculate_pitcher_wins_batch(game_ids: list) -> dict:
             winning_pitcher_by_game[game_id] = pitcher_of_record_cgs.id
 
         # Validate: ensure winning pitcher is on the winning team
+        # This may occur due to missing event data pre Rio Web 1.5.0 with the star pitch ingestion bug halting event loading
         assigned_cgs = cgs_by_game[game_id].get(winning_pitcher_by_game[game_id])
         if assigned_cgs and assigned_cgs.team_id != winning_team_id:
             # Wrong team! Don't assign a win for this game
