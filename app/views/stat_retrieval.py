@@ -1268,6 +1268,10 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
     for result_row in non_contact_batting_results:
         update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions)
 
+    # Add default runs_scored: 0 to all batting entries if requested
+    if include_runs_scored:
+        _add_default_to_stat_category(stat_dict, 'Batting', 'runs_scored', 0)
+
     # Optionally calculate runs scored (requires loading events and runners into memory)
     if include_runs_scored:
 
@@ -1363,6 +1367,10 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, activ
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
     for result_row in pitch_breakdown_results:
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
+
+    # Add default pitcher_wins: 0 to all pitching entries if requested
+    if include_pitcher_wins:
+        _add_default_to_stat_category(stat_dict, 'Pitching', 'pitcher_wins', 0)
 
     # Optionally calculate pitcher wins (requires loading events into memory)
     if include_pitcher_wins:
@@ -1512,6 +1520,27 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, activ
     for result_row in fielding_results:
         update_detailed_stats_dict(stat_dict, 'Fielding', result_row, active_dimensions)
     return
+
+def _add_default_to_stat_category(stat_dict, category, field_name, default_value):
+    """
+    Recursively adds a default field value to all entries in a stat category.
+
+    This ensures fields like 'pitcher_wins' or 'runs_scored' appear as 0
+    even when a player has no wins/runs, maintaining consistent response structure.
+    """
+    def add_to_nested_dict(d):
+        if isinstance(d, dict):
+            # If this dict contains the category, add the field
+            if category in d and isinstance(d[category], dict):
+                if field_name not in d[category]:
+                    d[category][field_name] = default_value
+            # Recurse into all nested dicts
+            for value in d.values():
+                if isinstance(value, dict):
+                    add_to_nested_dict(value)
+
+    add_to_nested_dict(stat_dict)
+
 
 def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_dimensions, group_by_swing=False):
     """
