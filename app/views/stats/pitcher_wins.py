@@ -127,6 +127,8 @@ def _calculate_pitcher_wins_batch(game_ids: list) -> dict:
             pitcher_half_inning  = abs(lead_change_half_inning - 1)
             if pitcher_half_inning == 1:
                 pitcher_inning = lead_change_inning - 1
+            else:
+                pitcher_inning = lead_change_inning
 
         # Find pitcher of record (last event in that inning/half)
         pitcher_of_record_event = None
