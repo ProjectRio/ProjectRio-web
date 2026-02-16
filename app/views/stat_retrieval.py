@@ -1551,13 +1551,29 @@ def _add_default_to_stat_category(stat_dict, category, field_name, default_value
 
     This ensures fields like 'pitcher_wins' or 'runs_scored' appear as 0
     even when a player has no wins/runs, maintaining consistent response structure.
+
+    Handles nested stat-specific groupings (e.g., handedness) inside the category.
     """
     def add_to_nested_dict(d):
         if isinstance(d, dict):
-            # If this dict contains the category, add the field
+            # If this dict contains the category
             if category in d and isinstance(d[category], dict):
-                if field_name not in d[category]:
-                    d[category][field_name] = default_value
+                category_dict = d[category]
+                # Check if the category dict contains stat data or more nesting
+                # If all values are dicts, it's nested (e.g., handedness grouping)
+                # If it has non-dict values, it's the stat data level
+                has_stat_data = any(not isinstance(v, dict) for v in category_dict.values())
+
+                if has_stat_data:
+                    # This is the stat data level - add the default here
+                    if field_name not in category_dict:
+                        category_dict[field_name] = default_value
+                else:
+                    # This is a grouping level (e.g., handedness) - recurse into it
+                    for value in category_dict.values():
+                        if isinstance(value, dict) and field_name not in value:
+                            value[field_name] = default_value
+
             # Recurse into all nested dicts
             for value in d.values():
                 if isinstance(value, dict):
