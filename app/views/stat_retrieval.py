@@ -8,6 +8,7 @@ from sqlalchemy import select, func, case
 import time
 import datetime
 import itertools
+from .stats.pitcher_wins import calculate_pitcher_wins_for_games
 
 # === Parameterized Grouping Configuration ===
 # Universal grouping dimensions that apply to all stat types (Batting, Pitching, Fielding, Misc)
@@ -1146,6 +1147,7 @@ def endpoint_detailed_stats():
     # Stat-specific grouping flags
     group_by_swing = (request.args.get('by_swing') == '1')
     exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
+    include_pitcher_wins = (request.args.get('include_pitcher_wins') == '1')
 
     # Stat exclusion flags
     exclude_batting_stats = (request.args.get('exclude_batting') == '1')
@@ -1176,7 +1178,7 @@ def endpoint_detailed_stats():
     if (not exclude_batting_stats):
         batting_stats = query_detailed_batting_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing, exclude_nonfair)
     if (not exclude_pitching_stats):
-        pitching_stats = query_detailed_pitching_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions)
+        pitching_stats = query_detailed_pitching_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, include_pitcher_wins)
     if (not exclude_misc_stats):
         misc_stats = query_detailed_misc_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions)
     if (not exclude_fielding_stats):
@@ -1266,7 +1268,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
 
     return
 
-def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions):
+def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, include_pitcher_wins=False):
 
     select_cols, group_cols, filters = _build_base_query_components(
         active_dimensions, game_ids, user_ids, char_ids
@@ -1320,10 +1322,40 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, activ
 
     pitching_summary_results = db.session.execute(pitching_summary_query).all()
     pitch_breakdown_results = db.session.execute(pitch_breakdown_query).all()
+
     for result_row in pitching_summary_results:
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
     for result_row in pitch_breakdown_results:
         update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
+
+    # Optionally calculate pitcher wins (requires loading events into memory)
+    if include_pitcher_wins:
+        winning_pitcher_by_game = calculate_pitcher_wins_for_games(list(game_ids))
+        winning_cgs_ids = list(winning_pitcher_by_game.values())
+
+        if winning_cgs_ids:
+            pitcher_wins_query = (
+                select(
+                    *select_cols,
+                    func.count(CharacterGameSummary.id).label('pitcher_wins'),
+                )
+                .select_from(CharacterGameSummary)
+                .join(Character, CharacterGameSummary.char_id == Character.char_id)
+                .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+                .where(
+                    CharacterGameSummary.id.in_(winning_cgs_ids),
+                    *filters
+                )
+            )
+
+            if group_cols:
+                pitcher_wins_query = pitcher_wins_query.group_by(*group_cols)
+
+            pitcher_wins_results = db.session.execute(pitcher_wins_query).all()
+
+            for result_row in pitcher_wins_results:
+                update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
+
     return
 
 def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions):
