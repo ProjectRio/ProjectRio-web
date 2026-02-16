@@ -22,8 +22,8 @@ from .stats.runs_scored import calculate_runs_scored_for_games
 #    Example: 'position': (request.args.get('by_position') == '1')
 # That's it! The dimension automatically flows through all query functions and update_detailed_stats_dict
 
-# Order of dimensions in the nested dict structure: game → user → char → roster_order → stat_type → (stat-specific)
-GROUPING_ORDER = ['game', 'user', 'char', 'roster_order']
+# Order of dimensions in the nested dict structure: game → user → char → roster_order → batting_hand → fielding_hand → stat_type → swing (swing handled separately)
+GROUPING_ORDER = ['game', 'user', 'char', 'roster_order', 'batting_hand', 'fielding_hand']
 
 # Config field descriptions:
 # - select_cols: SQLAlchemy column expressions to include in SELECT clause (e.g., Character.name.label('char_name'))
@@ -32,6 +32,7 @@ GROUPING_ORDER = ['game', 'user', 'char', 'roster_order']
 #             (e.g., 'char_name' → result_row.char_name = "Mario" → nested dict key: {"Mario": {...}})
 # - data_keys_to_remove: Keys to remove from stat data after using them for path navigation
 #                        (prevents duplication - "Mario" is a dict key, so remove from stat values)
+# - stat_specific: (optional) List of stat types this dimension applies to (if omitted, applies to all)
 
 GROUPING_DIMENSIONS = {
     'user': {
@@ -61,9 +62,23 @@ GROUPING_DIMENSIONS = {
         'path_key': 'roster_loc',
         'data_keys_to_remove': ['roster_loc'],
     },
+    'batting_hand': {
+        'select_cols': [CharacterGameSummary.batting_hand.label('batting_hand')],
+        'group_cols': [CharacterGameSummary.batting_hand],
+        'path_key': 'batting_hand',
+        'data_keys_to_remove': ['batting_hand'],
+        'stat_specific': ['Batting'],  # Only applies to batting stats
+    },
+    'fielding_hand': {
+        'select_cols': [CharacterGameSummary.fielding_hand.label('fielding_hand')],
+        'group_cols': [CharacterGameSummary.fielding_hand],
+        'path_key': 'fielding_hand',
+        'data_keys_to_remove': ['fielding_hand'],
+        'stat_specific': ['Pitching'],  # Only applies to pitching stats
+    },
 }
 
-def _build_base_query_components(active_dimensions, game_ids, user_ids, char_ids):
+def _build_base_query_components(active_dimensions, game_ids, user_ids, char_ids, stat_type=None):
     """
     Build common select_cols, group_cols, and filters for stat queries.
 
@@ -75,6 +90,7 @@ def _build_base_query_components(active_dimensions, game_ids, user_ids, char_ids
         game_ids: Set of game IDs to filter by (required)
         user_ids: Set of user IDs to filter by (optional)
         char_ids: Set of character IDs to filter by (optional)
+        stat_type: Optional stat type ('Batting', 'Pitching', 'Fielding', 'Misc') for stat-specific dimensions
 
     Returns:
         tuple: (select_cols, group_cols, filters) ready to use in SQLAlchemy queries
@@ -86,23 +102,13 @@ def _build_base_query_components(active_dimensions, game_ids, user_ids, char_ids
     # Iterate through dimensions in defined order
     for dim_name in GROUPING_ORDER:
         if active_dimensions.get(dim_name):
-            select_cols.extend(GROUPING_DIMENSIONS[dim_name]['select_cols'])
-            group_cols.extend(GROUPING_DIMENSIONS[dim_name]['group_cols'])
-
-    # Fantasy stats mode: when grouping by game AND roster_order, include character metadata
-    # Each game+user+roster_loc uniquely identifies one character, so include char details and handedness
-    if active_dimensions.get('game') and active_dimensions.get('roster_order'):
-        # Always include character identification (even if not grouping by char)
-        if not active_dimensions.get('char'):
-            select_cols.extend([
-                Character.char_id.label('char_id'),
-                Character.name.label('char_name')
-            ])
-        # Add handedness data (batting_hand and fielding_hand from CharacterGameSummary)
-        select_cols.extend([
-            CharacterGameSummary.fielding_hand.label('fielding_hand'),
-            CharacterGameSummary.batting_hand.label('batting_hand')
-        ])
+            config = GROUPING_DIMENSIONS[dim_name]
+            # Skip stat-specific dimensions if stat_type doesn't match or isn't provided
+            if 'stat_specific' in config:
+                if stat_type is None or stat_type not in config['stat_specific']:
+                    continue
+            select_cols.extend(config['select_cols'])
+            group_cols.extend(config['group_cols'])
 
     # Build filters - game_ids is always present
     filters = [CharacterGameSummary.game_id.in_(game_ids)]
@@ -1158,9 +1164,11 @@ def endpoint_detailed_stats():
         'char': (request.args.get('by_char') == '1'),
         'game': (request.args.get('by_game') == '1'),
         'roster_order': (request.args.get('by_roster_order') == '1'),
+        'batting_hand': (request.args.get('by_batting_hand') == '1'),
+        'fielding_hand': (request.args.get('by_fielding_hand') == '1'),
     }
 
-    # Stat-specific grouping flags
+    # Stat-specific grouping flags (handled separately due to query complexity)
     group_by_swing = (request.args.get('by_swing') == '1')
     exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
     include_pitcher_wins = (request.args.get('include_pitcher_wins') == '1')
@@ -1207,9 +1215,9 @@ def endpoint_detailed_stats():
 def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing=False, exclude_nonfair=False, include_runs_scored=False):
 
     select_cols, group_cols, filters = _build_base_query_components(
-        active_dimensions, game_ids, user_ids, char_ids
+        active_dimensions, game_ids, user_ids, char_ids, stat_type='Batting'
     )
-        
+
     contact_join_condition = (PitchSummary.contact_summary_id == ContactSummary.id)
     if exclude_nonfair:
         contact_join_condition = contact_join_condition & (ContactSummary.primary_result != 1)
@@ -1292,7 +1300,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
 
         # Build fresh select_cols and group_cols (not affected by group_by_swing)
         runs_select_cols, runs_group_cols, _ = _build_base_query_components(
-            active_dimensions, game_ids, user_ids, char_ids
+            active_dimensions, game_ids, user_ids, char_ids, stat_type='Batting'
         )
 
         runs_by_cgs = calculate_runs_scored_for_games(list(game_ids))
@@ -1326,7 +1334,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
 def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, include_pitcher_wins=False):
 
     select_cols, group_cols, filters = _build_base_query_components(
-        active_dimensions, game_ids, user_ids, char_ids
+        active_dimensions, game_ids, user_ids, char_ids, stat_type='Pitching'
     )
 
     pitching_summary_query = (
@@ -1561,7 +1569,7 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     """
     Update nested stat dictionary with result row data.
 
-    Builds nested dict structure: [game_id]? → [username]? → [char_name]? → [roster_loc]? → type_of_result → [swing_type]? → stat_data
+    Builds nested dict structure: [game_id]? → [username]? → [char_name]? → [roster_loc]? → [batting_hand]? → [fielding_hand]? → type_of_result → [swing_type]? → stat_data
     Uses GROUPING_DIMENSIONS config for universal dimensions, special handling for stat-specific dimensions.
 
     Args:
@@ -1575,18 +1583,21 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     data_dict = result_row._asdict()
     path = []
 
-    # Fantasy stats mode: if grouping by game AND roster_order, keep char metadata in output
-    fantasy_stats_mode = active_dimensions.get('game') and active_dimensions.get('roster_order')
-
     # Universal grouping dimensions (iterate through config in defined order)
     for dim_name in GROUPING_ORDER:
         if active_dimensions.get(dim_name):
             config = GROUPING_DIMENSIONS[dim_name]
-            path.append(getattr(result_row, config['path_key']))
+            # Skip stat-specific dimensions if stat type doesn't match
+            if 'stat_specific' in config and type_of_result not in config['stat_specific']:
+                continue
+
+            # Convert handedness values to text
+            path_value = getattr(result_row, config['path_key'])
+            if dim_name == 'batting_hand' or dim_name == 'fielding_hand':
+                path_value = cHANDEDNESS.get(path_value, 'Unknown')
+
+            path.append(path_value)
             for key in config['data_keys_to_remove']:
-                # In fantasy stats mode, keep char_id and char_name in the output even if not grouping by char
-                if fantasy_stats_mode and key in ['char_id', 'char_name']:
-                    continue
                 data_dict.pop(key, None)
 
     # Always add type_of_result level (Batting/Pitching/Fielding/Misc)
