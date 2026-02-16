@@ -23,7 +23,7 @@ from .stats.runs_scored import calculate_runs_scored_for_games
 # That's it! The dimension automatically flows through all query functions and update_detailed_stats_dict
 
 # Order of dimensions in the nested dict structure: game → user → char → roster_order → batting_hand → fielding_hand → stat_type → swing (swing handled separately)
-GROUPING_ORDER = ['game', 'user', 'char', 'roster_order', 'batting_hand', 'fielding_hand']
+GROUPING_ORDER = ['game', 'user', 'roster_order', 'char', 'batting_hand', 'fielding_hand']
 
 # Config field descriptions:
 # - select_cols: SQLAlchemy column expressions to include in SELECT clause (e.g., Character.name.label('char_name'))
