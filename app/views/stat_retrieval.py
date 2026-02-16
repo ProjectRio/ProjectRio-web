@@ -22,8 +22,8 @@ from .stats.runs_scored import calculate_runs_scored_for_games
 #    Example: 'position': (request.args.get('by_position') == '1')
 # That's it! The dimension automatically flows through all query functions and update_detailed_stats_dict
 
-# Order of dimensions in the nested dict structure: user → char → game → roster_order → stat_type → (stat-specific)
-GROUPING_ORDER = ['user', 'char', 'game', 'roster_order']
+# Order of dimensions in the nested dict structure: game → user → char → roster_order → stat_type → (stat-specific)
+GROUPING_ORDER = ['game', 'user', 'char', 'roster_order']
 
 # Config field descriptions:
 # - select_cols: SQLAlchemy column expressions to include in SELECT clause (e.g., Character.name.label('char_name'))
@@ -88,6 +88,21 @@ def _build_base_query_components(active_dimensions, game_ids, user_ids, char_ids
         if active_dimensions.get(dim_name):
             select_cols.extend(GROUPING_DIMENSIONS[dim_name]['select_cols'])
             group_cols.extend(GROUPING_DIMENSIONS[dim_name]['group_cols'])
+
+    # Fantasy stats mode: when grouping by game AND roster_order, include character metadata
+    # Each game+user+roster_loc uniquely identifies one character, so include char details and handedness
+    if active_dimensions.get('game') and active_dimensions.get('roster_order'):
+        # Always include character identification (even if not grouping by char)
+        if not active_dimensions.get('char'):
+            select_cols.extend([
+                Character.char_id.label('char_id'),
+                Character.name.label('char_name')
+            ])
+        # Add handedness data (batting_hand and fielding_hand from CharacterGameSummary)
+        select_cols.extend([
+            CharacterGameSummary.fielding_hand.label('fielding_hand'),
+            CharacterGameSummary.batting_hand.label('batting_hand')
+        ])
 
     # Build filters - game_ids is always present
     filters = [CharacterGameSummary.game_id.in_(game_ids)]
@@ -1546,7 +1561,7 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     """
     Update nested stat dictionary with result row data.
 
-    Builds nested dict structure: [username]? → [char_name]? → [game_id]? → [roster_loc]? → type_of_result → [swing_type]? → stat_data
+    Builds nested dict structure: [game_id]? → [username]? → [char_name]? → [roster_loc]? → type_of_result → [swing_type]? → stat_data
     Uses GROUPING_DIMENSIONS config for universal dimensions, special handling for stat-specific dimensions.
 
     Args:
@@ -1560,12 +1575,18 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     data_dict = result_row._asdict()
     path = []
 
+    # Fantasy stats mode: if grouping by game AND roster_order, keep char metadata in output
+    fantasy_stats_mode = active_dimensions.get('game') and active_dimensions.get('roster_order')
+
     # Universal grouping dimensions (iterate through config in defined order)
     for dim_name in GROUPING_ORDER:
         if active_dimensions.get(dim_name):
             config = GROUPING_DIMENSIONS[dim_name]
             path.append(getattr(result_row, config['path_key']))
             for key in config['data_keys_to_remove']:
+                # In fantasy stats mode, keep char_id and char_name in the output even if not grouping by char
+                if fantasy_stats_mode and key in ['char_id', 'char_name']:
+                    continue
                 data_dict.pop(key, None)
 
     # Always add type_of_result level (Batting/Pitching/Fielding/Misc)
