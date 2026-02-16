@@ -1,13 +1,125 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet, PitchSummary, ContactSummary, CharacterPositionSummary, FieldingSummary
 from ..consts import *
 from ..util import *
-import pprint
+from sqlalchemy import select, func, case
 import time
 import datetime
 import itertools
+from .stats.pitcher_wins import calculate_pitcher_wins_for_games
+from .stats.runs_scored import calculate_runs_scored_for_games
+
+# === Parameterized Grouping Configuration ===
+# Universal grouping dimensions that apply to all stat types (Batting, Pitching, Fielding, Misc)
+# Stat-specific dimensions (e.g., by_swing for Batting) are handled separately in their respective functions
+#
+# To add a new universal grouping dimension (e.g., by_position, by_team):
+# 1. Add new entry to GROUPING_DIMENSIONS config below
+# 2. Add dimension name to GROUPING_ORDER list (order determines nesting depth)
+# 3. Add to active_dimensions dict in endpoint_detailed_stats() where request args are parsed
+#    Example: 'position': (request.args.get('by_position') == '1')
+# That's it! The dimension automatically flows through all query functions and update_detailed_stats_dict
+
+# Order of dimensions in the nested dict structure: game → user → roster_order → char → stat_type → [batting_hand|fielding_hand|swing]
+# Note: batting_hand, fielding_hand, and swing are stat-specific and nest INSIDE stat_type, not before it
+GROUPING_ORDER = ['game', 'user', 'roster_order', 'char', 'batting_hand', 'fielding_hand']
+
+# Config field descriptions:
+# - select_cols: SQLAlchemy column expressions to include in SELECT clause (e.g., Character.name.label('char_name'))
+# - group_cols: SQLAlchemy columns for GROUP BY clause (must match select_cols for aggregation to work)
+# - path_key: Result row attribute name whose value becomes a dict key in the nested structure
+#             (e.g., 'char_name' → result_row.char_name = "Mario" → nested dict key: {"Mario": {...}})
+# - data_keys_to_remove: Keys to remove from stat data after using them for path navigation
+#                        (prevents duplication - "Mario" is a dict key, so remove from stat values)
+# - stat_specific: (optional) List of stat types this dimension applies to (if omitted, applies to all)
+
+GROUPING_DIMENSIONS = {
+    'user': {
+        'select_cols': [RioUser.username.label('username')],
+        'group_cols': [RioUser.username],
+        'path_key': 'username',
+        'data_keys_to_remove': ['username', 'user_id'],
+    },
+    'char': {
+        'select_cols': [
+            Character.char_id.label('char_id'),
+            Character.name.label('char_name')
+        ],
+        'group_cols': [Character.char_id, Character.name],
+        'path_key': 'char_name',
+        'data_keys_to_remove': ['char_name', 'char_id'],
+    },
+    'game': {
+        'select_cols': [CharacterGameSummary.game_id.label('game_id')],
+        'group_cols': [CharacterGameSummary.game_id],
+        'path_key': 'game_id',
+        'data_keys_to_remove': ['game_id'],
+    },
+    'roster_order': {
+        'select_cols': [CharacterGameSummary.roster_loc.label('roster_loc')],
+        'group_cols': [CharacterGameSummary.roster_loc],
+        'path_key': 'roster_loc',
+        'data_keys_to_remove': ['roster_loc'],
+    },
+    'batting_hand': {
+        'select_cols': [CharacterGameSummary.batting_hand.label('batting_hand')],
+        'group_cols': [CharacterGameSummary.batting_hand],
+        'path_key': 'batting_hand',
+        'data_keys_to_remove': ['batting_hand'],
+        'stat_specific': ['Batting'],  # Only applies to batting stats
+    },
+    'fielding_hand': {
+        'select_cols': [CharacterGameSummary.fielding_hand.label('fielding_hand')],
+        'group_cols': [CharacterGameSummary.fielding_hand],
+        'path_key': 'fielding_hand',
+        'data_keys_to_remove': ['fielding_hand'],
+        'stat_specific': ['Pitching'],  # Only applies to pitching stats
+    },
+}
+
+def _build_base_query_components(active_dimensions, game_ids, user_ids, char_ids, stat_type=None):
+    """
+    Build common select_cols, group_cols, and filters for stat queries.
+
+    This extracts the repetitive setup logic shared across all stat query functions.
+    Uses GROUPING_DIMENSIONS config to dynamically build query components based on grouping flags.
+
+    Args:
+        active_dimensions: Dict of dimension_name -> bool (e.g., {'user': True, 'char': False})
+        game_ids: Set of game IDs to filter by (required)
+        user_ids: Set of user IDs to filter by (optional)
+        char_ids: Set of character IDs to filter by (optional)
+        stat_type: Optional stat type ('Batting', 'Pitching', 'Fielding', 'Misc') for stat-specific dimensions
+
+    Returns:
+        tuple: (select_cols, group_cols, filters) ready to use in SQLAlchemy queries
+    """
+    select_cols = []
+    group_cols = []
+
+    # Build select and group columns based on active grouping dimensions
+    # Iterate through dimensions in defined order
+    for dim_name in GROUPING_ORDER:
+        if active_dimensions.get(dim_name):
+            config = GROUPING_DIMENSIONS[dim_name]
+            # Skip stat-specific dimensions if stat_type doesn't match or isn't provided
+            if 'stat_specific' in config:
+                if stat_type is None or stat_type not in config['stat_specific']:
+                    continue
+            select_cols.extend(config['select_cols'])
+            group_cols.extend(config['group_cols'])
+
+    # Build filters - game_ids is always present
+    filters = [CharacterGameSummary.game_id.in_(game_ids)]
+
+    if user_ids:
+        filters.append(CharacterGameSummary.user_id.in_(user_ids))
+    if char_ids:
+        filters.append(CharacterGameSummary.char_id.in_(char_ids))
+
+    return select_cols, group_cols, filters
 
 @app.route('/characters/', methods = ['GET'])
 def get_characters():
@@ -1002,467 +1114,537 @@ def endpoint_star_chances():
       the large return dict at each step
 
 @ URL example: http://127.0.0.1:5000/stats/?username=demouser1&character=1&by_swing=1
+
+TODO: Add character name lookup
 '''
 @app.route('/stats/', methods = ['GET'])
 def endpoint_detailed_stats():
 
-    #Sanitize games params 
-    list_of_game_ids = list() # Holds IDs for all the games we want data from
-    if (len(request.args.getlist('games')) != 0):
-        list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
-        list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
-        if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
-            return abort(408, description='Provided GameIDs not found')
-
+    game_ids_param = request.args.getlist('games')
+    if game_ids_param:
+        try:
+            game_ids = {int(game_id) for game_id in game_ids_param}
+        except ValueError as e:
+            abort(
+                400,
+                description=f"Invalid game ID (must be int): {e.args[0]}"
+            )
+        
+        # Verify all game IDs exist in database
+        stmt = select(Game.game_id).where(Game.game_id.in_(game_ids))
+        existing_game_ids = set(db.session.execute(stmt).scalars().all())
+        
+        missing_ids = game_ids - existing_game_ids
+        if missing_ids:
+            return abort(404, description=f'Game IDs not found: {missing_ids}')
     else:
-        games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-        for game_id in games['game_ids']:
-            list_of_game_ids.append(game_id)
-        if len(list_of_game_ids) == 0:
-            return abort(409, description='No games found for provided parameters')
+        games = endpoint_games(True)
+        game_ids = set(games['game_ids'])
+        if not game_ids:
+            return abort(404, description='No games found for provided parameters')
 
     # Sanitize character params
-    try:
-        list_of_char_ids = request.args.getlist('char_id')
-        for index, char_id in enumerate(list_of_char_ids):
-            sanitized_id = int(list_of_char_ids[index])
-            if sanitized_id in range (0,55):
-                list_of_char_ids[index] = sanitized_id
-            else:
-                return abort(400, description = "Char ID not in range")
-    except:
-        return abort(400, description="Invalid Char Id")
+    char_id_param = request.args.getlist('char_id')
+    char_ids = set()
+    if char_id_param:
+        try:
+            char_ids = {int(char_id) for char_id in char_id_param}
+        except ValueError as e:
+            abort(
+                400,
+                description=f"Invalid Char ID (must be int): {e.args[0]}"
+            )
+        
+        invalid_ids = {cid for cid in char_ids if not 0 <= cid <= 54}
+        if invalid_ids:
+            abort(400, description=f"Char IDs out of range (0-54): {invalid_ids}")
 
-    tuple_of_game_ids = tuple(list_of_game_ids)
-    tuple_char_ids = tuple(list_of_char_ids)
-    group_by_user = (request.args.get('by_user') == '1')
+    # Parse grouping dimension flags - centralized location for adding new dimensions
+    active_dimensions = {
+        'user': (request.args.get('by_user') == '1'),
+        'char': (request.args.get('by_char') == '1'),
+        'game': (request.args.get('by_game') == '1'),
+        'roster_order': (request.args.get('by_roster_order') == '1'),
+        'batting_hand': (request.args.get('by_batting_hand') == '1'),
+        'fielding_hand': (request.args.get('by_fielding_hand') == '1'),
+    }
+
+    # Stat-specific grouping flags (handled separately due to query complexity)
     group_by_swing = (request.args.get('by_swing') == '1')
-    group_by_char = (request.args.get('by_char') == '1')
     exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
+    include_pitcher_wins = (request.args.get('include_pitcher_wins') == '1')
+    include_runs_scored = (request.args.get('include_runs_scored') == '1')
 
-    #Stat exclussion flags
+    # Stat exclusion flags
     exclude_batting_stats = (request.args.get('exclude_batting') == '1')
     exclude_pitching_stats = (request.args.get('exclude_pitching') == '1')
     exclude_misc_stats = (request.args.get('exclude_misc') == '1')
     exclude_fielding_stats = (request.args.get('exclude_fielding') == '1')
 
-    usernames = request.args.getlist('username')
-    usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in usernames])
-    #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-    list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
-    # using list comprehension
-    list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
+    usernames_param = request.args.getlist('username')
+    user_ids = set()
+    if usernames_param:
+        usernames_normalized = set([lower_and_remove_nonalphanumeric(username) for username in usernames_param])
 
-    tuple_user_ids = tuple(list_of_user_id)
+        stmt = select(RioUser.id, RioUser.username_lowercase).where(RioUser.username_lowercase.in_(usernames_normalized))
+        results = db.session.execute(stmt).all()
 
-    #If we didn't find every user provided in the DB, abort
-    if (len(tuple_user_ids) != len(usernames)):
-        return abort(408, description='Provided Usernames not found')
+        user_ids = set()
+        found_usernames = set()
+        for user_id, username in results:
+            user_ids.add(user_id)
+            found_usernames.add(username)
 
-    #If a char was provided that is not 0-54 abort
-    invalid_chars=[i for i in tuple_char_ids if int(i) not in range(0,55)]
-    if len(invalid_chars) > 0:
-        return abort(408, description='Invalid provided characters')
+        missing_usernames = usernames_normalized - found_usernames
+        if missing_usernames:
+            return abort(404, description=f'Users not found: {missing_usernames}')
 
-    
     # Individual functions create queries to get their respective stats
     return_dict = {}
     if (not exclude_batting_stats):
-        batting_stats = query_detailed_batting_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char, group_by_swing, exclude_nonfair)
+        batting_stats = query_detailed_batting_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing, exclude_nonfair, include_runs_scored)
     if (not exclude_pitching_stats):
-        pitching_stats = query_detailed_pitching_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
+        pitching_stats = query_detailed_pitching_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, include_pitcher_wins)
     if (not exclude_misc_stats):
-        misc_stats = query_detailed_misc_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
+        misc_stats = query_detailed_misc_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions)
     if (not exclude_fielding_stats):
-        fielding_stats = query_detailed_fielding_stats(return_dict, tuple_of_game_ids, tuple_user_ids, tuple_char_ids, group_by_user, group_by_char)
-
+        fielding_stats = query_detailed_fielding_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions)
     return {
         'Stats': return_dict
     }
 
-def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False, group_by_swing=False, exclude_nonfair=False):
+def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing=False, exclude_nonfair=False, include_runs_scored=False):
 
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids, stat_type='Batting'
+    )
 
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    contact_join_condition = (PitchSummary.contact_summary_id == ContactSummary.id)
+    if exclude_nonfair:
+        contact_join_condition = contact_join_condition & (ContactSummary.primary_result != 1)
 
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
+    non_contact_batting_query = (
+        select(
+            *select_cols,
+            func.sum(CharacterGameSummary.walks_bb).label('summary_walks_bb'),
+            func.sum(CharacterGameSummary.walks_hit).label('summary_walks_hbp'),
+            func.sum(CharacterGameSummary.strikeouts).label('summary_strikeouts'),
+            func.sum(CharacterGameSummary.singles).label('summary_singles'),
+            func.sum(CharacterGameSummary.doubles).label('summary_doubles'),
+            func.sum(CharacterGameSummary.triples).label('summary_triples'),
+            func.sum(CharacterGameSummary.homeruns).label('summary_homeruns'),
+            func.sum(CharacterGameSummary.sac_flys).label('summary_sac_flys'),
+            func.sum(CharacterGameSummary.rbi).label('summary_rbi'),
+            func.sum(CharacterGameSummary.at_bats).label('summary_at_bats'),
+            func.sum(CharacterGameSummary.hits).label('summary_hits'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
+    )
 
-    by_swing = 'pitch_summary.type_of_swing' if group_by_swing else ''
-    select_swing = 'pitch_summary.type_of_swing AS type_of_swing, \n' if group_by_swing else ''
+    if group_cols:
+        non_contact_batting_query = non_contact_batting_query.group_by(*group_cols)
 
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char, by_swing]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
+    # Stat-specific grouping: by_swing only applies to contact batting (not walks/HBP/strikeouts)
+    # This is added AFTER non_contact query since non-contact events don't have swing data
+    if group_by_swing:
+        select_cols.append(PitchSummary.type_of_swing.label('type_of_swing'))
+        group_cols.append(PitchSummary.type_of_swing)
+
     contact_batting_query = (
-        
-        'SELECT \n'
-        f"{select_user}"
-        f"{select_char}"
-        f"{select_swing}"
-        'COUNT(CASE WHEN (contact_summary.primary_result = 0) THEN 1 ELSE NULL END) AS outs, \n'
-        'COUNT(CASE WHEN contact_summary.primary_result = 1 THEN 1 ELSE NULL END) AS foul_hits, \n'
-        'COUNT(CASE WHEN (contact_summary.primary_result = 2 OR contact_summary.primary_result = 3) THEN 1 ELSE NULL END) AS fair_hits, \n'
-        'COUNT(CASE WHEN (contact_summary.type_of_contact = 0 OR contact_summary.type_of_contact = 4) THEN 1 ELSE NULL END) AS sour_hits, '
-        'COUNT(CASE WHEN (contact_summary.type_of_contact = 1 OR contact_summary.type_of_contact = 3) THEN 1 ELSE NULL END) AS nice_hits, '
-        'COUNT(CASE WHEN contact_summary.type_of_contact = 2 THEN 1 ELSE NULL END) AS perfect_hits, '
-        'COUNT(CASE WHEN contact_summary.secondary_result = 7 THEN 1 ELSE NULL END) AS singles, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 8 THEN 1 ELSE NULL END) AS doubles, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 9 THEN 1 ELSE NULL END) AS triples, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 10 THEN 1 ELSE NULL END) AS homeruns, \n'
-        'COUNT(CASE WHEN contact_summary.secondary_result = 14 THEN 1 ELSE NULL END) AS sacflys, \n'
-        'COUNT(CASE WHEN event.result_of_ab = 1 THEN 1 ELSE NULL END) AS strikeouts, \n'
-        'COUNT(CASE WHEN event.result_of_ab != 0 THEN 1 ELSE NULL END) AS plate_appearances, \n'
-        'SUM(event.result_rbi) AS rbi '
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN event ON character_game_summary.id = event.batter_id \n'
-        'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'LEFT JOIN contact_summary ON pitch_summary.contact_summary_id = contact_summary.id \n'
-       f"   {'AND contact_summary.primary_result != 1' if exclude_nonfair else ''} \n"
-        'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            func.count(case((ContactSummary.primary_result == 0, 1))).label('outs'),
+            func.count(case((ContactSummary.primary_result == 1, 1))).label('foul_hits'),
+            func.count(case(((ContactSummary.primary_result == 2) | (ContactSummary.primary_result == 3), 1))).label('fair_hits'),
+            func.count(case(((ContactSummary.type_of_contact == 0) | (ContactSummary.type_of_contact == 4), 1))).label('sour_hits'),
+            func.count(case(((ContactSummary.type_of_contact == 1) | (ContactSummary.type_of_contact == 3), 1))).label('nice_hits'),
+            func.count(case((ContactSummary.type_of_contact == 2, 1))).label('perfect_hits'),
+            func.count(case((ContactSummary.secondary_result == 7, 1))).label('singles'),
+            func.count(case((ContactSummary.secondary_result == 8, 1))).label('doubles'),
+            func.count(case((ContactSummary.secondary_result == 9, 1))).label('triples'),
+            func.count(case((ContactSummary.secondary_result == 10, 1))).label('homeruns'),
+            func.count(case((ContactSummary.secondary_result == 14, 1))).label('sacflys'),
+            func.count(case((ContactSummary.secondary_result == 15, 1))).label('gidps'),
+            func.count(case((Event.result_of_ab == 1, 1))).label('strikeouts'),
+            func.count(case((Event.result_of_ab != 0, 1))).label('plate_appearances'),
+            func.sum(Event.result_rbi).label('rbi'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(Event, CharacterGameSummary.id == Event.batter_id)
+        .join(PitchSummary, PitchSummary.id == Event.pitch_summary_id)
+        .outerjoin(ContactSummary, contact_join_condition)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
 
-    #Redo groups, removing swing type
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-    non_contact_batting_query = ( 
-        'SELECT \n'
-       f"{select_user}"
-       f"{select_char}"
-        'SUM(character_game_summary.walks_bb) AS summary_walks_bb, \n'
-        'SUM(character_game_summary.walks_hit) AS summary_walks_hbp, \n'
-        'SUM(character_game_summary.strikeouts) AS summary_strikeouts, \n'
-        'SUM(character_game_summary.singles) AS summary_singles, \n'
-        'SUM(character_game_summary.doubles) AS summary_doubles, \n'
-        'SUM(character_game_summary.triples) AS summary_triples, \n'
-        'SUM(character_game_summary.homeruns) AS summary_homeruns, \n'
-        'SUM(character_game_summary.sac_flys) AS summary_sac_flys, \n'
-        'SUM(character_game_summary.rbi) AS summary_rbi, \n'
-        'SUM(character_game_summary.at_bats) AS summary_at_bats, \n'
-        'SUM(character_game_summary.hits) AS summary_hits \n'
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN rio_user ON character_game_summary.user_id = rio_user.id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
-    )
+    if group_cols:
+        contact_batting_query = contact_batting_query.group_by(*group_cols)
+
     contact_batting_results = db.session.execute(contact_batting_query).all()
     non_contact_batting_results = db.session.execute(non_contact_batting_query).all()
 
-    batting_stats = {}
     for result_row in contact_batting_results:
-        update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char, group_by_swing)
+        update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions, group_by_swing)
     for result_row in non_contact_batting_results:
-        update_detailed_stats_dict(stat_dict, 'Batting', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions)
 
-    return batting_stats
+    # Add default runs_scored: 0 to all batting entries if requested
+    if include_runs_scored:
+        _add_default_to_stat_category(stat_dict, 'Batting', 'runs_scored', 0)
 
-def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+    # Optionally calculate runs scored (requires loading events and runners into memory)
+    if include_runs_scored:
 
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
+        # Build fresh select_cols and group_cols (not affected by group_by_swing)
+        runs_select_cols, runs_group_cols, _ = _build_base_query_components(
+            active_dimensions, game_ids, user_ids, char_ids, stat_type='Batting'
+        )
 
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+        runs_by_cgs = calculate_runs_scored_for_games(list(game_ids))
+        scoring_cgs_ids = list(runs_by_cgs.keys())
 
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
+        if scoring_cgs_ids:
+            runs_scored_query = (
+                select(
+                    *runs_select_cols,
+                    func.count(CharacterGameSummary.id).label('runs_scored'),
+                )
+                .select_from(CharacterGameSummary)
+                .join(Character, CharacterGameSummary.char_id == Character.char_id)
+                .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+                .where(
+                    CharacterGameSummary.id.in_(scoring_cgs_ids),
+                    *filters
+                )
+            )
 
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-    pitching_summary_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'SUM(character_game_summary.batters_faced) AS batters_faced, \n'
-        'SUM(character_game_summary.runs_allowed) AS runs_allowed, \n'
-        'SUM(character_game_summary.hits_allowed) AS hits_allowed, \n'
-        'SUM(character_game_summary.strikeouts_pitched) AS strikeouts_pitched, \n'
-        'SUM(character_game_summary.star_pitches_thrown) AS star_pitches_thrown, \n'
-        'SUM(character_game_summary.outs_pitched) AS outs_pitched, \n'
-        'SUM(character_game_summary.batters_walked) AS walks_bb, \n'
-        'SUM(character_game_summary.batters_hit) AS walks_hbp, \n'
-        'SUM(character_game_summary.pitches_thrown) AS total_pitches \n'
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+            if runs_group_cols:
+                runs_scored_query = runs_scored_query.group_by(*runs_group_cols)
+
+            runs_scored_results = db.session.execute(runs_scored_query).all()
+
+            for result_row in runs_scored_results:
+                update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions)
+
+    return
+
+def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, include_pitcher_wins=False):
+
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids, stat_type='Pitching'
     )
+
+    pitching_summary_query = (
+        select(
+            *select_cols,
+            func.sum(CharacterGameSummary.batters_faced).label('batters_faced'),
+            func.sum(CharacterGameSummary.runs_allowed).label('runs_allowed'),
+            func.sum(CharacterGameSummary.hits_allowed).label('hits_allowed'),
+            func.sum(CharacterGameSummary.strikeouts_pitched).label('strikeouts_pitched'),
+            func.sum(CharacterGameSummary.star_pitches_thrown).label('star_pitches_thrown'),
+            func.sum(CharacterGameSummary.outs_pitched).label('outs_pitched'),
+            func.sum(CharacterGameSummary.batters_walked).label('walks_bb'),
+            func.sum(CharacterGameSummary.batters_hit).label('walks_hbp'),
+            func.sum(CharacterGameSummary.pitches_thrown).label('total_pitches'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
+    )
+
+    if group_cols:
+        pitching_summary_query = pitching_summary_query.group_by(*group_cols)
 
     pitch_breakdown_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'COUNT(CASE WHEN (pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing = 0) THEN 1 ELSE NULL END) AS balls, \n'
-        'COUNT(CASE WHEN ('
-            '(pitch_summary.in_strikezone = true AND pitch_summary.contact_summary_id IS NULL) OR'
-            '(pitch_summary.in_strikezone = false AND pitch_summary.type_of_swing > 0)'
-            ') THEN 1 ELSE NULL END) AS strikes \n'
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN event ON character_game_summary.id = event.pitcher_id \n'
-        'JOIN pitch_summary ON pitch_summary.id = event.pitch_summary_id \n'
-        'LEFT JOIN contact_summary ON contact_summary.id = pitch_summary.contact_summary_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            func.count(case((
+                (PitchSummary.in_strikezone == False) & (PitchSummary.type_of_swing == 0),
+                1
+            ))).label('balls'),
+            func.count(case((
+                ((PitchSummary.in_strikezone == True) & PitchSummary.contact_summary_id.is_(None)) |
+                ((PitchSummary.in_strikezone == False) & (PitchSummary.type_of_swing > 0)),
+                1
+            ))).label('strikes'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(Event, CharacterGameSummary.id == Event.pitcher_id)
+        .join(PitchSummary, PitchSummary.id == Event.pitch_summary_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        pitch_breakdown_query = pitch_breakdown_query.group_by(*group_cols)
 
     pitching_summary_results = db.session.execute(pitching_summary_query).all()
     pitch_breakdown_results = db.session.execute(pitch_breakdown_query).all()
+
     for result_row in pitching_summary_results:
-        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
     for result_row in pitch_breakdown_results:
-        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
+
+    # Add default pitcher_wins: 0 to all pitching entries if requested
+    if include_pitcher_wins:
+        _add_default_to_stat_category(stat_dict, 'Pitching', 'pitcher_wins', 0)
+
+    # Optionally calculate pitcher wins (requires loading events into memory)
+    if include_pitcher_wins:
+        winning_pitcher_by_game = calculate_pitcher_wins_for_games(list(game_ids))
+        winning_cgs_ids = list(winning_pitcher_by_game.values())
+
+        if winning_cgs_ids:
+            pitcher_wins_query = (
+                select(
+                    *select_cols,
+                    func.count(CharacterGameSummary.id).label('pitcher_wins'),
+                )
+                .select_from(CharacterGameSummary)
+                .join(Character, CharacterGameSummary.char_id == Character.char_id)
+                .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+                .where(
+                    CharacterGameSummary.id.in_(winning_cgs_ids),
+                    *filters
+                )
+            )
+
+            if group_cols:
+                pitcher_wins_query = pitcher_wins_query.group_by(*group_cols)
+
+            pitcher_wins_results = db.session.execute(pitcher_wins_query).all()
+
+            for result_row in pitcher_wins_results:
+                update_detailed_stats_dict(stat_dict, 'Pitching', result_row, active_dimensions)
+
     return
 
-def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
+def query_detailed_misc_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions):
 
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids
+    )
 
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
-
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-
-    if group_by_char:
-        divide_by = 1
-    elif len(char_ids) > 0:
-        divide_by = len(char_ids)
+    # CharacterGameSummary stores 9 rows per game (one per character).
+    # When filtering by specific chars: count "character-wins" (each char gets credit per win)
+    # When viewing all chars: normalize to "games won" (avoid counting same game 9 times)
+    # When grouping by_game or by_roster_order: each row is already per-character, no normalization needed
+    if active_dimensions.get('char') or active_dimensions.get('roster_order'):
+        divide_by = 1  # Each char gets separate row - no normalization needed
+    elif active_dimensions.get('game') or len(char_ids) > 0:
+        divide_by = 1  # Per-game grouping or char filter - no normalization needed
     else:
-        divide_by = 9
+        divide_by = 9  # Normalize to games won (9 char-rows per game → 1 game)
 
     query = (
-        'SELECT '
-       f"{select_user}"
-       f"{select_char}"
-       f"SUM(CASE WHEN game.away_score > game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS away_wins, \n"
-       f"SUM(CASE WHEN game.away_score < game.home_score AND game.away_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS away_loses, \n"
-       f"SUM(CASE WHEN game.home_score > game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS home_wins, \n"
-       f"SUM(CASE WHEN game.home_score < game.away_score AND game.home_player_id = rio_user.id THEN 1 ELSE 0 END)/{divide_by} AS home_loses, \n"      
-       f"COUNT(*)/{divide_by} AS game_appearances \n "
-        # 'SUM(character_game_summary.defensive_star_successes) AS defensive_star_successes, \n'
-        # 'SUM(character_game_summary.defensive_star_chances) AS defensive_star_chances, \n'
-        # 'SUM(character_game_summary.defensive_star_chances_won) AS defensive_star_chances_won, \n'
-        # 'SUM(character_game_summary.offensive_stars_put_in_play) AS offensive_stars_put_in_play, \n'
-        # 'SUM(character_game_summary.offensive_star_successes) AS offensive_star_successes, \n'
-        # 'SUM(character_game_summary.offensive_star_chances) AS offensive_star_chances, \n'
-        # 'SUM(character_game_summary.offensive_star_chances_won) AS offensive_star_chances_won \n'
-        'FROM character_game_summary \n'
-        'JOIN game ON character_game_summary.game_id = game.game_id \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            (func.sum(case((
+                (Game.away_score > Game.home_score) & (Game.away_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('away_wins'),
+            (func.sum(case((
+                (Game.away_score < Game.home_score) & (Game.away_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('away_loses'),
+            (func.sum(case((
+                (Game.home_score > Game.away_score) & (Game.home_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('home_wins'),
+            (func.sum(case((
+                (Game.home_score < Game.away_score) & (Game.home_player_id == RioUser.id),
+                1
+            ), else_=0)) / divide_by).label('home_loses'),
+            (func.count() / divide_by).label('game_appearances'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Game, CharacterGameSummary.game_id == Game.game_id)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        query = query.group_by(*group_cols)
 
     results = db.session.execute(query).all()
     for result_row in results:
-        update_detailed_stats_dict(stat_dict, 'Misc', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Misc', result_row, active_dimensions)
 
     return
 
-def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, group_by_user=False, group_by_char=False):
+def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions):
 
-    where_statement = build_where_statement(game_ids, char_ids, user_ids)
-
-    by_user = 'character_game_summary.user_id, rio_user.username' if group_by_user else ''
-    select_user = 'character_game_summary.user_id, \n rio_user.username AS username, \n' if group_by_user else ''
-
-    by_char = 'character_game_summary.char_id, character.name' if group_by_char else ''
-    select_char = 'character_game_summary.char_id AS char_id, \n character.name AS char_name, \n' if group_by_char else ''
-
-    # Build groupby statement by joining all the groups together. Empty statement if all groups are empty
-    groups = ','.join(filter(None,[by_user, by_char]))
-    group_by_statement = f"GROUP BY {groups} " if groups != '' else ''
-    position_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'SUM(pitches_at_p) AS pitches_per_p, \n'
-        'SUM(pitches_at_c) AS pitches_per_c, \n'
-        'SUM(pitches_at_1b) AS pitches_per_1b, \n'
-        'SUM(pitches_at_2b) AS pitches_per_2b, \n'
-        'SUM(pitches_at_3b) AS pitches_per_3b, \n'
-        'SUM(pitches_at_ss) AS pitches_per_ss, \n'
-        'SUM(pitches_at_lf) AS pitches_per_lf, \n'
-        'SUM(pitches_at_cf) AS pitches_per_cf, \n'
-        'SUM(pitches_at_rf) AS pitches_per_rf, \n'
-        'SUM(outs_at_p) AS outs_per_p, \n'
-        'SUM(outs_at_c) AS outs_per_c, \n'
-        'SUM(outs_at_1b) AS outs_per_1b, \n'
-        'SUM(outs_at_2b) AS outs_per_2b, \n'
-        'SUM(outs_at_3b) AS outs_per_3b, \n'
-        'SUM(outs_at_ss) AS outs_per_ss, \n'
-        'SUM(outs_at_lf) AS outs_per_lf, \n'
-        'SUM(outs_at_cf) AS outs_per_cf, \n'
-        'SUM(outs_at_rf) AS outs_per_rf \n'
-        #SUM( Insert other stats once questions addressed
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN character_position_summary ON character_position_summary.id = character_game_summary.character_position_summary_id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+    select_cols, group_cols, filters = _build_base_query_components(
+        active_dimensions, game_ids, user_ids, char_ids
     )
+
+    position_query = (
+        select(
+            *select_cols,
+            func.sum(CharacterPositionSummary.pitches_at_p).label('pitches_per_p'),
+            func.sum(CharacterPositionSummary.pitches_at_c).label('pitches_per_c'),
+            func.sum(CharacterPositionSummary.pitches_at_1b).label('pitches_per_1b'),
+            func.sum(CharacterPositionSummary.pitches_at_2b).label('pitches_per_2b'),
+            func.sum(CharacterPositionSummary.pitches_at_3b).label('pitches_per_3b'),
+            func.sum(CharacterPositionSummary.pitches_at_ss).label('pitches_per_ss'),
+            func.sum(CharacterPositionSummary.pitches_at_lf).label('pitches_per_lf'),
+            func.sum(CharacterPositionSummary.pitches_at_cf).label('pitches_per_cf'),
+            func.sum(CharacterPositionSummary.pitches_at_rf).label('pitches_per_rf'),
+            func.sum(CharacterPositionSummary.outs_at_p).label('outs_per_p'),
+            func.sum(CharacterPositionSummary.outs_at_c).label('outs_per_c'),
+            func.sum(CharacterPositionSummary.outs_at_1b).label('outs_per_1b'),
+            func.sum(CharacterPositionSummary.outs_at_2b).label('outs_per_2b'),
+            func.sum(CharacterPositionSummary.outs_at_3b).label('outs_per_3b'),
+            func.sum(CharacterPositionSummary.outs_at_ss).label('outs_per_ss'),
+            func.sum(CharacterPositionSummary.outs_at_lf).label('outs_per_lf'),
+            func.sum(CharacterPositionSummary.outs_at_cf).label('outs_per_cf'),
+            func.sum(CharacterPositionSummary.outs_at_rf).label('outs_per_rf'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(CharacterPositionSummary, CharacterPositionSummary.id == CharacterGameSummary.character_position_summary_id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
+    )
+
+    if group_cols:
+        position_query = position_query.group_by(*group_cols)
 
     fielding_query = (
-        'SELECT '
-        f"{select_user}"
-        f"{select_char}"
-        'COUNT(CASE WHEN fielding_summary.action = 1 THEN 1 ELSE NULL END) AS jump_catches, \n'
-        'COUNT(CASE WHEN fielding_summary.action = 2 THEN 1 ELSE NULL END) AS diving_catches, \n'
-        'COUNT(CASE WHEN fielding_summary.action = 3 THEN 1 ELSE NULL END) AS wall_jumps, \n'
-        'SUM(CASE WHEN fielding_summary.swap = True THEN 1 ELSE 0 END) AS swap_successes, \n'
-        'COUNT(CASE WHEN fielding_summary.bobble != 0 THEN 1 ELSE NULL END) AS bobbles \n'
-        #SUM( Insert other stats once questions addressed
-        'FROM character_game_summary \n'
-        'JOIN character ON character_game_summary.char_id = character.char_id \n'
-        'JOIN fielding_summary ON fielding_summary.fielder_character_game_summary_id = character_game_summary.id \n'
-        'JOIN rio_user ON rio_user.id = character_game_summary.user_id \n'
-       f"{where_statement}"
-       f"{group_by_statement}"
+        select(
+            *select_cols,
+            func.count(case((FieldingSummary.action == 1, 1))).label('jump_catches'),
+            func.count(case((FieldingSummary.action == 2, 1))).label('diving_catches'),
+            func.count(case((FieldingSummary.action == 3, 1))).label('wall_jumps'),
+            func.sum(case((FieldingSummary.swap == True, 1), else_=0)).label('swap_successes'),
+            func.count(case((FieldingSummary.bobble != 0, 1))).label('bobbles'),
+        )
+        .select_from(CharacterGameSummary)
+        .join(Character, CharacterGameSummary.char_id == Character.char_id)
+        .join(FieldingSummary, FieldingSummary.fielder_character_game_summary_id == CharacterGameSummary.id)
+        .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+        .where(*filters)
     )
+
+    if group_cols:
+        fielding_query = fielding_query.group_by(*group_cols)
 
     position_results = db.session.execute(position_query).all()
     fielding_results = db.session.execute(fielding_query).all()
     for result_row in position_results:
-        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, active_dimensions)
     for result_row in fielding_results:
-        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, group_by_user, group_by_char)
+        update_detailed_stats_dict(stat_dict, 'Fielding', result_row, active_dimensions)
     return
 
-def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, group_by_user=False, group_by_char=False, group_by_swing=False):
-    
-    #Transform SQLAlchemy result_row into a dict and remove extra fields
-    data_dict = result_row._asdict()
-    if ('username' in data_dict): data_dict.pop('username')
-    if ('user_id' in data_dict): data_dict.pop('user_id')
-    if ('char_name' in data_dict): data_dict.pop('char_name')
-    if ('char_id' in data_dict): data_dict.pop('char_id')
-    if ('type_of_swing' in data_dict): data_dict.pop('type_of_swing')
+def _add_default_to_stat_category(stat_dict, category, field_name, default_value):
+    """
+    Recursively adds a default field value to all entries in a stat category.
 
-    if group_by_user:
-        if result_row.username not in in_stat_dict:
-            in_stat_dict[result_row.username] = {}
+    This ensures fields like 'pitcher_wins' or 'runs_scored' appear as 0
+    even when a player has no wins/runs, maintaining consistent response structure.
 
-        USER_DICT = in_stat_dict[result_row.username]
-    
-        #User=1, Char=1, Swing=X
-        if group_by_char:
-            if result_row.char_name not in USER_DICT:
-                USER_DICT[result_row.char_name] = {}
+    Handles nested stat-specific groupings (e.g., handedness) inside the category.
+    """
+    def add_to_nested_dict(d):
+        if isinstance(d, dict):
+            # If this dict contains the category
+            if category in d and isinstance(d[category], dict):
+                category_dict = d[category]
+                # Check if the category dict contains stat data or more nesting
+                # If all values are dicts, it's nested (e.g., handedness grouping)
+                # If it has non-dict values, it's the stat data level
+                has_stat_data = any(not isinstance(v, dict) for v in category_dict.values())
 
-            CHAR_DICT = USER_DICT[result_row.char_name]
-
-            #Look at result type
-            if (type_of_result == 'Batting'):
-
-                if type_of_result not in CHAR_DICT:
-                    CHAR_DICT[type_of_result] = {}
-
-                #User=1, Char=1, Swing=1
-                if group_by_swing:
-                    BATTING_DICT = CHAR_DICT[type_of_result]
-
-                    if cTYPE_OF_SWING[result_row.type_of_swing] not in BATTING_DICT:
-                        BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-                    elif cTYPE_OF_SWING[result_row.type_of_swing] in BATTING_DICT:
-                        print('ERROR: FOUND PREVIOUS SWING TYPE')
-                        
-                    BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
-                
-                #User=1, Char=1, Swing=0
+                if has_stat_data:
+                    # This is the stat data level - add the default here
+                    if field_name not in category_dict:
+                        category_dict[field_name] = default_value
                 else:
-                    CHAR_DICT[type_of_result].update(data_dict)
-            
-            elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Misc'):
-                if type_of_result not in CHAR_DICT:
-                    CHAR_DICT[type_of_result] = {}
-                CHAR_DICT[type_of_result].update(data_dict)
+                    # This is a grouping level (e.g., handedness) - recurse into it
+                    for value in category_dict.values():
+                        if isinstance(value, dict) and field_name not in value:
+                            value[field_name] = default_value
 
-        #User=1, Char=0, Swing=1
-        elif group_by_swing and type_of_result == 'Batting':
-            if type_of_result not in USER_DICT:
-                USER_DICT[type_of_result] = {}
-            
-            if cTYPE_OF_SWING[result_row.type_of_swing] not in USER_DICT[type_of_result]:
-                USER_DICT[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-            elif USER_DICT[cTYPE_OF_SWING[result_row.type_of_swing]]:
-                print('ERROR: FOUND PREVIOUS SWING TYPE')
-                pprint(result_row._asdict())
-                
-            USER_DICT[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
+            # Recurse into all nested dicts
+            for value in d.values():
+                if isinstance(value, dict):
+                    add_to_nested_dict(value)
 
-        #User=1, Char=0, Swing=0 if batting
-        else:
-            if type_of_result not in USER_DICT:
-                USER_DICT[type_of_result] = {}
+    add_to_nested_dict(stat_dict)
 
-            USER_DICT[type_of_result].update(data_dict)
 
-    #User=0, Char=1, Swing=X
-    elif group_by_char:
-        if result_row.char_name not in in_stat_dict:
-            in_stat_dict[result_row.char_name] = {}
+def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_dimensions, group_by_swing=False):
+    """
+    Update nested stat dictionary with result row data.
 
-        CHAR_DICT = in_stat_dict[result_row.char_name]
+    Builds nested dict structure: [game_id]? → [username]? → [roster_loc]? → [char_name]? → type_of_result → [batting_hand|fielding_hand|swing]? → stat_data
+    Uses GROUPING_DIMENSIONS config for universal dimensions, stat-specific dimensions nest inside type_of_result.
 
-        #Look at result type
-        if (type_of_result == 'Batting'):
+    Args:
+        in_stat_dict: The dictionary to update (modified in place)
+        type_of_result: The stat category ('Batting', 'Pitching', 'Fielding', 'Misc')
+        result_row: SQLAlchemy result row containing stat data
+        active_dimensions: Dict of dimension_name -> bool (e.g., {'user': True, 'char': False})
+        group_by_swing: Whether swing grouping is active (Batting only, stat-specific)
+    """
+    # Extract stat data and build navigation path
+    data_dict = result_row._asdict()
+    path = []
 
-            #Build batting
-            if type_of_result not in CHAR_DICT:
-                CHAR_DICT[type_of_result] = {}
+    # Universal grouping dimensions (iterate through config in defined order)
+    # Skip stat-specific dimensions (batting_hand, fielding_hand) - they go after type_of_result
+    for dim_name in GROUPING_ORDER:
+        if active_dimensions.get(dim_name):
+            config = GROUPING_DIMENSIONS[dim_name]
+            # Skip stat-specific dimensions - handled after type_of_result
+            if 'stat_specific' in config:
+                continue
 
-            #User=0, Char=1, Swing=1
-            if group_by_swing:
-                BATTING_DICT = CHAR_DICT[type_of_result]
+            path_value = getattr(result_row, config['path_key'])
+            path.append(path_value)
+            for key in config['data_keys_to_remove']:
+                data_dict.pop(key, None)
 
-                if cTYPE_OF_SWING[result_row.type_of_swing] not in BATTING_DICT:
-                    BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-                elif cTYPE_OF_SWING[result_row.type_of_swing] in BATTING_DICT:
-                    print('ERROR: FOUND PREVIOUS SWING TYPE')
-                    
-                BATTING_DICT[cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
-            
-            #User=0, Char=1, Swing=0
-            else:
-                CHAR_DICT[type_of_result].update(data_dict)
+    # Always add type_of_result level (Batting/Pitching/Fielding/Misc)
+    path.append(type_of_result)
 
-        elif (type_of_result == 'Pitching' or type_of_result == 'Fielding' or type_of_result == 'Misc'):
-            if type_of_result not in CHAR_DICT:
-                CHAR_DICT[type_of_result] = {}
-            CHAR_DICT[type_of_result].update(data_dict)
-    
-    #User=0, Char=0, Swing=1
-    elif group_by_swing and type_of_result == 'Batting':
-        #Build batting
-        if type_of_result not in in_stat_dict:
-            in_stat_dict[type_of_result] = {}
+    # Stat-specific grouping dimensions go AFTER type_of_result
+    # batting_hand: only for Batting stats
+    if active_dimensions.get('batting_hand') and type_of_result == 'Batting':
+        batting_hand_name = cHANDEDNESS.get(result_row.batting_hand, 'Unknown')
+        path.append(batting_hand_name)
+        data_dict.pop('batting_hand', None)
 
-        if cTYPE_OF_SWING[result_row.type_of_swing] not in in_stat_dict[type_of_result]:
-            in_stat_dict[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]] = {}
-        elif cTYPE_OF_SWING[result_row.type_of_swing] in in_stat_dict[type_of_result]:
-            print('ERROR: FOUND PREVIOUS SWING TYPE')
-            
-        in_stat_dict[type_of_result][cTYPE_OF_SWING[result_row.type_of_swing]].update(data_dict)
+    # fielding_hand: only for Pitching stats
+    if active_dimensions.get('fielding_hand') and type_of_result == 'Pitching':
+        fielding_hand_name = cHANDEDNESS.get(result_row.fielding_hand, 'Unknown')
+        path.append(fielding_hand_name)
+        data_dict.pop('fielding_hand', None)
 
-    #User=0, Char=0, Swing=0
-    else:
-        if type_of_result not in in_stat_dict:
-            in_stat_dict[type_of_result] = {}
-        in_stat_dict[type_of_result].update(data_dict)
+    # by_swing: only for Batting stats
+    if group_by_swing and type_of_result == 'Batting':
+        swing_name = cTYPE_OF_SWING[result_row.type_of_swing]
+        path.append(swing_name)
+        data_dict.pop('type_of_swing', None)
+
+    # Navigate to target dict, creating nested dicts as needed
+    current_dict = in_stat_dict
+    for key in path:
+        if key not in current_dict:
+            current_dict[key] = {}
+        current_dict = current_dict[key]
+
+    # Update final dict with stat data
+    current_dict.update(data_dict)
 
 @app.route('/stats/fix/', methods = ['GET'])
 def fix_event_cgs_ids():

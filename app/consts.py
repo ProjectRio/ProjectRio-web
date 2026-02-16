@@ -40,6 +40,11 @@ cTYPE_OF_SWING = {
     4: "Bunt"
 }
 
+cHANDEDNESS = {
+    0: "Right",
+    1: "Left"
+}
+
 cTAG_TYPES = {
     0: "Component",
     1: "Competition",
