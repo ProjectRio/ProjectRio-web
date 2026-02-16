@@ -22,7 +22,8 @@ from .stats.runs_scored import calculate_runs_scored_for_games
 #    Example: 'position': (request.args.get('by_position') == '1')
 # That's it! The dimension automatically flows through all query functions and update_detailed_stats_dict
 
-# Order of dimensions in the nested dict structure: game → user → char → roster_order → batting_hand → fielding_hand → stat_type → swing (swing handled separately)
+# Order of dimensions in the nested dict structure: game → user → roster_order → char → stat_type → [batting_hand|fielding_hand|swing]
+# Note: batting_hand, fielding_hand, and swing are stat-specific and nest INSIDE stat_type, not before it
 GROUPING_ORDER = ['game', 'user', 'roster_order', 'char', 'batting_hand', 'fielding_hand']
 
 # Config field descriptions:
@@ -1569,8 +1570,8 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     """
     Update nested stat dictionary with result row data.
 
-    Builds nested dict structure: [game_id]? → [username]? → [char_name]? → [roster_loc]? → [batting_hand]? → [fielding_hand]? → type_of_result → [swing_type]? → stat_data
-    Uses GROUPING_DIMENSIONS config for universal dimensions, special handling for stat-specific dimensions.
+    Builds nested dict structure: [game_id]? → [username]? → [roster_loc]? → [char_name]? → type_of_result → [batting_hand|fielding_hand|swing]? → stat_data
+    Uses GROUPING_DIMENSIONS config for universal dimensions, stat-specific dimensions nest inside type_of_result.
 
     Args:
         in_stat_dict: The dictionary to update (modified in place)
@@ -1584,18 +1585,15 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     path = []
 
     # Universal grouping dimensions (iterate through config in defined order)
+    # Skip stat-specific dimensions (batting_hand, fielding_hand) - they go after type_of_result
     for dim_name in GROUPING_ORDER:
         if active_dimensions.get(dim_name):
             config = GROUPING_DIMENSIONS[dim_name]
-            # Skip stat-specific dimensions if stat type doesn't match
-            if 'stat_specific' in config and type_of_result not in config['stat_specific']:
+            # Skip stat-specific dimensions - handled after type_of_result
+            if 'stat_specific' in config:
                 continue
 
-            # Convert handedness values to text
             path_value = getattr(result_row, config['path_key'])
-            if dim_name == 'batting_hand' or dim_name == 'fielding_hand':
-                path_value = cHANDEDNESS.get(path_value, 'Unknown')
-
             path.append(path_value)
             for key in config['data_keys_to_remove']:
                 data_dict.pop(key, None)
@@ -1603,7 +1601,20 @@ def update_detailed_stats_dict(in_stat_dict, type_of_result, result_row, active_
     # Always add type_of_result level (Batting/Pitching/Fielding/Misc)
     path.append(type_of_result)
 
-    # Stat-specific grouping: by_swing only applies to Batting
+    # Stat-specific grouping dimensions go AFTER type_of_result
+    # batting_hand: only for Batting stats
+    if active_dimensions.get('batting_hand') and type_of_result == 'Batting':
+        batting_hand_name = cHANDEDNESS.get(result_row.batting_hand, 'Unknown')
+        path.append(batting_hand_name)
+        data_dict.pop('batting_hand', None)
+
+    # fielding_hand: only for Pitching stats
+    if active_dimensions.get('fielding_hand') and type_of_result == 'Pitching':
+        fielding_hand_name = cHANDEDNESS.get(result_row.fielding_hand, 'Unknown')
+        path.append(fielding_hand_name)
+        data_dict.pop('fielding_hand', None)
+
+    # by_swing: only for Batting stats
     if group_by_swing and type_of_result == 'Batting':
         swing_name = cTYPE_OF_SWING[result_row.type_of_swing]
         path.append(swing_name)
