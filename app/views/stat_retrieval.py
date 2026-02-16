@@ -9,6 +9,7 @@ import time
 import datetime
 import itertools
 from .stats.pitcher_wins import calculate_pitcher_wins_for_games
+from .stats.runs_scored import calculate_runs_scored_for_games
 
 # === Parameterized Grouping Configuration ===
 # Universal grouping dimensions that apply to all stat types (Batting, Pitching, Fielding, Misc)
@@ -1148,6 +1149,7 @@ def endpoint_detailed_stats():
     group_by_swing = (request.args.get('by_swing') == '1')
     exclude_nonfair = (request.args.get('exclude_nonfair') == '1')
     include_pitcher_wins = (request.args.get('include_pitcher_wins') == '1')
+    include_runs_scored = (request.args.get('include_runs_scored') == '1')
 
     # Stat exclusion flags
     exclude_batting_stats = (request.args.get('exclude_batting') == '1')
@@ -1176,7 +1178,7 @@ def endpoint_detailed_stats():
     # Individual functions create queries to get their respective stats
     return_dict = {}
     if (not exclude_batting_stats):
-        batting_stats = query_detailed_batting_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing, exclude_nonfair)
+        batting_stats = query_detailed_batting_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing, exclude_nonfair, include_runs_scored)
     if (not exclude_pitching_stats):
         pitching_stats = query_detailed_pitching_stats(return_dict, game_ids, user_ids, char_ids, active_dimensions, include_pitcher_wins)
     if (not exclude_misc_stats):
@@ -1187,7 +1189,7 @@ def endpoint_detailed_stats():
         'Stats': return_dict
     }
 
-def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing=False, exclude_nonfair=False):
+def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active_dimensions, group_by_swing=False, exclude_nonfair=False, include_runs_scored=False):
 
     select_cols, group_cols, filters = _build_base_query_components(
         active_dimensions, game_ids, user_ids, char_ids
@@ -1265,6 +1267,40 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
         update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions, group_by_swing)
     for result_row in non_contact_batting_results:
         update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions)
+
+    # Optionally calculate runs scored (requires loading events and runners into memory)
+    if include_runs_scored:
+
+        # Build fresh select_cols and group_cols (not affected by group_by_swing)
+        runs_select_cols, runs_group_cols, _ = _build_base_query_components(
+            active_dimensions, game_ids, user_ids, char_ids
+        )
+
+        runs_by_cgs = calculate_runs_scored_for_games(list(game_ids))
+        scoring_cgs_ids = list(runs_by_cgs.keys())
+
+        if scoring_cgs_ids:
+            runs_scored_query = (
+                select(
+                    *runs_select_cols,
+                    func.count(CharacterGameSummary.id).label('runs_scored'),
+                )
+                .select_from(CharacterGameSummary)
+                .join(Character, CharacterGameSummary.char_id == Character.char_id)
+                .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
+                .where(
+                    CharacterGameSummary.id.in_(scoring_cgs_ids),
+                    *filters
+                )
+            )
+
+            if runs_group_cols:
+                runs_scored_query = runs_scored_query.group_by(*runs_group_cols)
+
+            runs_scored_results = db.session.execute(runs_scored_query).all()
+
+            for result_row in runs_scored_results:
+                update_detailed_stats_dict(stat_dict, 'Batting', result_row, active_dimensions)
 
     return
 
