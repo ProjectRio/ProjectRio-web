@@ -7,3 +7,4 @@ endpoint_log.log
 Dockerfile
 /venv
 CLAUDE.md
+/.claude
