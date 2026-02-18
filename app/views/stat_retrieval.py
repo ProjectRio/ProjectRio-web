@@ -1237,6 +1237,7 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
             func.sum(CharacterGameSummary.rbi).label('summary_rbi'),
             func.sum(CharacterGameSummary.at_bats).label('summary_at_bats'),
             func.sum(CharacterGameSummary.hits).label('summary_hits'),
+            func.sum(CharacterGameSummary.star_hits).label('star_hits')
         )
         .select_from(CharacterGameSummary)
         .join(Character, CharacterGameSummary.char_id == Character.char_id)
@@ -1507,6 +1508,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, activ
             func.sum(CharacterPositionSummary.outs_at_lf).label('outs_per_lf'),
             func.sum(CharacterPositionSummary.outs_at_cf).label('outs_per_cf'),
             func.sum(CharacterPositionSummary.outs_at_rf).label('outs_per_rf'),
+            func.sum(CharacterGameSummary.big_plays).label('big_plays')
         )
         .select_from(CharacterGameSummary)
         .join(Character, CharacterGameSummary.char_id == Character.char_id)
