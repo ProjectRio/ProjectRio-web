@@ -298,6 +298,7 @@ def _build_linescores(game_ids):
             Event.half_inning,
             Event.away_score,
             Event.home_score,
+            Event.result_rbi,
         )
         .join(subq, (Event.game_id == subq.c.game_id) & (Event.event_num == subq.c.max_event_num))
         .order_by(Event.game_id, Event.inning, Event.half_inning)
@@ -317,12 +318,13 @@ def _compute_linescore_from_halves(half_innings):
     prev_away = 0
     prev_home = 0
     for hi in half_innings:
+        # away_score/home_score is pre-play, so add result_rbi to get true end-of-half score
         if hi.half_inning == 0:  # Top (away batting)
-            away.append(hi.away_score - prev_away)
+            away.append(hi.away_score + hi.result_rbi - prev_away)
+            prev_away = hi.away_score + hi.result_rbi
         else:  # Bottom (home batting)
-            home.append(hi.home_score - prev_home)
-        prev_away = hi.away_score
-        prev_home = hi.home_score
+            home.append(hi.home_score + hi.result_rbi - prev_home)
+            prev_home = hi.home_score + hi.result_rbi
     return {0: away, 1: home}
 
 
