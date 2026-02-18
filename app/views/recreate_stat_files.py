@@ -209,7 +209,7 @@ def recreate_stat_file():
   events = db.session.execute(event_query).all()
   event_list = list()
   for event in events:
-    event_data = event_data = parse_event_data(event)
+    event_data = parse_event_data(event)
     event_list.append(event_data)
 
   json_stat_file = {
@@ -298,14 +298,19 @@ def build_events_query(filter_by_game_id, where_statement_in_values):
     "event.pitcher_stamina, \n"
     "event.chem_links_ob, \n"
     "event.result_rbi, \n"
+    "event.result_num_of_outs, \n"
     "event.result_of_ab, \n"
     "pitcher.char_id AS pitcher, \n"
     "pitcher.id AS pitcher_cgs_id, \n"
+    "pitcher.roster_loc AS pitcher_roster_loc, \n"
     "batter.char_id AS batter, \n"
     "batter.id AS batter_cgs_id, \n"
+    "batter.roster_loc AS batter_roster_loc, \n"
     "catcher.char_id AS catcher, \n"
     "catcher.id AS catcher_cgs_id, \n"
+    "catcher.roster_loc AS catcher_roster_loc, \n"
     "runner_cgs.char_id AS runner_char_id, \n"
+    "runner_cgs.roster_loc AS runner_batter_roster_loc, \n"
     "runner_batter.initial_base AS runner_batter_initial_base, \n"
     "runner_batter.result_base AS runner_batter_result_base, \n"
     "runner_batter.out_type AS runner_batter_out_type, \n"
@@ -318,6 +323,7 @@ def build_events_query(filter_by_game_id, where_statement_in_values):
     "runner_1b.steal AS runner_1b_steal, \n"
     "runner_1b.runner_character_game_summary_id AS runner_1b_cgs_id, \n"
     "b1_cgs.char_id AS runner_1b_char_id, \n"
+    "b1_cgs.roster_loc AS runner_1b_roster_loc, \n"
     "runner_2b.initial_base AS runner_2b_initial_base, \n"
     "runner_2b.result_base AS runner_2b_result_base, \n"
     "runner_2b.out_type AS runner_2b_out_type, \n"
@@ -325,6 +331,7 @@ def build_events_query(filter_by_game_id, where_statement_in_values):
     "runner_2b.steal AS runner_2b_steal, \n"
     "runner_2b.runner_character_game_summary_id AS runner_2b_cgs_id, \n"
     "b2_cgs.char_id AS runner_2b_char_id, \n"
+    "b2_cgs.roster_loc AS runner_2b_roster_loc, \n"
     "runner_3b.initial_base AS runner_3b_initial_base, \n"
     "runner_3b.result_base AS runner_3b_result_base, \n"
     "runner_3b.out_type AS runner_3b_out_type, \n"
@@ -332,15 +339,16 @@ def build_events_query(filter_by_game_id, where_statement_in_values):
     "runner_3b.steal AS runner_3b_steal, \n"
     "runner_3b.runner_character_game_summary_id AS runner_3b_cgs_id, \n"
     "b3_cgs.char_id AS runner_3b_char_id, \n"
+    "b3_cgs.roster_loc AS runner_3b_roster_loc, \n"
     "pitch_summary.pitch_type, \n"
     "pitch_summary.charge_pitch_type, \n"
     "pitch_summary.star_pitch, \n"
     "pitch_summary.pitch_speed, \n"
-    "pitch_summary.pitch_ball_x_pos, \n"
-    "pitch_summary.pitch_ball_z_pos, \n"
-    "pitch_summary.pitch_batter_x_pos, \n"
-    "pitch_summary.pitch_batter_z_pos, \n"
-    "pitch_summary.pitch_result, \n"
+    "pitch_summary.ball_position_strikezone, \n"
+    "pitch_summary.in_strikezone, \n"
+    "pitch_summary.bat_x_contact_pos, \n"
+    "pitch_summary.bat_z_contact_pos, \n"
+    "pitch_summary.d_ball, \n"
     "pitch_summary.type_of_swing, \n"
     "contact_summary.type_of_contact, \n"
     "contact_summary.charge_power_up, \n"
@@ -349,20 +357,28 @@ def build_events_query(filter_by_game_id, where_statement_in_values):
     "contact_summary.input_direction, \n"
     "contact_summary.input_direction_stick, \n"
     "contact_summary.frame_of_swing_upon_contact, \n"
-    "contact_summary.ball_angle, \n"
-    "contact_summary.ball_horiz_power, \n"
-    "contact_summary.ball_vert_power, \n"
+    "contact_summary.ball_power, \n"
+    "contact_summary.ball_vert_angle, \n"
+    "contact_summary.ball_horiz_angle, \n"
+    "contact_summary.contact_absolute, \n"
+    "contact_summary.contact_quality, \n"
+    "contact_summary.rng1, \n"
+    "contact_summary.rng2, \n"
+    "contact_summary.rng3, \n"
     "contact_summary.ball_x_velocity, \n"
     "contact_summary.ball_y_velocity, \n"
     "contact_summary.ball_z_velocity, \n"
-    "contact_summary.ball_x_pos, \n"
-    "contact_summary.ball_y_pos, \n"
-    "contact_summary.ball_z_pos, \n"
+    "contact_summary.ball_x_contact_pos, \n"
+    "contact_summary.ball_z_contact_pos, \n"
+    "contact_summary.ball_x_landing_pos, \n"
+    "contact_summary.ball_y_landing_pos, \n"
+    "contact_summary.ball_z_landing_pos, \n"
     "contact_summary.ball_max_height, \n"
-    "contact_summary.multi_out, \n"
+    "contact_summary.ball_hang_time, \n"
     "contact_summary.primary_result, \n"
     "contact_summary.secondary_result, \n"
     "fielder_cgs.char_id AS fielder, \n"
+    "fielder_cgs.roster_loc AS fielder_roster_loc, \n"
     "fielding_summary.position, \n"
     "fielding_summary.action, \n"
     "fielding_summary.jump, \n"
@@ -413,57 +429,62 @@ def parse_event_data(event):
     "Pitcher Stamina": event.pitcher_stamina,
     "Chemistry Links on Base": event.chem_links_ob,
     "Pitcher CGS Id": event.pitcher_cgs_id,
+    "Pitcher Roster Loc": event.pitcher_roster_loc,
     "Batter CGS Id": event.batter_cgs_id,
+    "Batter Roster Loc": event.batter_roster_loc,
     "Catcher CGS Id": event.catcher_cgs_id,
-    "Pitcher": event.pitcher,
-    "Batter": event.batter,
-    "Catcher": event.catcher,
+    "Catcher Roster Loc": event.catcher_roster_loc,
     "RBI": event.result_rbi,
+    "Num Outs During Play": event.result_num_of_outs,
     "Result of AB": event.result_of_ab
   }
 
   # check if event has a batter
   if event.runner_batter_initial_base:
     event_data["Runner Batter"] = {
+      "Runner Roster Loc": event.runner_batter_roster_loc,
       "Runner Char Id": event.batter,
       "Runner Initial Base": event.runner_batter_initial_base,
-      "Runner Result Base": event.runner_batter_result_base,
       "Out Type": event.runner_batter_out_type,
       "Out Location": event.runner_batter_out_location,
-      "Steal": event.runner_batter_steal
+      "Steal": event.runner_batter_steal,
+      "Runner Result Base": event.runner_batter_result_base
     }
   # check if event has a runner on 1b
   if event.runner_1b_initial_base:
     event_data["Runner 1B"] = {
+      "Runner Roster Loc": event.runner_1b_roster_loc,
       "Runner Char Id": event.runner_1b_char_id,
       "Runner Initial Base": event.runner_1b_initial_base,
-      "Runner Result Base": event.runner_1b_result_base,
       "Out Type": event.runner_1b_out_type,
       "Out Location": event.runner_1b_out_location,
-      "Steal": event.runner_1b_steal
+      "Steal": event.runner_1b_steal,
+      "Runner Result Base": event.runner_1b_result_base,
     }
   # check if event has a runner on 2b
   if event.runner_2b_initial_base:
     event_data["Runner 2B"] = {
+      "Runner Roster Loc": event.runner_2b_roster_loc,
       "Runner Char Id": event.runner_2b_char_id,
       "Runner Initial Base": event.runner_2b_initial_base,
-      "Runner Result Base": event.runner_2b_result_base,
       "Out Type": event.runner_2b_out_type,
       "Out Location": event.runner_2b_out_location,
-      "Steal": event.runner_2b_steal
+      "Steal": event.runner_2b_steal,
+      "Runner Result Base": event.runner_2b_result_base
     }
   # check if event has a runner on 3b
   if event.runner_3b_initial_base:
     event_data["Runner 3B"] = {
+      "Runner Roster Loc": event.runner_3b_roster_loc,
       "Runner Char Id": event.runner_3b_char_id,
-      "Runner Initial Base": event.runner_3b_initial_base,
       "Runner Result Base": event.runner_3b_result_base,
       "Out Type": event.runner_3b_out_type,
       "Out Location": event.runner_3b_out_location,
-      "Steal": event.runner_3b_steal
+      "Steal": event.runner_3b_steal,
+      "Runner Initial Base": event.runner_3b_initial_base,
     }
   
-  if event.type_of_contact:
+  if event.pitch_type:
     event_data["Pitch"] = {
       "Pitcher Team Id": event.half_inning,
       "Pitcher Char Id": event.pitcher,
@@ -471,7 +492,11 @@ def parse_event_data(event):
       "Charge Type": event.charge_pitch_type,
       "Star Pitch": event.star_pitch,
       "Pitch Speed": event.pitch_speed,
-      "Pitch Result": event.pitch_result,
+      "Ball Position - Strikezone": event.ball_position_strikezone,
+      "In Strikezone": event.in_strikezone,
+      "Bat Contact Pos - X": event.bat_x_contact_pos,
+      "Bat Contact Pos - Z": event.bat_z_contact_pos,
+      "DB": event.d_ball,
       "Type of Swing": event.type_of_swing,
     }
 
@@ -484,27 +509,31 @@ def parse_event_data(event):
         "Input Direction - Push/Pull": event.input_direction,
         "Input Direction - Stick": event.input_direction_stick,
         "Frame of Swing Upon Contact": event.frame_of_swing_upon_contact,
-        "Ball Angle": event.ball_angle,
-        "Ball Vertical Power": event.ball_vert_power,
-        "Ball Horizontal Power": event.ball_horiz_power,
+        "Ball Power": event.ball_power,
+        "Vert Angle": event.ball_vert_angle,
+        "Horiz Angle": event.ball_horiz_angle,
+        "Contact Absolute": event.contact_absolute,
+        "Contact Quality": event.contact_quality,
+        "RNG1": event.rng1,
+        "RNG2": event.rng2,
+        "RNG3": event.rng3,
         "Ball Velocity - X": event.ball_x_velocity,
         "Ball Velocity - Y": event.ball_y_velocity,
         "Ball Velocity - Z": event.ball_z_velocity,
-        "Ball Landing Position - X": event.ball_x_pos,
-        "Ball Landing Position - Y": event.ball_y_pos,
-        "Ball Landing Position - Z": event.ball_z_pos,
+        "Ball Contact Pos - X": event.ball_x_contact_pos,
+        "Ball Contact Pos - Z": event.ball_z_contact_pos,
+        "Ball Landing Position - X": event.ball_x_landing_pos,
+        "Ball Landing Position - Y": event.ball_y_landing_pos,
+        "Ball Landing Position - Z": event.ball_z_landing_pos,
         "Ball Max Height": event.ball_max_height,
-        "Ball Position - X": event.pitch_ball_x_pos,
-        "Ball Position - Z": event.pitch_ball_z_pos,
-        "Batter Position Upon Contact - X": event.pitch_batter_x_pos,
-        "Batter Position Upon Contact - Z": event.pitch_batter_z_pos,
-        "Multi-out": event.multi_out,
+        "Ball Hang Time": event.ball_hang_time,
         "Contact Result - Primary": event.primary_result,
         "Contact Result - Secondary": event.secondary_result,
       }
 
       if event.position:
         event_data["Pitch"]["Contact"]["First Fielder"] = {
+          "Fielder Roster Location": event.fielder_roster_loc,
           "Fielder Position": event.position,
           "Fielder Character": event.fielder,
           "Fielder Action": event.action,
