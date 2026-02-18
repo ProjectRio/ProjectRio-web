@@ -333,8 +333,6 @@ def _build_scoring_plays(game_ids):
     '''
     batter_cgs = aliased(CharacterGameSummary)
     pitcher_cgs = aliased(CharacterGameSummary)
-    batter_char = aliased(Character)
-    pitcher_char = aliased(Character)
 
     rows = db.session.execute(
         select(
@@ -352,13 +350,11 @@ def _build_scoring_plays(game_ids):
             Event.runner_on_1,
             Event.runner_on_2,
             Event.runner_on_3,
-            batter_char.name.label('batter'),
-            pitcher_char.name.label('pitcher'),
+            batter_cgs.char_id.label('batter'),
+            pitcher_cgs.char_id.label('pitcher'),
         )
         .join(batter_cgs, Event.batter_id == batter_cgs.id)
-        .join(batter_char, batter_cgs.char_id == batter_char.char_id)
         .join(pitcher_cgs, Event.pitcher_id == pitcher_cgs.id)
-        .join(pitcher_char, pitcher_cgs.char_id == pitcher_char.char_id)
         .where(
             Event.game_id.in_(game_ids),
             Event.result_rbi > 0,
@@ -373,7 +369,7 @@ def _build_scoring_plays(game_ids):
             if rid is not None:
                 runner_ids.add(rid)
 
-    # Batch-query all runners with their character names
+    # Batch-query all runners with their char_ids
     runner_lookup = {}
     if runner_ids:
         runner_rows = db.session.execute(
@@ -384,15 +380,14 @@ def _build_scoring_plays(game_ids):
                 Runner.out_type,
                 Runner.out_location,
                 Runner.steal,
-                Character.name.label('runner_name'),
+                CharacterGameSummary.char_id,
             )
             .join(CharacterGameSummary, Runner.runner_character_game_summary_id == CharacterGameSummary.id)
-            .join(Character, CharacterGameSummary.char_id == Character.char_id)
             .where(Runner.id.in_(runner_ids))
         ).all()
         for r in runner_rows:
             runner_lookup[r.id] = {
-                'character': r.runner_name,
+                'char_id': r.char_id,
                 'initial_base': r.initial_base,
                 'result_base': r.result_base,
                 'out_type': r.out_type,
