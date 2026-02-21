@@ -270,72 +270,13 @@ def get_rosters_from_game(game_id):
     return away_dict, home_dict
 
 
-def _build_linescores(game_ids):
-    '''Build per-half-inning run totals for each game.
-
-    Returns dict: {game_id: {'away': [runs_per_half, ...], 'home': [runs_per_half, ...]}}
-
-    Uses the last event in each half-inning to get the cumulative score,
-    then diffs consecutive half-innings to get runs scored per half.
-    '''
-    # Get the last event per half-inning (max event_num) with its score
-    subq = (
-        select(
-            Event.game_id,
-            Event.inning,
-            Event.half_inning,
-            func.max(Event.event_num).label('max_event_num'),
-        )
-        .where(Event.game_id.in_(game_ids))
-        .group_by(Event.game_id, Event.inning, Event.half_inning)
-        .subquery()
-    )
-
-    rows = db.session.execute(
-        select(
-            Event.game_id,
-            Event.inning,
-            Event.half_inning,
-            Event.away_score,
-            Event.home_score,
-            Event.result_rbi,
-        )
-        .join(subq, (Event.game_id == subq.c.game_id) & (Event.event_num == subq.c.max_event_num))
-        .order_by(Event.game_id, Event.inning, Event.half_inning)
-    ).all()
-
-    linescores = {}
-    for game_id, half_innings in itertools.groupby(rows, key=lambda r: r.game_id):
-        linescores[game_id] = _compute_linescore_from_halves(list(half_innings))
-
-    return linescores
-
-
-def _compute_linescore_from_halves(half_innings):
-    '''Given ordered half-inning rows for a single game, compute runs per half-inning.'''
-    away = []
-    home = []
-    prev_away = 0
-    prev_home = 0
-    for hi in half_innings:
-        # away_score/home_score is pre-play, so add result_rbi to get true end-of-half score
-        if hi.half_inning == 0:  # Top (away batting)
-            away.append(hi.away_score + hi.result_rbi - prev_away)
-            prev_away = hi.away_score + hi.result_rbi
-        else:  # Bottom (home batting)
-            home.append(hi.home_score + hi.result_rbi - prev_home)
-            prev_home = hi.home_score + hi.result_rbi
-    return {0: away, 1: home}
-
-
-def _build_scoring_plays(game_ids):
-    '''Query events where runs scored and return them grouped by game_id.
-
-    Returns dict: {game_id: [{'inning': ..., 'half_inning': ..., 'runners': {...}, ...}, ...]}
-    '''
+def build_linescore_and_scoring_plays(game_innings, include_linescore, include_scoring_plays):
+    # game_innings: {game_id: innings_played}
+    # Query all RBI events — needed for linescore scoring tracking and/or scoring plays
     batter_cgs = aliased(CharacterGameSummary)
     pitcher_cgs = aliased(CharacterGameSummary)
 
+    # Events with RBI > 0
     rows = db.session.execute(
         select(
             Event.id,
@@ -358,70 +299,91 @@ def _build_scoring_plays(game_ids):
         .join(batter_cgs, Event.batter_id == batter_cgs.id)
         .join(pitcher_cgs, Event.pitcher_id == pitcher_cgs.id)
         .where(
-            Event.game_id.in_(game_ids),
+            Event.game_id.in_(list(game_innings.keys())),
             Event.result_rbi > 0,
         )
         .order_by(Event.game_id, Event.event_num)
     ).all()
 
-    # Collect all runner IDs from scoring events
-    runner_ids = set()
-    for row in rows:
-        for rid in (row.runner_on_0, row.runner_on_1, row.runner_on_2, row.runner_on_3):
-            if rid is not None:
-                runner_ids.add(rid)
-
-    # Batch-query all runners with their char_ids
+    # Batch-query runners if scoring plays are requested
     runner_lookup = {}
-    if runner_ids:
-        runner_rows = db.session.execute(
-            select(
-                Runner.id,
-                Runner.initial_base,
-                Runner.result_base,
-                Runner.out_type,
-                Runner.out_location,
-                Runner.steal,
-                CharacterGameSummary.char_id,
-            )
-            .join(CharacterGameSummary, Runner.runner_character_game_summary_id == CharacterGameSummary.id)
-            .where(Runner.id.in_(runner_ids))
-        ).all()
-        for r in runner_rows:
-            runner_lookup[r.id] = {
-                'char_id': r.char_id,
-                'initial_base': r.initial_base,
-                'result_base': r.result_base,
-                'out_type': r.out_type,
-                'out_location': r.out_location,
-                'steal': r.steal,
-            }
+    if include_scoring_plays:
+        runner_ids = set()
+        for row in rows:
+            for rid in (row.runner_on_0, row.runner_on_1, row.runner_on_2, row.runner_on_3):
+                if rid is not None:
+                    runner_ids.add(rid)
+        if runner_ids:
+            runner_rows = db.session.execute(
+                select(
+                    Runner.id,
+                    Runner.initial_base,
+                    Runner.result_base,
+                    Runner.out_type,
+                    Runner.out_location,
+                    Runner.steal,
+                    CharacterGameSummary.char_id,
+                )
+                .join(CharacterGameSummary, Runner.runner_character_game_summary_id == CharacterGameSummary.id)
+                .where(Runner.id.in_(runner_ids))
+            ).all()
+            for r in runner_rows:
+                runner_lookup[r.id] = {
+                    'char_id': r.char_id,
+                    'initial_base': r.initial_base,
+                    'result_base': r.result_base,
+                    'out_type': r.out_type,
+                    'out_location': r.out_location,
+                    'steal': r.steal,
+                }
 
+    # Accumulate RBI per (game_id, inning, half_inning) and build scoring plays in one pass
+    rbi_by_half = {}  # {game_id: {(inning, half_inning): runs}}
     scoring_plays = {}
+
     for row in rows:
-        if row.game_id not in scoring_plays:
-            scoring_plays[row.game_id] = []
+        game_id = row.game_id
 
-        runners = {}
-        for base, rid in enumerate((row.runner_on_0, row.runner_on_1, row.runner_on_2, row.runner_on_3)):
-            if rid is not None and rid in runner_lookup:
-                runners[base] = runner_lookup[rid]
+        if include_linescore:
+            if game_id not in rbi_by_half:
+                rbi_by_half[game_id] = {}
+            key = (row.inning, row.half_inning)
+            rbi_by_half[game_id][key] = rbi_by_half[game_id].get(key, 0) + row.result_rbi
 
-        scoring_plays[row.game_id].append({
-            'inning': row.inning,
-            'half_inning': row.half_inning,
-            'event_num': row.event_num,
-            'result_rbi': row.result_rbi,
-            'result_of_ab': row.result_of_ab,
-            'batter': row.batter,
-            'pitcher': row.pitcher,
-            'away_score': row.away_score,
-            'home_score': row.home_score,
-            'outs': row.outs,
-            'runners': runners,
-        })
+        if include_scoring_plays:
+            if game_id not in scoring_plays:
+                scoring_plays[game_id] = []
 
-    return scoring_plays
+            runners = {}
+            for base, rid in enumerate((row.runner_on_0, row.runner_on_1, row.runner_on_2, row.runner_on_3)):
+                if rid is not None and rid in runner_lookup:
+                    runners[base] = runner_lookup[rid]
+
+            scoring_plays[game_id].append({
+                'inning': row.inning,
+                'half_inning': row.half_inning,
+                'event_num': row.event_num,
+                'result_rbi': row.result_rbi,
+                'result_of_ab': row.result_of_ab,
+                'batter': row.batter,
+                'pitcher': row.pitcher,
+                'away_score': row.away_score,
+                'home_score': row.home_score,
+                'outs': row.outs,
+                'runners': runners,
+            })
+
+    # Build linescore arrays using innings_played to correctly fill scoreless innings with 0
+    linescores = {}
+    if include_linescore:
+        for game_id, innings_played in game_innings.items():
+            away = [rbi_by_half.get(game_id, {}).get((i, 0), 0) for i in range(1, innings_played + 1)]
+            home = [rbi_by_half.get(game_id, {}).get((i, 1), 0) for i in range(1, innings_played + 1)]
+            if home[-1] == 0 and sum(home) > sum(away):
+                home[-1] = 'X'
+            linescores[game_id] = {0: away, 1: home}
+
+    return linescores, scoring_plays
 
 
 '''
@@ -689,18 +651,13 @@ def endpoint_games(called_internally=False):
             game_ids.append(game.game_id)
         return { "game_ids": game_ids }
     else:
-        # Collect game_ids for optional event queries
-        result_game_ids = [game.game_id for game in results]
+        # Collect game_ids and innings_played for optional event queries
+        game_innings = {game.game_id: game.innings_played for game in results}
 
-        # Build linescore data if requested
         linescores = {}
-        if include_linescore and result_game_ids:
-            linescores = _build_linescores(result_game_ids)
-
-        # Build scoring plays data if requested
         scoring_plays_by_game = {}
-        if include_scoring_plays and result_game_ids:
-            scoring_plays_by_game = _build_scoring_plays(result_game_ids)
+        if game_innings and (include_linescore or include_scoring_plays):
+            linescores, scoring_plays_by_game = build_linescore_and_scoring_plays(game_innings, include_linescore, include_scoring_plays)
 
         for game in results:
             game_dict = {
@@ -727,7 +684,7 @@ def endpoint_games(called_internally=False):
                 game_dict['away_roster'] = away_roster_dict
                 game_dict['home_roster'] = home_roster_dict
             if include_linescore:
-                game_dict['linescore'] = linescores.get(game.game_id, {'away': [], 'home': []})
+                game_dict['linescore'] = linescores.get(game.game_id, {0: [], 1: []})
             if include_scoring_plays:
                 game_dict['scoring_plays'] = scoring_plays_by_game.get(game.game_id, [])
             games.append(game_dict)
