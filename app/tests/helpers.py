@@ -8,6 +8,8 @@ from connection import Connection
 
 db = Connection()
 
+BASE_URL = os.getenv('BASE_URL', 'http://127.0.0.1:5000')
+
 class User:
     pk       = None
     rk       = None
@@ -29,7 +31,7 @@ class User:
     def register(self):
         # Post new user
         json = {'Username': self.username, 'Email': self.email, 'Password': self.password}
-        response = requests.post("http://127.0.0.1:5000/register/", json=json)
+        response = requests.post(f"{BASE_URL}/register/", json=json)
         self.success = (response.status_code == 200)
 
         # Get user info from db
@@ -46,7 +48,7 @@ class User:
         self.verified = False
 
     def verify_user(self):
-        response = requests.post(f"http://127.0.0.1:5000/verify_email/{self.url}")
+        response = requests.post(f"{BASE_URL}/verify_email/{self.url}")
         # Confirm user is verified
         query = 'SELECT * FROM rio_user WHERE username = %s'
         params = (self.username,)
@@ -59,7 +61,7 @@ class User:
 
     def add_to_group(self, group_name):
         json = {'username': self.username, 'group_name': group_name, 'ADMIN_KEY': os.getenv('ADMIN_KEY')}
-        response = requests.post(f"http://127.0.0.1:5000/user_group/add_user", json=json)
+        response = requests.post(f"{BASE_URL}/user_group/add_user", json=json)
         success = (response.status_code == 200)
 
         if not success:
@@ -70,7 +72,7 @@ class User:
 
     def register_api_key(self):
         json = {'Username': self.username}
-        response = requests.post(f"http://127.0.0.1:5000/api_key/register/", json=json)
+        response = requests.post(f"{BASE_URL}/api_key/register/", json=json)
         success = (response.status_code == 200)
 
         if not success:
@@ -170,7 +172,7 @@ class Community:
         in_comm_dict['global_link'] = 1 if link else 0
         in_comm_dict['rio_key'] = founder_user.rk
 
-        response = requests.post("http://127.0.0.1:5000/community/create", json=in_comm_dict)
+        response = requests.post(f"{BASE_URL}/community/create", json=in_comm_dict)
         self.success = (response.status_code == 200)
 
         if not self.success:
@@ -209,9 +211,9 @@ class Community:
     #def join_via_url(self, user, name_err=False, url_err=False, rk_err=False):
     def join_via_url(self, user):
         if (self.url != None):
-            endpoint = "http://127.0.0.1:5000/community/join/{}/{}".format(self.name, self.url)
+            endpoint = f"{BASE_URL}/community/join/{self.name}/{self.url}"
         else:
-            endpoint = "http://127.0.0.1:5000/community/join/{}".format(self.name)
+            endpoint = f"{BASE_URL}/community/join/{self.name}"
         response = requests.post(endpoint, json={'rio_key': user.rk})
         success = (response.status_code == 200)
 
@@ -229,7 +231,7 @@ class Community:
         
     # If invited, join. If not, request outstanding
     def join_via_request(self, user):
-        response = requests.post("http://127.0.0.1:5000/community/join", json={'community_name': self.name, 'rio_key': user.rk})
+        response = requests.post(f"{BASE_URL}/community/join", json={'community_name': self.name, 'rio_key': user.rk})
         success = (response.status_code == 200)
 
         if not success:
@@ -251,7 +253,7 @@ class Community:
                        'community_name': self.name, 
                        'invite_list': [invitee.username for invitee in invitee_dict.values()] }
 
-        response = requests.post("http://127.0.0.1:5000/community/invite", json=invite_json)
+        response = requests.post(f"{BASE_URL}/community/invite", json=invite_json)
         success = (response.status_code == 200)
 
         if (success):
@@ -271,7 +273,7 @@ class Community:
                 temp_dict['remove'] = True
             manage_user_list.append(temp_dict)
         
-        response = requests.post("http://127.0.0.1:5000/community/manage", json={'community_name': self.name, 
+        response = requests.post(f"{BASE_URL}/community/manage", json={'community_name': self.name,
                                                                              'rio_key': admin_user.rk, 
                                                                              'user_list': manage_user_list })
         success = (response.status_code == 200)
@@ -283,7 +285,7 @@ class Community:
     def key(self, member_rk, action):
         payload = {'rio_key': member_rk, 'action': action, 'community_name': self.name}
         
-        response = requests.post("http://127.0.0.1:5000/community/key", json=payload)
+        response = requests.post(f"{BASE_URL}/community/key", json=payload)
         success = (response.status_code == 200)
 
         if (success):
@@ -293,7 +295,7 @@ class Community:
     def manage_sponsor(self, user, modification):
         json = {'community_name': self.name, 'action': modification, 'rio_key': user.rk}
 
-        response = requests.post("http://127.0.0.1:5000/community/sponsor", json=json)
+        response = requests.post(f"{BASE_URL}/community/sponsor", json=json)
 
         success = (response.status_code == 200)
 
@@ -408,7 +410,7 @@ class Tag:
 
     def create(self):
         # Post Tag
-        response = requests.post("http://127.0.0.1:5000/tag/create", json=self.init_dict)
+        response = requests.post(f"{BASE_URL}/tag/create", json=self.init_dict)
 
         self.success = (response.status_code == 200)
 
@@ -460,7 +462,7 @@ class TagSet:
         self.init_dict = tagset_details
 
     def create(self):
-        response = requests.post("http://127.0.0.1:5000/tag_set/create", json=self.init_dict)
+        response = requests.post(f"{BASE_URL}/tag_set/create", json=self.init_dict)
         self.success = (response.status_code == 200)
         if not self.success:
             return self.success
@@ -509,16 +511,16 @@ class TagSet:
             self.tags[tag.pk] = tag
 
 def wipe_db():
-    response = requests.post("http://127.0.0.1:5000/wipe_db/", json={"ADMIN_KEY": "NUKE"})
+    response = requests.post(f"{BASE_URL}/wipe_db/", json={"ADMIN_KEY": os.getenv('ADMIN_KEY')})
     return response.status_code == 200
 
 def reset_db():
-    response = requests.post("http://127.0.0.1:5000/init_db/", json={"ADMIN_KEY": "NUKE"})
+    response = requests.post(f"{BASE_URL}/init_db/", json={"ADMIN_KEY": os.getenv('ADMIN_KEY')})
     return response.status_code == 200
 
 def get_community_members(community_name, user):
     json = {'community_name': community_name, 'rio_key': user.rk}
-    response = requests.post("http://127.0.0.1:5000/community/members", json=json)
+    response = requests.post(f"{BASE_URL}/community/members", json=json)
     success = response.status_code == 200
 
     if not success:
@@ -532,7 +534,7 @@ def add_user_group(group_name, daily_limit, weekly_limit, sponsor_limit, user):
     json = {'group_name': group_name, 'daily_limit': daily_limit, 
             'weekly_limit': weekly_limit, 'sponsor_limit': sponsor_limit, 
             'ADMIN_KEY': os.getenv('ADMIN_KEY')}
-    response = requests.get('http://127.0.0.1:5000/user_group/create', json=json)
+    response = requests.get(f'{BASE_URL}/user_group/create', json=json)
     success = response.status_code == 200
     return success
 
@@ -546,7 +548,7 @@ def compare_comm_user_to_dict(comm_user_dict, comm_user):
 
 def get_community_tags(community_name, user):
     json = {'community_name': community_name, 'rio_key': user.rk}
-    response = requests.post("http://127.0.0.1:5000/community/tags", json=json)
+    response = requests.post(f"{BASE_URL}/community/tags", json=json)
     success = response.status_code == 200
 
     data = response.json()
