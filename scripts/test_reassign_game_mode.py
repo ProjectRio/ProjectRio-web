@@ -79,10 +79,10 @@ def get_ladder_games(tagset_name):
 
 def get_tag_set_id(tagset_name):
     """Look up a tag set's ID by name via /tag_set/list."""
-    resp = requests.get(f"{BASE_URL}/tag_set/list")
+    resp = requests.post(f"{BASE_URL}/tag_set/list", json={})
     if resp.status_code != 200:
         return None
-    for ts in resp.json():
+    for ts in resp.json().get('Tag Sets', []):
         if ts['name'] == tagset_name:
             return ts['id']
     return None
