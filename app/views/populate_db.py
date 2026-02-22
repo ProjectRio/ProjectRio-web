@@ -10,6 +10,7 @@ from pprint import pprint
 from random import random
 from ..decorators import api_key_check
 import os
+import time
 from pathlib import Path
 import json
 
@@ -160,8 +161,17 @@ def save_game():
     except Exception as e:
         return jsonify({'error': f'Error processing JSON data: {str(e)}'}), 500
 
+def prune_stale_ongoing_games():
+    """Remove ongoing games that started more than 2 hours ago."""
+    cutoff = int(time.time()) - 7200  # 2 hours
+    db.session.query(OngoingGame).filter(
+        OngoingGame.date_time_start <= cutoff
+    ).delete()
+    db.session.commit()
+
 def process_all_games_job(app):
     with app.app_context():
+        prune_stale_ongoing_games()
         process_all_games()
         return
 
