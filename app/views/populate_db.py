@@ -812,6 +812,7 @@ def submit_game_history():
     #Need to recalc in case games were played after this manually submitted game
     if admin_accept and recalc:
         recalc_elo(tag_set_id, log)
+        db.session.commit()
 
     return {'game_history_id': new_game_history.id}
 
@@ -885,7 +886,9 @@ def update_game_status():
     # See if we need to adjust the elo to ignore this game
     recalc_needed = admin_has_changed_accept or ((game_history.winner_accept and game_history.winner_accept and game_history.admin_accept == None) and not users_already_accepted)
     if (recalc_needed):
-        return recalc_elo(tag_set.id)
+        result = recalc_elo(tag_set.id)
+        db.session.commit()
+        return result
     return 'No recalculation needed', 200
 
 def calc_elo(winner_ladder, loser_ladder):
@@ -929,81 +932,77 @@ def calc_elo(winner_ladder, loser_ladder):
     loser_ladder.rd = loser_player.rd
     loser_ladder.vol = loser_player.vol
 
-    db.session.commit()
-
     return ret_dict
 
-@app.route('/recalc_elo/', methods=['POST'])
-def recalc_elo(in_tag_set_id=None, log=False):
-    tag_set_id = in_tag_set_id if in_tag_set_id != None else request.json['tag_set_id']
+def recalc_elo(tag_set_id, log=False):
+    '''Recalculate all ladder ratings for a tag set from scratch.
 
+    Uses flush() internally — caller is responsible for commit/rollback.
+    '''
     tag_set = TagSet.query.filter_by(id=tag_set_id).first()
-    if (tag_set == None):
-        return abort(409, description="TagSet does not exist")
+    if tag_set is None:
+        raise ValueError(f"TagSet with id {tag_set_id} does not exist")
 
     # Delete all ladder rows for tag_set
     Ladder.query.filter_by(tag_set_id=tag_set_id).delete()
-    db.session.commit()
 
-    # Loop through all games and recalc the elo from the start
-    all_games = GameHistory.query.filter(GameHistory.tag_set_id==tag_set_id).order_by(GameHistory.date_created.asc())
+    # Track ladders by community_user_id so we don't need to query for them each game
+    ladders = {}
+
+    # Loop through all games and recalc from the start
+    all_games = GameHistory.query.filter(GameHistory.tag_set_id == tag_set_id).order_by(GameHistory.date_created.asc())
     game_calc_dict = dict()
+
     for count, game in enumerate(all_games):
-        # If game counts (users or admin have accepted)
-        if ((game.winner_accept == True and game.loser_accept == True and game.admin_accept == None) 
-             or game.admin_accept == True):
-            winner_ladder = db.session.query(
-                Ladder
-            ).join(
-                CommunityUser
-            ).filter(
-                (Ladder.tag_set_id == tag_set_id) &
-                (CommunityUser.id == game.winner_comm_user_id)
-            ).first()
-            loser_ladder = db.session.query(
-                    Ladder
-                ).join(
-                    CommunityUser
-                ).filter(
-                    (Ladder.tag_set_id == tag_set_id) &
-                    (CommunityUser.id == game.loser_comm_user_id)
-                ).first()
-                
-            #Create elos for new players if needed
-            if winner_ladder == None:
-                # winner_rio_user_id = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first().user_id
-                # print('Making Ladder for RioUser=', winner_rio_user_id, 'CommUser=', game.winner_comm_user_id)
-                new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
-                winner_ladder = Ladder(tag_set_id, game.winner_comm_user_id, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
-                db.session.add(winner_ladder)
-                db.session.commit()
-            if loser_ladder == None:
-                # loser_rio_user_id = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first().user_id
-                # print('Making Ladder for RioUser=', loser_rio_user_id, 'CommUser=', game.loser_comm_user_id)
-                new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
-                loser_ladder = Ladder(tag_set_id, game.loser_comm_user_id, new_glicko_player.rating, new_glicko_player.rd, new_glicko_player.vol)
-                db.session.add(loser_ladder)
-                db.session.commit()
+        # Only count games where users or admin have accepted
+        if not ((game.winner_accept == True and game.loser_accept == True and game.admin_accept == None)
+                or game.admin_accept == True):
+            continue
 
-            game.winner_incoming_elo = winner_ladder.rating
-            game.loser_incoming_elo = loser_ladder.rating
-            
-            # print(f"GameHistoryId={game.id}")
-            ratings = calc_elo(winner_ladder, loser_ladder)
+        # Get or create ladder entries for both players
+        for comm_user_id in (game.winner_comm_user_id, game.loser_comm_user_id):
+            if comm_user_id not in ladders:
+                ladder = Ladder(tag_set_id, comm_user_id, cDefaultEloRating, cDefaultEloRd, cDefaultEloVol)
+                db.session.add(ladder)
+                ladders[comm_user_id] = ladder
 
-            ratings['game_history_id'] = game.id
-            
-            if log:
-                game_calc_dict[count] = ratings
+        winner_ladder = ladders[game.winner_comm_user_id]
+        loser_ladder = ladders[game.loser_comm_user_id]
 
-            if ((game.winner_result_elo != None and game.winner_result_elo != ratings['winner_rating'])
-                or (game.loser_result_elo != None and game.loser_result_elo != ratings['loser_rating'])):
-                game.recalced_elo = True
-            game.winner_result_elo = ratings['winner_rating']
-            game.loser_result_elo = ratings['loser_rating']
-    
-    db.session.commit()
+        game.winner_incoming_elo = winner_ladder.rating
+        game.loser_incoming_elo = loser_ladder.rating
+
+        ratings = calc_elo(winner_ladder, loser_ladder)
+        ratings['game_history_id'] = game.id
+
+        if log:
+            game_calc_dict[count] = ratings
+
+        if ((game.winner_result_elo is not None and game.winner_result_elo != ratings['winner_rating'])
+                or (game.loser_result_elo is not None and game.loser_result_elo != ratings['loser_rating'])):
+            game.recalced_elo = True
+        game.winner_result_elo = ratings['winner_rating']
+        game.loser_result_elo = ratings['loser_rating']
+
+    db.session.flush()
     return game_calc_dict
+
+
+@app.route('/recalc_elo/', methods=['POST'])
+def recalc_elo_endpoint():
+    tag_set_id = request.json.get('tag_set_id')
+    log = request.json.get('log', False)
+
+    try:
+        result = recalc_elo(tag_set_id, log)
+        db.session.commit()
+        return result
+    except ValueError as e:
+        db.session.rollback()
+        return abort(404, description=str(e))
+    except Exception as e:
+        db.session.rollback()
+        return abort(500, description=f"Recalc failed: {str(e)}")
 
 @app.route('/reassign_game_history_game_mode/', methods=['POST'])
 @api_key_check(['Admin', 'TrustedUser'])
@@ -1013,35 +1012,59 @@ def reassign_game_history_game_mode():
     game_id = data.get('game_id')
     new_tag_set_name = data.get('new_tag_set_name')
 
-    if not game_id or not isinstance(game_id, int):
-        return abort(409, description="No game id or non-integer game id provided")
-    
+    if game_id is None or not isinstance(game_id, int):
+        return abort(400, description="No game id or non-integer game id provided")
+
     if not new_tag_set_name:
-        return abort(409, description="No tag set provided")
-    
+        return abort(400, description="No tag set provided")
+
     new_tag_set_name = lower_and_remove_nonalphanumeric(new_tag_set_name)
 
     game = GameHistory.query.filter(GameHistory.game_id == game_id).first()
-
     if not game:
-        return abort(409, description=f"No game found with id {game_id}")
-    
-    tag_set = TagSet.query.filter_by(name=new_tag_set_name).first()
+        return abort(404, description=f"No game history found with game_id {game_id}")
 
-    if not tag_set:
-        return abort(409, description=f"No tag set found with name {new_tag_set_name}")
+    new_tag_set = TagSet.query.filter_by(name_lowercase=new_tag_set_name).first()
+    if not new_tag_set:
+        return abort(404, description=f"No tag set found with name {new_tag_set_name}")
 
     old_tag_set_id = game.tag_set_id
-    new_tag_set_id = tag_set.id
+
+    # No-op if already in the target tag set
+    if old_tag_set_id == new_tag_set.id:
+        return 'Game is already in this game mode', 200
+
+    # If moving across communities, remap comm_user_ids to the new community
+    old_tag_set = TagSet.query.filter_by(id=old_tag_set_id).first()
+    if new_tag_set.community_id is not None and old_tag_set.community_id != new_tag_set.community_id:
+        # Look up the RioUser behind each old CommunityUser, then find their CommunityUser in the new community
+        old_winner_comm_user = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first()
+        old_loser_comm_user = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first()
+
+        new_winner_comm_user = CommunityUser.query.filter_by(user_id=old_winner_comm_user.user_id, community_id=new_tag_set.community_id).first()
+        new_loser_comm_user = CommunityUser.query.filter_by(user_id=old_loser_comm_user.user_id, community_id=new_tag_set.community_id).first()
+
+        if not new_winner_comm_user:
+            winner_ru = RioUser.query.filter_by(id=old_winner_comm_user.user_id).first()
+            return abort(400, description=f"Winner '{winner_ru.username}' is not a member of the community that owns tag set '{new_tag_set_name}'")
+        if not new_loser_comm_user:
+            loser_ru = RioUser.query.filter_by(id=old_loser_comm_user.user_id).first()
+            return abort(400, description=f"Loser '{loser_ru.username}' is not a member of the community that owns tag set '{new_tag_set_name}'")
+
+        game.winner_comm_user_id = new_winner_comm_user.id
+        game.loser_comm_user_id = new_loser_comm_user.id
 
     try:
-        game.tag_set_id = new_tag_set_id
-        db.session.commit()
+        game.tag_set_id = new_tag_set.id
+        db.session.flush()
 
         recalc_elo(old_tag_set_id)
-        recalc_elo(tag_set.id)
-    except:
-        return abort(500, description="Failed to update game mode")
+        recalc_elo(new_tag_set.id)
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return abort(500, description=f"Failed to update game mode: {str(e)}")
 
     return 'Success', 200
     
