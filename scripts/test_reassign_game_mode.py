@@ -11,6 +11,7 @@ Tests:
 4. Out-of-order move: Move an older game (15th most recent) and verify
 5. Recalc endpoint: Verify /recalc_elo/ still works standalone
 6. No-op: Move a game to the tag set it's already in
+7. Cross-community rejection: Move S13 game to PJ Classic where player isn't a member
 
 Run inside the Docker container:
     ADMIN_KEY=<key> python3 scripts/test_reassign_game_mode.py
@@ -47,13 +48,17 @@ def get_ladder(tagset_name):
     return resp.status_code, resp.text
 
 
-def reassign_game(game_id, new_tag_set_name):
+def move_games(game_ids, new_tag_set_name):
+    """Move one or more games to a new tag set. Accepts a single int or list."""
     payload = {
         'ADMIN_KEY': ADMIN_KEY,
-        'game_id': game_id,
         'new_tag_set_name': new_tag_set_name,
     }
-    resp = requests.post(f"{BASE_URL}/reassign_game_history_game_mode/", json=payload)
+    if isinstance(game_ids, list):
+        payload['game_ids'] = game_ids
+    else:
+        payload['game_id'] = game_ids
+    resp = requests.post(f"{BASE_URL}/move_games/", json=payload)
     return resp.status_code, resp.text
 
 
@@ -192,12 +197,11 @@ def test_same_community_move():
     print(f"  PJ Classic: {len(pj_ladder_before)} players, {len(pj_gh_before)} games")
     print(f"  PJ Training: {len(training_ladder_before)} players, {len(training_gh_before)} games")
 
-    # Move games to PJ Training
+    # Move games to PJ Training (batch)
     print(f"\n  Moving {NUM_GAMES} games to {TAGSET_PJ_TRAINING}...")
-    for gid in game_ids:
-        status, result = reassign_game(gid, TAGSET_PJ_TRAINING)
-        assert status == 200, f"Failed to move game {gid}: {status} {result}"
-        print(f"    Game {gid}: OK")
+    status, result = move_games(game_ids, TAGSET_PJ_TRAINING)
+    assert status == 200, f"Failed to move games: {status} {result}"
+    print(f"    {result}")
 
     # Verify games are in PJ Training and NOT in PJ Classic
     missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_TRAINING, training_id)
@@ -211,12 +215,11 @@ def test_same_community_move():
     print_ladder_diff("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
     print_ladder_diff("PJ Training", training_ladder_before, snapshot_ladder(TAGSET_PJ_TRAINING))
 
-    # Move games back
+    # Move games back (batch)
     print(f"\n  Moving {NUM_GAMES} games back to {TAGSET_PJ_CLASSIC}...")
-    for gid in game_ids:
-        status, result = reassign_game(gid, TAGSET_PJ_CLASSIC)
-        assert status == 200, f"Failed to move game {gid} back: {status} {result}"
-        print(f"    Game {gid}: OK")
+    status, result = move_games(game_ids, TAGSET_PJ_CLASSIC)
+    assert status == 200, f"Failed to move games back: {status} {result}"
+    print(f"    {result}")
 
     # Verify games are back in PJ Classic and NOT in PJ Training
     missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_CLASSIC, pj_id)
@@ -262,12 +265,11 @@ def test_cross_community_move():
     print(f"  PJ Classic: {len(pj_ladder_before)} players, {len(pj_gh_before)} games")
     print(f"  S13: {len(s13_ladder_before)} players, {len(s13_gh_before)} games")
 
-    # Move to S13
+    # Move to S13 (batch)
     print(f"\n  Moving {NUM_GAMES} games to {TAGSET_S13}...")
-    for gid in game_ids:
-        status, result = reassign_game(gid, TAGSET_S13)
-        assert status == 200, f"Failed to move game {gid}: {status} {result}"
-        print(f"    Game {gid}: OK")
+    status, result = move_games(game_ids, TAGSET_S13)
+    assert status == 200, f"Failed to move games: {status} {result}"
+    print(f"    {result}")
 
     # Verify GameHistory
     missing, wrong = verify_games_in_tagset(game_ids, TAGSET_S13, s13_id)
@@ -280,12 +282,11 @@ def test_cross_community_move():
     print_ladder_diff("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
     print_ladder_diff("S13", s13_ladder_before, snapshot_ladder(TAGSET_S13))
 
-    # Move back
+    # Move back (batch)
     print(f"\n  Moving {NUM_GAMES} games back to {TAGSET_PJ_CLASSIC}...")
-    for gid in game_ids:
-        status, result = reassign_game(gid, TAGSET_PJ_CLASSIC)
-        assert status == 200, f"Failed to move game {gid} back: {status} {result}"
-        print(f"    Game {gid}: OK")
+    status, result = move_games(game_ids, TAGSET_PJ_CLASSIC)
+    assert status == 200, f"Failed to move games back: {status} {result}"
+    print(f"    {result}")
 
     # Verify GameHistory restored
     missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_CLASSIC, pj_id)
@@ -323,12 +324,11 @@ def test_three_way_move():
     training_ladder_before = snapshot_ladder(TAGSET_PJ_TRAINING)
     s13_ladder_before = snapshot_ladder(TAGSET_S13)
 
-    # Step 1: PJ Classic -> PJ Training
+    # Step 1: PJ Classic -> PJ Training (batch)
     print(f"\n  Step 1: Moving to {TAGSET_PJ_TRAINING}...")
-    for gid in game_ids:
-        status, result = reassign_game(gid, TAGSET_PJ_TRAINING)
-        assert status == 200, f"Step 1 failed for game {gid}: {status} {result}"
-        print(f"    Game {gid}: OK")
+    status, result = move_games(game_ids, TAGSET_PJ_TRAINING)
+    assert status == 200, f"Step 1 failed: {status} {result}"
+    print(f"    {result}")
 
     missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_TRAINING, training_id)
     assert not missing, f"Step 1: Games missing from Training: {missing}"
@@ -336,12 +336,11 @@ def test_three_way_move():
     assert not leftover, f"Step 1: Games still in PJ Classic: {leftover}"
     print(f"  Step 1 GameHistory verified ✓")
 
-    # Step 2: PJ Training -> S13 (cross-community)
+    # Step 2: PJ Training -> S13 (cross-community, batch)
     print(f"\n  Step 2: Moving to {TAGSET_S13}...")
-    for gid in game_ids:
-        status, result = reassign_game(gid, TAGSET_S13)
-        assert status == 200, f"Step 2 failed for game {gid}: {status} {result}"
-        print(f"    Game {gid}: OK")
+    status, result = move_games(game_ids, TAGSET_S13)
+    assert status == 200, f"Step 2 failed: {status} {result}"
+    print(f"    {result}")
 
     missing, wrong = verify_games_in_tagset(game_ids, TAGSET_S13, s13_id)
     assert not missing, f"Step 2: Games missing from S13: {missing}"
@@ -350,12 +349,11 @@ def test_three_way_move():
     assert not our_leftover, f"Step 2: Games still in Training: {our_leftover}"
     print(f"  Step 2 GameHistory verified ✓")
 
-    # Step 3: S13 -> PJ Classic (cross-community back)
+    # Step 3: S13 -> PJ Classic (cross-community back, batch)
     print(f"\n  Step 3: Moving back to {TAGSET_PJ_CLASSIC}...")
-    for gid in game_ids:
-        status, result = reassign_game(gid, TAGSET_PJ_CLASSIC)
-        assert status == 200, f"Step 3 failed for game {gid}: {status} {result}"
-        print(f"    Game {gid}: OK")
+    status, result = move_games(game_ids, TAGSET_PJ_CLASSIC)
+    assert status == 200, f"Step 3 failed: {status} {result}"
+    print(f"    {result}")
 
     missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_CLASSIC, pj_id)
     assert not missing, f"Step 3: Games missing from PJ Classic: {missing}"
@@ -403,9 +401,9 @@ def test_out_of_order_move():
 
     # Move to Training
     print(f"\n  Moving game {game_id} to {TAGSET_PJ_TRAINING}...")
-    status, result = reassign_game(game_id, TAGSET_PJ_TRAINING)
+    status, result = move_games(game_id, TAGSET_PJ_TRAINING)
     assert status == 200, f"Failed to move: {status} {result}"
-    print(f"    Move: OK")
+    print(f"    {result}")
 
     # Verify it moved
     missing, wrong = verify_games_in_tagset([game_id], TAGSET_PJ_TRAINING, training_id)
@@ -420,9 +418,9 @@ def test_out_of_order_move():
 
     # Move back
     print(f"\n  Moving game {game_id} back to {TAGSET_PJ_CLASSIC}...")
-    status, result = reassign_game(game_id, TAGSET_PJ_CLASSIC)
+    status, result = move_games(game_id, TAGSET_PJ_CLASSIC)
     assert status == 200, f"Failed to move back: {status} {result}"
-    print(f"    Move back: OK")
+    print(f"    {result}")
 
     # Verify GameHistory restored
     missing, wrong = verify_games_in_tagset([game_id], TAGSET_PJ_CLASSIC, pj_id)
@@ -491,6 +489,51 @@ def test_recalc_endpoint():
     print("  PASSED ✓")
 
 
+def test_cross_community_reject():
+    """Moving a game to a community where a player isn't a member should fail."""
+    print("\n" + "=" * 60)
+    print("TEST 7: Cross-community rejection (player not in destination)")
+    print(f"  Last S13 game -> {TAGSET_PJ_CLASSIC} (should fail)")
+    print("=" * 60)
+
+    s13_id = get_tag_set_id(TAGSET_S13)
+    pj_id = get_tag_set_id(TAGSET_PJ_CLASSIC)
+    assert s13_id and pj_id, "Could not find tag set IDs"
+
+    # Get the last game from S13 (most likely to have players not in PJ community)
+    status, games = get_ladder_games(TAGSET_S13)
+    assert status == 200 and len(games) >= 1, f"Failed to get S13 games: {games}"
+    last_game = games[-1]
+    game_id = last_game['game_id']
+    assert game_id is not None, "Last S13 game has no game_id"
+    print(f"  Selected last S13 game: {game_id}")
+    print(f"    Winner: {last_game.get('winner_player')}, Loser: {last_game.get('loser_player')}")
+
+    # Snapshot S13 ladder and game history before attempt
+    s13_ladder_before = snapshot_ladder(TAGSET_S13)
+    s13_gh_before = snapshot_game_history(TAGSET_S13)
+
+    # Attempt to move — should fail with 400
+    status, result = move_games(game_id, TAGSET_PJ_CLASSIC)
+    print(f"  Move result: {status} - {result}")
+    assert status == 400, f"Expected 400, got {status}: {result}"
+    assert 'not a member' in result.lower(), f"Expected 'not a member' error, got: {result}"
+    print(f"  Correctly rejected ✓")
+
+    # Verify the game is still in S13 and nothing changed
+    missing, wrong = verify_games_in_tagset([game_id], TAGSET_S13, s13_id)
+    assert not missing, f"Game disappeared from S13 after failed move: {missing}"
+    assert not wrong, f"Game has wrong tag_set in S13: {wrong}"
+    print(f"  Game still in S13 ✓")
+
+    # Verify S13 ladder unchanged
+    s13_ladder_after = snapshot_ladder(TAGSET_S13)
+    verify_ladders_match("S13", s13_ladder_before, s13_ladder_after)
+    print(f"  S13 ladder unchanged ✓")
+
+    print("  PASSED ✓")
+
+
 def test_noop():
     """Moving a game to the same tag set should be a no-op."""
     print("\n" + "=" * 60)
@@ -501,7 +544,7 @@ def test_noop():
     assert status == 200 and len(games) >= 1, f"Failed to get games: {games}"
 
     game_id = games[0]['game_id']
-    status, result = reassign_game(game_id, TAGSET_PJ_CLASSIC)
+    status, result = move_games(game_id, TAGSET_PJ_CLASSIC)
     print(f"  Move to same tag set: {status} - {result}")
     assert status == 200, f"Expected 200, got {status}"
     assert 'already' in result.lower(), f"Expected 'already' message, got: {result}"
@@ -547,6 +590,7 @@ if __name__ == '__main__':
         test_out_of_order_move()
         test_recalc_endpoint()
         test_noop()
+        test_cross_community_reject()
 
         print("\n" + "=" * 60)
         print("ALL TESTS PASSED ✓")

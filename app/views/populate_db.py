@@ -1016,67 +1016,107 @@ def recalc_elo_endpoint():
         db.session.rollback()
         return abort(500, description=f"Recalc failed: {str(e)}")
 
-@app.route('/reassign_game_history_game_mode/', methods=['POST'])
+@app.route('/move_games/', methods=['POST'])
 @api_key_check(['Admin', 'TrustedUser'])
-def reassign_game_history_game_mode():
+def move_games():
+    '''Move one or more games to a different tag set and recalculate ELO.
+
+    Accepts a single game_id (int) or a list of game_ids (list of ints).
+    When moving across communities, remaps comm_user_ids to the destination
+    community — all players must be members of that community or the request
+    is rejected. All validation happens before any changes are made.
+
+    Recalculates ELO once per affected tag set (all source tag sets + the
+    destination), rather than per game.
+
+    Requires Admin or TrustedUser API key.
+
+    JSON body:
+        game_id (int):              Single game to move (mutually exclusive with game_ids)
+        game_ids (list[int]):       Multiple games to move (mutually exclusive with game_id)
+        new_tag_set_name (str):     Name of the destination tag set
+    '''
     data = request.get_json()
 
+    # Accept single game_id or list of game_ids
+    game_ids = data.get('game_ids')
     game_id = data.get('game_id')
     new_tag_set_name = data.get('new_tag_set_name')
 
-    if game_id is None or not isinstance(game_id, int):
-        return abort(400, description="No game id or non-integer game id provided")
+    if game_ids is not None:
+        if not isinstance(game_ids, list) or not all(isinstance(gid, int) for gid in game_ids):
+            return abort(400, description="game_ids must be a list of integers")
+        if len(game_ids) == 0:
+            return abort(400, description="game_ids list is empty")
+    elif game_id is not None:
+        if not isinstance(game_id, int):
+            return abort(400, description="game_id must be an integer")
+        game_ids = [game_id]
+    else:
+        return abort(400, description="No game_id or game_ids provided")
 
     if not new_tag_set_name:
         return abort(400, description="No tag set provided")
 
     new_tag_set_name = lower_and_remove_nonalphanumeric(new_tag_set_name)
 
-    game = GameHistory.query.filter(GameHistory.game_id == game_id).first()
-    if not game:
-        return abort(404, description=f"No game history found with game_id {game_id}")
-
     new_tag_set = TagSet.query.filter_by(name_lowercase=new_tag_set_name).first()
     if not new_tag_set:
         return abort(404, description=f"No tag set found with name {new_tag_set_name}")
 
-    old_tag_set_id = game.tag_set_id
+    # Validate all games before making any changes
+    games = []
+    for gid in game_ids:
+        game = GameHistory.query.filter(GameHistory.game_id == gid).first()
+        if not game:
+            return abort(404, description=f"No game history found with game_id {gid}")
+        if game.tag_set_id == new_tag_set.id:
+            continue  # skip no-ops
+        games.append(game)
 
-    # No-op if already in the target tag set
-    if old_tag_set_id == new_tag_set.id:
+    if not games:
         return 'Game is already in this game mode', 200
 
-    # If moving across communities, remap comm_user_ids to the new community
-    old_tag_set = TagSet.query.filter_by(id=old_tag_set_id).first()
-    if new_tag_set.community_id is not None and old_tag_set.community_id != new_tag_set.community_id:
-        # Look up the RioUser behind each old CommunityUser, then find their CommunityUser in the new community
-        old_winner_comm_user = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first()
-        old_loser_comm_user = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first()
+    # Track which old tag sets need recalc
+    old_tag_set_ids = set()
 
-        new_winner_comm_user = CommunityUser.query.filter_by(user_id=old_winner_comm_user.user_id, community_id=new_tag_set.community_id).first()
-        new_loser_comm_user = CommunityUser.query.filter_by(user_id=old_loser_comm_user.user_id, community_id=new_tag_set.community_id).first()
+    # Validate cross-community membership and remap comm_user_ids
+    for game in games:
+        old_tag_set = TagSet.query.filter_by(id=game.tag_set_id).first()
+        old_tag_set_ids.add(game.tag_set_id)
 
-        if not new_winner_comm_user:
-            winner_ru = RioUser.query.filter_by(id=old_winner_comm_user.user_id).first()
-            return abort(400, description=f"Winner '{winner_ru.username}' is not a member of the community that owns tag set '{new_tag_set_name}'")
-        if not new_loser_comm_user:
-            loser_ru = RioUser.query.filter_by(id=old_loser_comm_user.user_id).first()
-            return abort(400, description=f"Loser '{loser_ru.username}' is not a member of the community that owns tag set '{new_tag_set_name}'")
+        if new_tag_set.community_id is not None and old_tag_set.community_id != new_tag_set.community_id:
+            old_winner_comm_user = CommunityUser.query.filter_by(id=game.winner_comm_user_id).first()
+            old_loser_comm_user = CommunityUser.query.filter_by(id=game.loser_comm_user_id).first()
 
-        game.winner_comm_user_id = new_winner_comm_user.id
-        game.loser_comm_user_id = new_loser_comm_user.id
+            new_winner_comm_user = CommunityUser.query.filter_by(user_id=old_winner_comm_user.user_id, community_id=new_tag_set.community_id).first()
+            new_loser_comm_user = CommunityUser.query.filter_by(user_id=old_loser_comm_user.user_id, community_id=new_tag_set.community_id).first()
+
+            if not new_winner_comm_user:
+                winner_ru = RioUser.query.filter_by(id=old_winner_comm_user.user_id).first()
+                return abort(400, description=f"Winner '{winner_ru.username}' (game {game.game_id}) is not a member of the community that owns tag set '{new_tag_set_name}'")
+            if not new_loser_comm_user:
+                loser_ru = RioUser.query.filter_by(id=old_loser_comm_user.user_id).first()
+                return abort(400, description=f"Loser '{loser_ru.username}' (game {game.game_id}) is not a member of the community that owns tag set '{new_tag_set_name}'")
+
+            game.winner_comm_user_id = new_winner_comm_user.id
+            game.loser_comm_user_id = new_loser_comm_user.id
 
     try:
-        game.tag_set_id = new_tag_set.id
+        # Move all games to the new tag set
+        for game in games:
+            game.tag_set_id = new_tag_set.id
         db.session.flush()
 
-        recalc_elo(old_tag_set_id)
+        # Recalc each affected tag set once
+        for old_tag_set_id in old_tag_set_ids:
+            recalc_elo(old_tag_set_id)
         recalc_elo(new_tag_set.id)
 
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        return abort(500, description=f"Failed to update game mode: {str(e)}")
+        return abort(500, description=f"Failed to move games: {str(e)}")
 
-    return 'Success', 200
+    return f'{len(games)} game(s) moved successfully', 200
     
