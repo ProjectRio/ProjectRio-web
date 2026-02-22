@@ -922,8 +922,8 @@ def calc_elo(winner_ladder, loser_ladder):
                 'loser_rd': loser_player.rd,'loser_previous_rd': loser_ladder.rd,
                 'loser_vol': loser_player.vol,'loser_previous_vol': loser_ladder.vol}
     winner_ladder.rating = winner_player.rating
-    winner_ladder.rd = winner_ladder.rd
-    winner_ladder.vol = winner_ladder.vol
+    winner_ladder.rd = winner_player.rd
+    winner_ladder.vol = winner_player.vol
 
     loser_ladder.rating = loser_player.rating
     loser_ladder.rd = loser_player.rd
