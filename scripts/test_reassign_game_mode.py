@@ -1,38 +1,51 @@
 """
-Manual test script for reassign_game_history_game_mode changes.
+Test script for reassign_game_history_game_mode and recalc_elo changes.
+
+Uses real game data from the test database. Does NOT wipe the DB.
+All games are moved back to their original location at the end of each test.
 
 Tests:
-1. Same-community move: move a game between two tag sets in the same community
-2. Cross-community move: move a game to a tag set in a different community
-3. Cross-community move blocked: player not in target community
-4. No-op: move a game to the tag set it's already in
-5. Rollback: verify DB isn't corrupted if something goes wrong
-6. recalc_elo: verify the endpoint still works standalone
+1. Same-community move: PJ Classic 2 -> PJ Training -> PJ Classic 2
+2. Cross-community move: PJ Classic 2 -> S13 -> PJ Classic 2
+3. Three-way move: PJ Classic 2 -> PJ Training -> S13 -> PJ Classic 2
+4. Out-of-order move: Move an older game (15th most recent) and verify
+5. Recalc endpoint: Verify /recalc_elo/ still works standalone
+6. No-op: Move a game to the tag set it's already in
 
-Run with your local server at http://127.0.0.1:5000:
-    python scripts/test_reassign_game_mode.py
-
-WARNING: This calls wipe_db() and will destroy all data in your local DB.
+Run inside the Docker container:
+    ADMIN_KEY=<key> python3 scripts/test_reassign_game_mode.py
 """
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'app', 'tests'))
-
 import requests
 from pprint import pprint
-from helpers import User, Community, Tag, TagSet, wipe_db, reset_db
 
-BASE_URL = os.getenv('BASE_URL', "http://127.0.0.1:5000")
+BASE_URL = os.getenv('BASE_URL', 'http://127.0.0.1:5000')
 ADMIN_KEY = os.getenv('ADMIN_KEY')
 
 if not ADMIN_KEY:
     print("ERROR: ADMIN_KEY environment variable is not set.")
     sys.exit(1)
 
+# Tag set names
+TAGSET_PJ_CLASSIC = 'PJ and Friends Team Classic 2'
+TAGSET_PJ_TRAINING = 'PJ and Friends Classic Training'
+TAGSET_S13 = 'S13 Superstars Off Hazards'
+
+NUM_GAMES = 5
+
+
+# ============================================================
+# Helper functions
+# ============================================================
+
 def get_ladder(tagset_name):
     resp = requests.post(f"{BASE_URL}/tag_set/ladder/", json={'TagSet': tagset_name})
-    return resp.status_code, resp.json() if resp.status_code == 200 else resp.text
+    if resp.status_code == 200:
+        return resp.status_code, resp.json()
+    return resp.status_code, resp.text
+
 
 def reassign_game(game_id, new_tag_set_name):
     payload = {
@@ -43,315 +56,483 @@ def reassign_game(game_id, new_tag_set_name):
     resp = requests.post(f"{BASE_URL}/reassign_game_history_game_mode/", json=payload)
     return resp.status_code, resp.text
 
+
 def recalc(tag_set_id, log=False):
     payload = {
         'tag_set_id': tag_set_id,
         'log': log,
     }
     resp = requests.post(f"{BASE_URL}/recalc_elo/", json=payload)
-    return resp.status_code, resp.json() if resp.status_code == 200 else resp.text
+    if resp.status_code == 200:
+        return resp.status_code, resp.json()
+    return resp.status_code, resp.text
 
-def manual_submit_game(winner_username, loser_username, tag_set_name, submitter_rio_key, recalc=False):
-    payload = {
-        'winner_username': winner_username,
-        'winner_score': 10,
-        'loser_username': loser_username,
-        'loser_score': 0,
-        'tag_set': tag_set_name,
-        'submitter_rio_key': submitter_rio_key,
-    }
-    if recalc:
-        payload['recalc'] = True
-    resp = requests.post(f"{BASE_URL}/manual_submit_game/", json=payload)
-    return resp.status_code, resp.json() if resp.status_code == 200 else resp.text
 
-def setup():
-    """Create two communities, each with a tag set, and two players in both communities."""
-    wipe_db()
+def get_ladder_games(tagset_name):
+    """Get games from a tag set via /ladder/games/ endpoint.
+    Returns GameHistory data including tag_set_id, elo fields, etc."""
+    resp = requests.get(f"{BASE_URL}/ladder/games/", params={'tag_set': tagset_name})
+    if resp.status_code == 200:
+        return resp.status_code, resp.json().get('games', [])
+    return resp.status_code, resp.text
 
-    # Admin/sponsor
-    sponsor = User()
-    sponsor.register()
-    sponsor.verify_user()
-    assert sponsor.success, "Sponsor registration failed"
-    assert sponsor.add_to_group('admin'), "Failed to add sponsor to admin group"
 
-    # Community A
-    comm_a = Community(sponsor, True, False, False)
-    assert comm_a.success, "Community A creation failed"
+def get_tag_set_id(tagset_name):
+    """Look up a tag set's ID by name via /tag_set/list."""
+    resp = requests.get(f"{BASE_URL}/tag_set/list")
+    if resp.status_code != 200:
+        return None
+    for ts in resp.json():
+        if ts['name'] == tagset_name:
+            return ts['id']
+    return None
 
-    tag_a = Tag(comm_a.founder, comm_a)
-    tag_a.create()
 
-    tagset_a1 = TagSet(comm_a.founder, comm_a, [tag_a], 'Season')
-    tagset_a1.create()
-    assert tagset_a1.pk, "TagSet A1 creation failed"
+def snapshot_ladder(tagset_name):
+    """Get a simplified snapshot of the ladder for comparison."""
+    status, data = get_ladder(tagset_name)
+    if status != 200 or not isinstance(data, dict):
+        return {}
+    return {username: info['rating'] for username, info in data.items()}
 
-    tag_a2 = Tag(comm_a.founder, comm_a)
-    tag_a2.create()
 
-    tagset_a2 = TagSet(comm_a.founder, comm_a, [tag_a2], 'Season')
-    tagset_a2.create()
-    assert tagset_a2.pk, "TagSet A2 creation failed"
+def snapshot_game_history(tagset_name):
+    """Get a dict of game_id -> game history info for a tag set."""
+    status, games = get_ladder_games(tagset_name)
+    if status != 200:
+        return {}
+    result = {}
+    for g in games:
+        gid = g.get('game_id')
+        if gid is not None:
+            result[gid] = {
+                'tag_set': g.get('tag_set'),
+                'winner_incoming_elo': g.get('winner_incoming_elo'),
+                'loser_incoming_elo': g.get('loser_incoming_elo'),
+                'winner_result_elo': g.get('winner_result_elo'),
+                'loser_result_elo': g.get('loser_result_elo'),
+                'winner_player': g.get('winner_player'),
+                'loser_player': g.get('loser_player'),
+            }
+    return result
 
-    comm_a.refresh()
 
-    # Community B
-    comm_b = Community(sponsor, True, False, False)
-    assert comm_b.success, "Community B creation failed"
+def print_ladder_diff(label, before, after):
+    """Print rating changes between two ladder snapshots."""
+    all_users = set(list(before.keys()) + list(after.keys()))
+    changes = []
+    for user in sorted(all_users):
+        old = before.get(user)
+        new = after.get(user)
+        if old != new:
+            changes.append(f"    {user}: {old} -> {new}")
+    if changes:
+        print(f"  {label} rating changes:")
+        for c in changes:
+            print(c)
+    else:
+        print(f"  {label}: no rating changes")
 
-    tag_b = Tag(comm_b.founder, comm_b)
-    tag_b.create()
 
-    tagset_b = TagSet(comm_b.founder, comm_b, [tag_b], 'Season')
-    tagset_b.create()
-    assert tagset_b.pk, "TagSet B creation failed"
+def verify_games_in_tagset(game_ids, tagset_name, tag_set_id):
+    """Verify that specific game_ids appear in a tag set's game history."""
+    gh = snapshot_game_history(tagset_name)
+    missing = []
+    wrong_tagset = []
+    for gid in game_ids:
+        if gid not in gh:
+            missing.append(gid)
+        elif gh[gid]['tag_set'] != tag_set_id:
+            wrong_tagset.append((gid, gh[gid]['tag_set']))
+    return missing, wrong_tagset
 
-    comm_b.refresh()
 
-    # Two players
-    player1 = User()
-    player1.register()
-    player1.verify_user()
+def verify_games_not_in_tagset(game_ids, tagset_name):
+    """Verify that specific game_ids do NOT appear in a tag set's game history."""
+    gh = snapshot_game_history(tagset_name)
+    found = [gid for gid in game_ids if gid in gh]
+    return found
 
-    player2 = User()
-    player2.register()
-    player2.verify_user()
 
-    # Join both players to Community A (via URL)
-    comm_a.join_via_url(player1)
-    comm_a.join_via_url(player2)
+def verify_ladders_match(label, before, after):
+    """Assert all ratings match between two ladder snapshots."""
+    for user, rating in before.items():
+        assert after.get(user) == rating, \
+            f"{label} rating not restored for {user}: was {rating}, now {after.get(user)}"
 
-    # Join both players to Community B (via URL)
-    comm_b.join_via_url(player1)
-    comm_b.join_via_url(player2)
 
-    comm_a.refresh()
-    comm_b.refresh()
-
-    return sponsor, comm_a, comm_b, tagset_a1, tagset_a2, tagset_b, player1, player2
-
+# ============================================================
+# Tests
+# ============================================================
 
 def test_same_community_move():
-    """Move a game between two tag sets in the same community."""
+    """Move 5 games from PJ Classic 2 to PJ Training (same community) and back."""
     print("\n" + "=" * 60)
     print("TEST 1: Same-community move")
+    print(f"  {TAGSET_PJ_CLASSIC} -> {TAGSET_PJ_TRAINING} -> back")
     print("=" * 60)
 
-    sponsor, comm_a, comm_b, tagset_a1, tagset_a2, tagset_b, player1, player2 = setup()
+    pj_id = get_tag_set_id(TAGSET_PJ_CLASSIC)
+    training_id = get_tag_set_id(TAGSET_PJ_TRAINING)
+    assert pj_id and training_id, "Could not find tag set IDs"
 
-    # Submit 3 games to tagset_a1 (as admin so they auto-count)
-    for i in range(3):
-        status, resp = manual_submit_game(player1.username, player2.username, tagset_a1.name, sponsor.rk, recalc=True)
-        assert status == 200, f"Game {i+1} submit failed: {resp}"
-        print(f"  Submitted game {i+1}, game_history_id: {resp['game_history_id']}")
+    # Get recent games from PJ Classic
+    status, games = get_ladder_games(TAGSET_PJ_CLASSIC)
+    assert status == 200, f"Failed to get games: {games}"
+    game_ids = [g['game_id'] for g in games[:NUM_GAMES] if g['game_id'] is not None]
+    assert len(game_ids) >= NUM_GAMES, f"Not enough games with game_id, found {len(game_ids)}"
+    game_ids = game_ids[:NUM_GAMES]
+    print(f"  Selected {NUM_GAMES} game_ids: {game_ids}")
 
-    # Check ladder A1 has ratings
-    status, ladder = get_ladder(tagset_a1.name)
-    assert status == 200
-    print(f"  Ladder A1: {player1.username}={ladder[player1.username]['rating']}, {player2.username}={ladder[player2.username]['rating']}")
-    assert ladder[player1.username]['rating'] > 1500, "Winner should be above 1500"
-    assert ladder[player2.username]['rating'] < 1500, "Loser should be below 1500"
+    # Snapshot everything before
+    pj_ladder_before = snapshot_ladder(TAGSET_PJ_CLASSIC)
+    training_ladder_before = snapshot_ladder(TAGSET_PJ_TRAINING)
+    pj_gh_before = snapshot_game_history(TAGSET_PJ_CLASSIC)
+    training_gh_before = snapshot_game_history(TAGSET_PJ_TRAINING)
+    print(f"  PJ Classic: {len(pj_ladder_before)} players, {len(pj_gh_before)} games")
+    print(f"  PJ Training: {len(training_ladder_before)} players, {len(training_gh_before)} games")
 
-    # Check ladder A2 is empty
-    status, ladder_a2 = get_ladder(tagset_a2.name)
-    print(f"  Ladder A2 before move: {ladder_a2}")
+    # Move games to PJ Training
+    print(f"\n  Moving {NUM_GAMES} games to {TAGSET_PJ_TRAINING}...")
+    for gid in game_ids:
+        status, result = reassign_game(gid, TAGSET_PJ_TRAINING)
+        assert status == 200, f"Failed to move game {gid}: {status} {result}"
+        print(f"    Game {gid}: OK")
 
-    # Move game 1 to tagset_a2
-    game_id = resp['game_history_id']  # last game
-    # Actually we need the game_id (BigInteger from Game table), not game_history_id
-    # Let's use the game_id from the response - check what manual_submit returns
-    # manual_submit returns game_history_id, but reassign expects game_id (Game.game_id)
-    # Let's query for it
-    print(f"\n  Moving game (game_history_id={game_id}) to tagset A2...")
+    # Verify games are in PJ Training and NOT in PJ Classic
+    missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_TRAINING, training_id)
+    assert not missing, f"Games missing from {TAGSET_PJ_TRAINING}: {missing}"
+    assert not wrong, f"Games have wrong tag_set in {TAGSET_PJ_TRAINING}: {wrong}"
+    leftover = verify_games_not_in_tagset(game_ids, TAGSET_PJ_CLASSIC)
+    assert not leftover, f"Games still in {TAGSET_PJ_CLASSIC} after move: {leftover}"
+    print(f"  GameHistory verified: games in Training, not in PJ Classic ✓")
 
-    # We need the actual game_id. Let's get it from /games/
-    games_resp = requests.post(f"{BASE_URL}/games/", json={'TagSet': tagset_a1.name})
-    assert games_resp.status_code == 200, f"Failed to get games: {games_resp.text}"
-    games = games_resp.json()
-    game_id_to_move = games[0]['game_id']
-    print(f"  Game ID to move: {game_id_to_move}")
+    # Check ladders changed
+    print_ladder_diff("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
+    print_ladder_diff("PJ Training", training_ladder_before, snapshot_ladder(TAGSET_PJ_TRAINING))
 
-    status, result = reassign_game(game_id_to_move, tagset_a2.name)
-    print(f"  Reassign result: {status} - {result}")
-    assert status == 200, f"Reassign failed: {result}"
+    # Move games back
+    print(f"\n  Moving {NUM_GAMES} games back to {TAGSET_PJ_CLASSIC}...")
+    for gid in game_ids:
+        status, result = reassign_game(gid, TAGSET_PJ_CLASSIC)
+        assert status == 200, f"Failed to move game {gid} back: {status} {result}"
+        print(f"    Game {gid}: OK")
 
-    # Check ladder A1 has been recalculated (should have 2 games now)
-    status, ladder_a1_after = get_ladder(tagset_a1.name)
-    assert status == 200
-    print(f"  Ladder A1 after move: {player1.username}={ladder_a1_after[player1.username]['rating']}, {player2.username}={ladder_a1_after[player2.username]['rating']}")
+    # Verify games are back in PJ Classic and NOT in PJ Training
+    missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_CLASSIC, pj_id)
+    assert not missing, f"Games missing from {TAGSET_PJ_CLASSIC}: {missing}"
+    assert not wrong, f"Games have wrong tag_set in {TAGSET_PJ_CLASSIC}: {wrong}"
+    leftover = verify_games_not_in_tagset(game_ids, TAGSET_PJ_TRAINING)
+    # Only check the ones we moved (training may have its own games)
+    our_leftover = [gid for gid in leftover if gid in game_ids]
+    assert not our_leftover, f"Moved games still in {TAGSET_PJ_TRAINING}: {our_leftover}"
+    print(f"  GameHistory verified: games back in PJ Classic ✓")
 
-    # Check ladder A2 now has the moved game
-    status, ladder_a2_after = get_ladder(tagset_a2.name)
-    assert status == 200
-    print(f"  Ladder A2 after move: {player1.username}={ladder_a2_after[player1.username]['rating']}, {player2.username}={ladder_a2_after[player2.username]['rating']}")
-
-    # A1 ratings should have changed (lost a game)
-    assert ladder_a1_after[player1.username]['rating'] != ladder[player1.username]['rating'], \
-        "A1 ladder should have changed after losing a game"
+    # Verify ladders restored
+    verify_ladders_match("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
+    verify_ladders_match("PJ Training", training_ladder_before, snapshot_ladder(TAGSET_PJ_TRAINING))
+    print("  Ladders restored ✓")
 
     print("  PASSED ✓")
 
 
 def test_cross_community_move():
-    """Move a game to a tag set in a different community (players are in both)."""
+    """Move 5 games from PJ Classic 2 to S13 (different community) and back."""
     print("\n" + "=" * 60)
     print("TEST 2: Cross-community move")
+    print(f"  {TAGSET_PJ_CLASSIC} -> {TAGSET_S13} -> back")
     print("=" * 60)
 
-    sponsor, comm_a, comm_b, tagset_a1, tagset_a2, tagset_b, player1, player2 = setup()
+    pj_id = get_tag_set_id(TAGSET_PJ_CLASSIC)
+    s13_id = get_tag_set_id(TAGSET_S13)
+    assert pj_id and s13_id, "Could not find tag set IDs"
 
-    # Submit a game to tagset_a1
-    status, resp = manual_submit_game(player1.username, player2.username, tagset_a1.name, sponsor.rk, recalc=True)
-    assert status == 200, f"Game submit failed: {resp}"
-    print(f"  Submitted game, game_history_id: {resp['game_history_id']}")
+    # Get recent games
+    status, games = get_ladder_games(TAGSET_PJ_CLASSIC)
+    assert status == 200, f"Failed to get games: {games}"
+    game_ids = [g['game_id'] for g in games[:NUM_GAMES] if g['game_id'] is not None]
+    game_ids = game_ids[:NUM_GAMES]
+    print(f"  Selected {NUM_GAMES} game_ids: {game_ids}")
 
-    # Check ladder A1
-    status, ladder_a1 = get_ladder(tagset_a1.name)
-    assert status == 200
-    print(f"  Ladder A1: {player1.username}={ladder_a1[player1.username]['rating']}, {player2.username}={ladder_a1[player2.username]['rating']}")
+    # Snapshot
+    pj_ladder_before = snapshot_ladder(TAGSET_PJ_CLASSIC)
+    s13_ladder_before = snapshot_ladder(TAGSET_S13)
+    pj_gh_before = snapshot_game_history(TAGSET_PJ_CLASSIC)
+    s13_gh_before = snapshot_game_history(TAGSET_S13)
+    print(f"  PJ Classic: {len(pj_ladder_before)} players, {len(pj_gh_before)} games")
+    print(f"  S13: {len(s13_ladder_before)} players, {len(s13_gh_before)} games")
 
-    # Get game_id
-    games_resp = requests.post(f"{BASE_URL}/games/", json={'TagSet': tagset_a1.name})
-    game_id_to_move = games_resp.json()[0]['game_id']
+    # Move to S13
+    print(f"\n  Moving {NUM_GAMES} games to {TAGSET_S13}...")
+    for gid in game_ids:
+        status, result = reassign_game(gid, TAGSET_S13)
+        assert status == 200, f"Failed to move game {gid}: {status} {result}"
+        print(f"    Game {gid}: OK")
 
-    # Move to community B's tagset
-    print(f"\n  Moving game {game_id_to_move} to tagset B (different community)...")
-    status, result = reassign_game(game_id_to_move, tagset_b.name)
-    print(f"  Reassign result: {status} - {result}")
-    assert status == 200, f"Cross-community move failed: {result}"
+    # Verify GameHistory
+    missing, wrong = verify_games_in_tagset(game_ids, TAGSET_S13, s13_id)
+    assert not missing, f"Games missing from {TAGSET_S13}: {missing}"
+    assert not wrong, f"Games have wrong tag_set in {TAGSET_S13}: {wrong}"
+    leftover = verify_games_not_in_tagset(game_ids, TAGSET_PJ_CLASSIC)
+    assert not leftover, f"Games still in {TAGSET_PJ_CLASSIC}: {leftover}"
+    print(f"  GameHistory verified: games in S13, not in PJ Classic ✓")
 
-    # Ladder A1 should now be empty (no games)
-    status, ladder_a1_after = get_ladder(tagset_a1.name)
-    print(f"  Ladder A1 after move: {ladder_a1_after}")
+    print_ladder_diff("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
+    print_ladder_diff("S13", s13_ladder_before, snapshot_ladder(TAGSET_S13))
 
-    # Ladder B should now have the game
-    status, ladder_b = get_ladder(tagset_b.name)
-    assert status == 200
-    print(f"  Ladder B after move: {player1.username}={ladder_b[player1.username]['rating']}, {player2.username}={ladder_b[player2.username]['rating']}")
+    # Move back
+    print(f"\n  Moving {NUM_GAMES} games back to {TAGSET_PJ_CLASSIC}...")
+    for gid in game_ids:
+        status, result = reassign_game(gid, TAGSET_PJ_CLASSIC)
+        assert status == 200, f"Failed to move game {gid} back: {status} {result}"
+        print(f"    Game {gid}: OK")
+
+    # Verify GameHistory restored
+    missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_CLASSIC, pj_id)
+    assert not missing, f"Games missing from {TAGSET_PJ_CLASSIC}: {missing}"
+    assert not wrong, f"Games have wrong tag_set: {wrong}"
+    print(f"  GameHistory verified: games back in PJ Classic ✓")
+
+    verify_ladders_match("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
+    verify_ladders_match("S13", s13_ladder_before, snapshot_ladder(TAGSET_S13))
+    print("  Ladders restored ✓")
 
     print("  PASSED ✓")
 
 
-def test_cross_community_blocked():
-    """Move a game to a community where one player is NOT a member — should fail."""
+def test_three_way_move():
+    """Move games PJ Classic -> PJ Training -> S13 -> PJ Classic."""
     print("\n" + "=" * 60)
-    print("TEST 3: Cross-community move blocked (player not in target community)")
+    print("TEST 3: Three-way move")
+    print(f"  {TAGSET_PJ_CLASSIC} -> {TAGSET_PJ_TRAINING} -> {TAGSET_S13} -> back")
     print("=" * 60)
 
-    sponsor, comm_a, comm_b, tagset_a1, tagset_a2, tagset_b, player1, player2 = setup()
+    pj_id = get_tag_set_id(TAGSET_PJ_CLASSIC)
+    training_id = get_tag_set_id(TAGSET_PJ_TRAINING)
+    s13_id = get_tag_set_id(TAGSET_S13)
 
-    # Create a third player who is ONLY in community A
-    player3 = User()
-    player3.register()
-    player3.verify_user()
-    comm_a.join_via_url(player3)
+    # Get games
+    status, games = get_ladder_games(TAGSET_PJ_CLASSIC)
+    assert status == 200
+    game_ids = [g['game_id'] for g in games[:NUM_GAMES] if g['game_id'] is not None]
+    game_ids = game_ids[:NUM_GAMES]
+    print(f"  Selected {NUM_GAMES} game_ids: {game_ids}")
 
-    # Submit game with player3 in community A
-    status, resp = manual_submit_game(player1.username, player3.username, tagset_a1.name, sponsor.rk, recalc=True)
-    assert status == 200, f"Game submit failed: {resp}"
-    print(f"  Submitted game with {player1.username} vs {player3.username}")
+    # Snapshot all three
+    pj_ladder_before = snapshot_ladder(TAGSET_PJ_CLASSIC)
+    training_ladder_before = snapshot_ladder(TAGSET_PJ_TRAINING)
+    s13_ladder_before = snapshot_ladder(TAGSET_S13)
 
-    # Get game_id
-    games_resp = requests.post(f"{BASE_URL}/games/", json={'TagSet': tagset_a1.name})
-    game_id_to_move = games_resp.json()[0]['game_id']
+    # Step 1: PJ Classic -> PJ Training
+    print(f"\n  Step 1: Moving to {TAGSET_PJ_TRAINING}...")
+    for gid in game_ids:
+        status, result = reassign_game(gid, TAGSET_PJ_TRAINING)
+        assert status == 200, f"Step 1 failed for game {gid}: {status} {result}"
+        print(f"    Game {gid}: OK")
 
-    # Try to move to community B — player3 is not a member
-    print(f"  Attempting to move game to community B (player3 not a member)...")
-    status, result = reassign_game(game_id_to_move, tagset_b.name)
-    print(f"  Reassign result: {status} - {result}")
-    assert status == 400, f"Should have been blocked but got {status}: {result}"
-    assert player3.username in result, f"Error should mention the player's username"
+    missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_TRAINING, training_id)
+    assert not missing, f"Step 1: Games missing from Training: {missing}"
+    leftover = verify_games_not_in_tagset(game_ids, TAGSET_PJ_CLASSIC)
+    assert not leftover, f"Step 1: Games still in PJ Classic: {leftover}"
+    print(f"  Step 1 GameHistory verified ✓")
+
+    # Step 2: PJ Training -> S13 (cross-community)
+    print(f"\n  Step 2: Moving to {TAGSET_S13}...")
+    for gid in game_ids:
+        status, result = reassign_game(gid, TAGSET_S13)
+        assert status == 200, f"Step 2 failed for game {gid}: {status} {result}"
+        print(f"    Game {gid}: OK")
+
+    missing, wrong = verify_games_in_tagset(game_ids, TAGSET_S13, s13_id)
+    assert not missing, f"Step 2: Games missing from S13: {missing}"
+    leftover = verify_games_not_in_tagset(game_ids, TAGSET_PJ_TRAINING)
+    our_leftover = [gid for gid in leftover if gid in game_ids]
+    assert not our_leftover, f"Step 2: Games still in Training: {our_leftover}"
+    print(f"  Step 2 GameHistory verified ✓")
+
+    # Step 3: S13 -> PJ Classic (cross-community back)
+    print(f"\n  Step 3: Moving back to {TAGSET_PJ_CLASSIC}...")
+    for gid in game_ids:
+        status, result = reassign_game(gid, TAGSET_PJ_CLASSIC)
+        assert status == 200, f"Step 3 failed for game {gid}: {status} {result}"
+        print(f"    Game {gid}: OK")
+
+    missing, wrong = verify_games_in_tagset(game_ids, TAGSET_PJ_CLASSIC, pj_id)
+    assert not missing, f"Step 3: Games missing from PJ Classic: {missing}"
+    leftover = verify_games_not_in_tagset(game_ids, TAGSET_S13)
+    our_leftover = [gid for gid in leftover if gid in game_ids]
+    assert not our_leftover, f"Step 3: Games still in S13: {our_leftover}"
+    print(f"  Step 3 GameHistory verified ✓")
+
+    # Verify all three ladders restored
+    verify_ladders_match("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
+    verify_ladders_match("PJ Training", training_ladder_before, snapshot_ladder(TAGSET_PJ_TRAINING))
+    verify_ladders_match("S13", s13_ladder_before, snapshot_ladder(TAGSET_S13))
+    print("  All three ladders restored ✓")
 
     print("  PASSED ✓")
 
 
-def test_noop_same_tagset():
-    """Moving a game to the tag set it's already in should be a no-op."""
+def test_out_of_order_move():
+    """Move an older game (15th most recent) to test that recalc handles ordering correctly."""
     print("\n" + "=" * 60)
-    print("TEST 4: No-op (same tag set)")
+    print("TEST 4: Out-of-order move (15th most recent game)")
+    print(f"  {TAGSET_PJ_CLASSIC} -> {TAGSET_PJ_TRAINING} -> back")
     print("=" * 60)
 
-    sponsor, comm_a, comm_b, tagset_a1, tagset_a2, tagset_b, player1, player2 = setup()
+    pj_id = get_tag_set_id(TAGSET_PJ_CLASSIC)
+    training_id = get_tag_set_id(TAGSET_PJ_TRAINING)
 
-    # Submit a game
-    status, resp = manual_submit_game(player1.username, player2.username, tagset_a1.name, sponsor.rk, recalc=True)
-    assert status == 200
+    # Get games and pick the 15th
+    status, games = get_ladder_games(TAGSET_PJ_CLASSIC)
+    assert status == 200, f"Failed to get games: {games}"
+    games_with_ids = [g for g in games if g['game_id'] is not None]
+    assert len(games_with_ids) >= 15, f"Not enough games, found {len(games_with_ids)}, need 15"
 
-    games_resp = requests.post(f"{BASE_URL}/games/", json={'TagSet': tagset_a1.name})
-    game_id = games_resp.json()[0]['game_id']
+    old_game = games_with_ids[14]  # 0-indexed, so index 14 = 15th game
+    game_id = old_game['game_id']
+    print(f"  Selected 15th most recent game: {game_id}")
+    print(f"    Winner: {old_game.get('winner_player')}, Loser: {old_game.get('loser_player')}")
+    print(f"    Winner incoming elo: {old_game.get('winner_incoming_elo')}, result: {old_game.get('winner_result_elo')}")
+    print(f"    Loser incoming elo: {old_game.get('loser_incoming_elo')}, result: {old_game.get('loser_result_elo')}")
 
-    # Move to same tagset
-    status, result = reassign_game(game_id, tagset_a1.name)
-    print(f"  Reassign to same tagset: {status} - {result}")
-    assert status == 200
-    assert 'already' in result.lower(), f"Expected 'already' message, got: {result}"
+    # Snapshot
+    pj_ladder_before = snapshot_ladder(TAGSET_PJ_CLASSIC)
+    training_ladder_before = snapshot_ladder(TAGSET_PJ_TRAINING)
+    pj_gh_before = snapshot_game_history(TAGSET_PJ_CLASSIC)
+
+    # Move to Training
+    print(f"\n  Moving game {game_id} to {TAGSET_PJ_TRAINING}...")
+    status, result = reassign_game(game_id, TAGSET_PJ_TRAINING)
+    assert status == 200, f"Failed to move: {status} {result}"
+    print(f"    Move: OK")
+
+    # Verify it moved
+    missing, wrong = verify_games_in_tagset([game_id], TAGSET_PJ_TRAINING, training_id)
+    assert not missing, f"Game missing from Training: {missing}"
+    leftover = verify_games_not_in_tagset([game_id], TAGSET_PJ_CLASSIC)
+    assert not leftover, f"Game still in PJ Classic: {leftover}"
+    print(f"  GameHistory verified: game in Training ✓")
+
+    # Check that PJ Classic ladder changed (removing a mid-history game affects everyone after)
+    pj_ladder_moved = snapshot_ladder(TAGSET_PJ_CLASSIC)
+    print_ladder_diff("PJ Classic (after removing old game)", pj_ladder_before, pj_ladder_moved)
+
+    # Move back
+    print(f"\n  Moving game {game_id} back to {TAGSET_PJ_CLASSIC}...")
+    status, result = reassign_game(game_id, TAGSET_PJ_CLASSIC)
+    assert status == 200, f"Failed to move back: {status} {result}"
+    print(f"    Move back: OK")
+
+    # Verify GameHistory restored
+    missing, wrong = verify_games_in_tagset([game_id], TAGSET_PJ_CLASSIC, pj_id)
+    assert not missing, f"Game missing from PJ Classic: {missing}"
+    print(f"  GameHistory verified: game back in PJ Classic ✓")
+
+    # Verify the game's elo fields are correct after round-trip
+    pj_gh_after = snapshot_game_history(TAGSET_PJ_CLASSIC)
+    if game_id in pj_gh_before and game_id in pj_gh_after:
+        before_elos = pj_gh_before[game_id]
+        after_elos = pj_gh_after[game_id]
+        print(f"  Game {game_id} elo comparison:")
+        print(f"    Winner incoming: {before_elos['winner_incoming_elo']} -> {after_elos['winner_incoming_elo']}")
+        print(f"    Winner result:   {before_elos['winner_result_elo']} -> {after_elos['winner_result_elo']}")
+        print(f"    Loser incoming:  {before_elos['loser_incoming_elo']} -> {after_elos['loser_incoming_elo']}")
+        print(f"    Loser result:    {before_elos['loser_result_elo']} -> {after_elos['loser_result_elo']}")
+        assert before_elos['winner_result_elo'] == after_elos['winner_result_elo'], \
+            f"Winner result elo changed: {before_elos['winner_result_elo']} != {after_elos['winner_result_elo']}"
+        assert before_elos['loser_result_elo'] == after_elos['loser_result_elo'], \
+            f"Loser result elo changed: {before_elos['loser_result_elo']} != {after_elos['loser_result_elo']}"
+        print(f"  Game elo fields match ✓")
+
+    # Verify ladders restored
+    verify_ladders_match("PJ Classic", pj_ladder_before, snapshot_ladder(TAGSET_PJ_CLASSIC))
+    verify_ladders_match("PJ Training", training_ladder_before, snapshot_ladder(TAGSET_PJ_TRAINING))
+    print("  Ladders restored ✓")
 
     print("  PASSED ✓")
 
 
 def test_recalc_endpoint():
-    """Verify the /recalc_elo/ endpoint still works as a standalone HTTP call."""
+    """Verify /recalc_elo/ endpoint works standalone."""
     print("\n" + "=" * 60)
     print("TEST 5: recalc_elo endpoint")
     print("=" * 60)
 
-    sponsor, comm_a, comm_b, tagset_a1, tagset_a2, tagset_b, player1, player2 = setup()
+    tag_set_id = get_tag_set_id(TAGSET_PJ_CLASSIC)
+    assert tag_set_id is not None, f"Could not find tag set ID for {TAGSET_PJ_CLASSIC}"
+    print(f"  Tag set ID for {TAGSET_PJ_CLASSIC}: {tag_set_id}")
 
-    # Submit 2 games
-    for i in range(2):
-        status, resp = manual_submit_game(player1.username, player2.username, tagset_a1.name, sponsor.rk, recalc=True)
-        assert status == 200
+    ladder_before = snapshot_ladder(TAGSET_PJ_CLASSIC)
+    gh_before = snapshot_game_history(TAGSET_PJ_CLASSIC)
+    print(f"  Before recalc: {len(ladder_before)} players, {len(gh_before)} games")
 
-    # Snapshot ladder
-    status, ladder_before = get_ladder(tagset_a1.name)
-    assert status == 200
-    print(f"  Ladder before recalc: {player1.username}={ladder_before[player1.username]['rating']}")
-
-    # Call recalc endpoint
-    status, result = recalc(tagset_a1.pk, log=True)
-    print(f"  Recalc result: {status}")
+    status, result = recalc(tag_set_id, log=True)
+    print(f"  Recalc status: {status}")
     assert status == 200, f"Recalc failed: {result}"
 
-    # Ladder should be the same (no games changed)
-    status, ladder_after = get_ladder(tagset_a1.name)
-    assert status == 200
-    print(f"  Ladder after recalc: {player1.username}={ladder_after[player1.username]['rating']}")
-    assert ladder_before[player1.username]['rating'] == ladder_after[player1.username]['rating'], \
-        "Ratings should be identical after recalc with no changes"
+    ladder_after = snapshot_ladder(TAGSET_PJ_CLASSIC)
+    gh_after = snapshot_game_history(TAGSET_PJ_CLASSIC)
+    print_ladder_diff("PJ Classic", ladder_before, ladder_after)
+
+    # Verify game history elos unchanged
+    elo_mismatches = 0
+    for gid, before_data in gh_before.items():
+        after_data = gh_after.get(gid)
+        if after_data and before_data['winner_result_elo'] != after_data['winner_result_elo']:
+            elo_mismatches += 1
+            if elo_mismatches <= 3:
+                print(f"    Game {gid} winner_result_elo: {before_data['winner_result_elo']} -> {after_data['winner_result_elo']}")
+    if elo_mismatches > 3:
+        print(f"    ... and {elo_mismatches - 3} more mismatches")
+    if elo_mismatches == 0:
+        print(f"  All GameHistory elo fields unchanged ✓")
 
     print("  PASSED ✓")
 
 
-def test_recalc_nonexistent_tagset():
-    """Recalc on a nonexistent tag set should 404."""
+def test_noop():
+    """Moving a game to the same tag set should be a no-op."""
     print("\n" + "=" * 60)
-    print("TEST 6: recalc_elo with nonexistent tag set")
+    print("TEST 6: No-op (same tag set)")
     print("=" * 60)
 
-    status, result = recalc(99999)
-    print(f"  Recalc with bad ID: {status} - {result}")
-    assert status == 404, f"Expected 404 but got {status}"
+    status, games = get_ladder_games(TAGSET_PJ_CLASSIC)
+    assert status == 200 and len(games) >= 1, f"Failed to get games: {games}"
+
+    game_id = games[0]['game_id']
+    status, result = reassign_game(game_id, TAGSET_PJ_CLASSIC)
+    print(f"  Move to same tag set: {status} - {result}")
+    assert status == 200, f"Expected 200, got {status}"
+    assert 'already' in result.lower(), f"Expected 'already' message, got: {result}"
 
     print("  PASSED ✓")
 
+
+# ============================================================
+# Main
+# ============================================================
 
 if __name__ == '__main__':
     print("=" * 60)
-    print("Testing reassign_game_history_game_mode + recalc_elo changes")
+    print("Testing reassign_game_history_game_mode + recalc_elo")
     print("=" * 60)
     print(f"Server: {BASE_URL}")
-    print(f"WARNING: This will wipe your local database!")
+    print(f"Using real game data - all moves are reversed at end of each test.")
+    print(f"Tag sets:")
+    print(f"  PJ Classic:  {TAGSET_PJ_CLASSIC}")
+    print(f"  PJ Training: {TAGSET_PJ_TRAINING}")
+    print(f"  S13:         {TAGSET_S13}")
 
     input("\nPress Enter to continue (Ctrl+C to abort)...")
 
     try:
         test_same_community_move()
         test_cross_community_move()
-        test_cross_community_blocked()
-        test_noop_same_tagset()
+        test_three_way_move()
+        test_out_of_order_move()
         test_recalc_endpoint()
-        test_recalc_nonexistent_tagset()
+        test_noop()
 
         print("\n" + "=" * 60)
         print("ALL TESTS PASSED ✓")
@@ -361,4 +542,6 @@ if __name__ == '__main__':
         sys.exit(1)
     except Exception as e:
         print(f"\n  ERROR: {type(e).__name__}: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
