@@ -975,14 +975,26 @@ def recalc_elo(tag_set_id, log=False):
         ratings = calc_elo(winner_ladder, loser_ladder)
         ratings['game_history_id'] = game.id
 
+        # Truncate rating and rd to integers to match the behavior of
+        # process_game(), which commits after each game. Since Ladder.rating
+        # and Ladder.rd are Integer columns, each commit truncates the float
+        # values from Glicko-2. Without this, recalc accumulates float
+        # precision across games and produces different results.
+        winner_ladder.rating = int(winner_ladder.rating)
+        winner_ladder.rd = int(winner_ladder.rd)
+        loser_ladder.rating = int(loser_ladder.rating)
+        loser_ladder.rd = int(loser_ladder.rd)
+
         if log:
             game_calc_dict[count] = ratings
 
-        if ((game.winner_result_elo is not None and game.winner_result_elo != ratings['winner_rating'])
-                or (game.loser_result_elo is not None and game.loser_result_elo != ratings['loser_rating'])):
+        winner_result = int(ratings['winner_rating'])
+        loser_result = int(ratings['loser_rating'])
+        if ((game.winner_result_elo is not None and game.winner_result_elo != winner_result)
+                or (game.loser_result_elo is not None and game.loser_result_elo != loser_result)):
             game.recalced_elo = True
-        game.winner_result_elo = ratings['winner_rating']
-        game.loser_result_elo = ratings['loser_rating']
+        game.winner_result_elo = winner_result
+        game.loser_result_elo = loser_result
 
     db.session.flush()
     return game_calc_dict
