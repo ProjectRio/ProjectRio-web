@@ -526,6 +526,20 @@ if __name__ == '__main__':
 
     input("\nPress Enter to continue (Ctrl+C to abort)...")
 
+    # Normalize all ladders first — the integer truncation fix changed how
+    # recalc_elo works, so existing DB values may have been computed with
+    # float precision.  Re-running recalc brings everything in line.
+    print("\n" + "=" * 60)
+    print("SETUP: Normalizing ladders via recalc_elo")
+    print("=" * 60)
+    for ts_name in (TAGSET_PJ_CLASSIC, TAGSET_PJ_TRAINING, TAGSET_S13):
+        ts_id = get_tag_set_id(ts_name)
+        assert ts_id is not None, f"Could not find tag set ID for {ts_name}"
+        status, result = recalc(ts_id)
+        assert status == 200, f"recalc_elo failed for {ts_name}: {status} {result}"
+        print(f"  {ts_name} (id={ts_id}): recalced ✓")
+    print("  All ladders normalized.\n")
+
     try:
         test_same_community_move()
         test_cross_community_move()
