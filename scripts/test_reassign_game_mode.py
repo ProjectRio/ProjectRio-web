@@ -23,7 +23,7 @@ import requests
 from pprint import pprint
 from helpers import User, Community, Tag, TagSet, wipe_db, reset_db
 
-BASE_URL = "http://127.0.0.1:5000"
+BASE_URL = os.getenv('BASE_URL', "http://127.0.0.1:5000")
 ADMIN_KEY = os.getenv('ADMIN_KEY')
 if not ADMIN_KEY:
     print("ERROR: ADMIN_KEY environment variable is not set.")
