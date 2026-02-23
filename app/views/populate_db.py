@@ -30,9 +30,9 @@ def update_ongoing_game():
             away_player = get_user_via_rio_or_comm_key(request.json['Away Player'])
 
             if home_player is None or away_player is None:
-                return abort(410, 'Invalid Rio User')
+                return abort(400, 'Invalid Rio User')
             if home_player.verified is False or away_player.verified is False:
-                return abort(411, "Both users must be verified to submit games.")
+                return abort(422, "Both users must be verified to submit games.")
 
             game = OngoingGame(
                 game_id = game_id,
@@ -149,7 +149,7 @@ def save_game():
         if home_player is None or away_player is None:
             return jsonify({'error': 'Invalid Rio User'}), 400
         if home_player.verified is False or away_player.verified is False:
-            return jsonify({'error': 'Both users must be verified to submit games'}), 400
+            return jsonify({'error': 'Both users must be verified to submit games'}), 422
 
         # Save the JSON data to a file with the name based on 'game_id'
         filename = os.path.join('..', app.config['GAMES_UPLOAD_FOLDER'], f'{game_id}_{submit_time}.json')
@@ -780,7 +780,7 @@ def submit_game_history():
         .join(UserGroupUser)
         .where(UserGroupUser.user_id == submitter_user.id)
     ).scalars().all()
-    is_site_privileged = bool({'Admin', 'Trusted User'} & set(submitter_groups))
+    is_site_privileged = bool({'Admin', 'TrustedUser'} & set(submitter_groups))
 
     # Check if submitter is a community member
     submitter_comm_user = db.session.execute(
@@ -928,7 +928,7 @@ def update_game_status():
         .join(UserGroupUser)
         .where(UserGroupUser.user_id == confirmer_user.id)
     ).scalars().all()
-    is_site_privileged = bool({'Admin', 'Trusted User'} & set(confirmer_groups))
+    is_site_privileged = bool({'Admin', 'TrustedUser'} & set(confirmer_groups))
 
     # Check community membership
     confirmer_comm_user = db.session.execute(
@@ -1123,7 +1123,7 @@ def move_games():
     Recalculates ELO once per affected tag set (all source tag sets + the
     destination), rather than per game.
 
-    Requires Admin or TrustedUser API key.
+    Requires Admin or Trusted User API key.
 
     JSON body:
         game_id (int):              Single game to move (mutually exclusive with game_ids)

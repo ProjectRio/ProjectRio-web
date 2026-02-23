@@ -704,7 +704,7 @@ def get_ladder(in_tag_set=None):
        f"        WHERE tag_set_id = {tag_set.id} \n"
         '                AND (winner_score > loser_score) \n'
         '                AND ( \n'
-        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    (winner_accept AND loser_accept AND admin_accept IS NULL) \n'
         '                    OR \n'
         '                    (admin_accept)) \n'
         '        UNION ALL \n'
@@ -717,7 +717,7 @@ def get_ladder(in_tag_set=None):
        f"        WHERE tag_set_id = {tag_set.id} \n"
         '                AND (winner_score > loser_score) \n'
         '                AND ( \n'
-        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    (winner_accept AND loser_accept AND admin_accept IS NULL) \n'
         '                    OR \n'
         '                    (admin_accept)) \n'
         '        UNION ALL \n'
@@ -730,7 +730,7 @@ def get_ladder(in_tag_set=None):
        f"        WHERE tag_set_id = {tag_set.id} \n"
         '                AND (winner_score = loser_score) \n'
         '                AND ( \n'
-        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    (winner_accept AND loser_accept AND admin_accept IS NULL) \n'
         '                    OR \n'
         '                    (admin_accept)) \n'
         '        UNION ALL \n'
@@ -743,7 +743,7 @@ def get_ladder(in_tag_set=None):
        f"        WHERE tag_set_id = {tag_set.id} \n"
         '                AND (winner_score = loser_score) \n'
         '                AND ( \n'
-        '                    (winner_accept AND loser_accept AND admin_accept = NULL) \n'
+        '                    (winner_accept AND loser_accept AND admin_accept IS NULL) \n'
         '                    OR \n'
         '                    (admin_accept)) \n'
         '    ) AS combined \n'

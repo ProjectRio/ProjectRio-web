@@ -1,10 +1,27 @@
 import random
+import re
 import string
 import requests
 import time
 import os
 
 from connection import Connection
+
+
+def get_error_description(response):
+    """Extract the abort() description from Flask's error response.
+
+    Flask's abort() returns HTML by default.  The description is embedded in
+    a <p> tag inside the HTML body.  This helper tries JSON first (in case a
+    custom error handler is added later), then falls back to parsing the HTML.
+    """
+    try:
+        return response.json().get('description', '')
+    except Exception:
+        pass
+    # Fallback: pull text from the first <p>...</p> in the HTML body
+    match = re.search(r'<p>(.*?)</p>', response.text, re.DOTALL)
+    return match.group(1).strip() if match else response.text
 
 db = Connection()
 
