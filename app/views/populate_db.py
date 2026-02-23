@@ -1,6 +1,6 @@
 from flask import request, abort, jsonify
 from flask import current_app as app
-from sqlalchemy import desc
+from sqlalchemy import desc, select, delete
 from ..models import *
 from ..consts import *
 from ..util import *
@@ -322,8 +322,8 @@ def process_game(game_json):
         ratings = calc_elo(winner_ladder, loser_ladder)
 
         #Finally ready to write the row
-        new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
-                                    winner_score, loser_score, 
+        new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id,
+                                    winner_score, loser_score,
                                     winner_elo, loser_elo,
                                     ratings['winner_rating'], ratings['loser_rating'],
                                     True, True, True, date_time_end)
@@ -698,208 +698,292 @@ def process_game(game_json):
 
 @app.route('/manual_submit_game/', methods=['POST'])
 def submit_game_history():
-    game_id_dec_provided = request.is_json and 'game_id_dec' in request.json
-    game_id_hex_provided = request.is_json and 'game_id_hex' in request.json
-    game_id_provided = game_id_hex_provided or game_id_dec_provided
+    # === Parse and validate input ===
+    if not request.is_json:
+        abort(400, description='Request must be JSON')
 
-    if game_id_hex_provided and game_id_dec_provided:
-        abort(417, description='Two game ids provided')
+    data = request.json
 
+    # Validate required fields in one pass
+    required_fields = {
+        'submitter_rio_key': data.get('submitter_rio_key'),
+        'winner_username': data.get('winner_username'),
+        'loser_username': data.get('loser_username'),
+        'winner_score': data.get('winner_score'),
+        'loser_score': data.get('loser_score'),
+        'tag_set': data.get('tag_set'),
+        'date': data.get('date'),
+    }
+    missing = [name for name, value in required_fields.items() if value is None]
+    if missing:
+        abort(400, description=f'Missing required field(s): {", ".join(missing)}')
+
+    submitter_rio_key = required_fields['submitter_rio_key']
+    winner_username = required_fields['winner_username']
+    loser_username = required_fields['loser_username']
+    winner_score = required_fields['winner_score']
+    loser_score = required_fields['loser_score']
+    tag_set_name = required_fields['tag_set']
+    date = required_fields['date']
+
+    # Game ID: optional, at most one format allowed
     game_id = None
-    if game_id_dec_provided:
-        game_id = request.json['game_id_dec']
-    if game_id_hex_provided:
-        game_id = int(request.json['game_id_hex'].replace(',', ''), 16)
+    if 'game_id_dec' in data and 'game_id_hex' in data:
+        abort(400, description='Only one game_id format may be provided (hex or dec)')
+    elif 'game_id_dec' in data:
+        game_id = data.get('game_id_dec')
+    elif 'game_id_hex' in data:
+        game_id = int(data.get('game_id_hex').replace(',', ''), 16)
 
-
-    #Resolve GameId
-    winner_username = request.json['winner_username']
-    winner_score = request.json['winner_score']
-    loser_username = request.json['loser_username']
-    loser_score = request.json['loser_score']
-    submitter_key_provided = request.is_json and 'submitter_rio_key' in request.json
-    submitter_rio_key = request.json['submitter_rio_key'] if submitter_key_provided else None
-
-    date_provided = request.is_json and 'date' in request.json
-    date = request.json['date'] if date_provided else None
-
-    recalc_ladder_provided = request.is_json and 'recalc' in request.json
-    recalc = request.json['recalc'] if recalc_ladder_provided else None
-    log_provided = request.is_json and 'log' in request.json
-    log = request.json['log'] if (log_provided and recalc) else None
-
-    tag_set = TagSet.query.filter_by(name_lowercase=(lower_and_remove_nonalphanumeric(request.json['tag_set']))).first()
-    if tag_set == None:
-        return abort(409, description='No TagSet found with provided name')
-    tag_set_id = tag_set.id
-
-    # Delete ongoing game row once game is submitted (if game crashed)
-    if game_id_provided:
-        OngoingGame.query.filter_by(game_id=game_id).delete()
-        #Make sure Game does not exist
-        game_exists = (Game.query.filter_by(game_id=game_id).first() != None)
-        if game_exists:
-            abort(416, description='No TagSet found with provided name')
-        game_id = None
+    # === Resolve references (read-only lookups, no DB writes yet) ===
+    tag_set = db.session.execute(
+        select(TagSet).where(TagSet.name_lowercase == lower_and_remove_nonalphanumeric(tag_set_name))
+    ).scalars().first()
+    if tag_set is None:
+        abort(404, description='No TagSet found with provided name')
 
     comm_id = tag_set.community_id
 
-    #Get users and community users
-    winner_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(winner_username)).first()
-    loser_user = RioUser.query.filter_by(username_lowercase=lower_and_remove_nonalphanumeric(loser_username)).first()
+    users = {}
+    for role, username in [('winner', winner_username), ('loser', loser_username)]:
+        user = db.session.execute(
+            select(RioUser).where(RioUser.username_lowercase == lower_and_remove_nonalphanumeric(username))
+        ).scalars().first()
+        if user is None:
+            abort(404, description=f'No RioUser found for {role}: {username}')
+        if not user.verified:
+            abort(422, description=f'RioUser {username} ({role}) is not verified')
+        comm_user = db.session.execute(
+            select(CommunityUser).where(
+                CommunityUser.user_id == user.id,
+                CommunityUser.community_id == comm_id,
+            )
+        ).scalars().first()
+        if comm_user is None:
+            abort(404, description=f'RioUser {username} ({role}) is not a member of this community')
+        users[role] = (user, comm_user)
 
-    if winner_user == None or loser_user == None:
-        return abort(410, description='No RioUser found for at least one of the provided usernames')
+    winner_user, winner_comm_user = users['winner']
+    loser_user, loser_comm_user = users['loser']
 
-    if not winner_user.verified or not loser_user.verified:
-        return abort(411, description='RioUser(s) are not verified')
+    # === Validate submitter permissions ===
+    # Resolve the RioUser from the rio key
+    submitter_user = db.session.execute(
+        select(RioUser).where(RioUser.rio_key == submitter_rio_key)
+    ).scalars().first()
+    if submitter_user is None:
+        abort(401, description='Invalid submitter rio key')
 
-    winner_comm_user = CommunityUser.query.filter_by(user_id=winner_user.id, community_id=comm_id).first()
-    loser_comm_user = CommunityUser.query.filter_by(user_id=loser_user.id, community_id=comm_id).first()
+    # Check if submitter has site-level privileges (Admin or Trusted User)
+    submitter_groups = db.session.execute(
+        select(UserGroup.name)
+        .join(UserGroupUser)
+        .where(UserGroupUser.user_id == submitter_user.id)
+    ).scalars().all()
+    is_site_privileged = bool({'Admin', 'Trusted User'} & set(submitter_groups))
 
-    if winner_comm_user == None or loser_comm_user == None:
-        return abort(412, description='No CommunityUser found for at least one of the RioUsers')
+    # Check if submitter is a community member
+    submitter_comm_user = db.session.execute(
+        select(CommunityUser).where(
+            CommunityUser.user_id == submitter_user.id,
+            CommunityUser.community_id == comm_id,
+        )
+    ).scalars().first()
 
-    #Get TagSet. If season, update/track ELO. Else just add the GameHistory row
-    winner_elo = None
-    loser_elo = None
+    is_community_admin = submitter_comm_user is not None and submitter_comm_user.admin
+    is_winner = submitter_comm_user is not None and submitter_comm_user.id == winner_comm_user.id
+    is_loser = submitter_comm_user is not None and submitter_comm_user.id == loser_comm_user.id
 
-    #Get ELOs
-    winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id, tag_set_id=tag_set_id).first()
-    loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id, tag_set_id=tag_set_id).first()
+    if not (is_winner or is_loser or is_community_admin or is_site_privileged):
+        abort(403, description='Submitter is not a player in this game, a community admin, or a site Admin/Trusted User')
 
-    #Create elos for new players if needed
-    if winner_ladder == None:
-        new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
-        winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
-        db.session.add(winner_ladder)
+    winner_accept = True if is_winner else None
+    loser_accept = True if is_loser else None
+    admin_accept = True if ((is_community_admin or is_site_privileged) and not is_winner and not is_loser) else None
+
+    # === Clean up ongoing game and validate game_id if provided ===
+    if game_id is not None:
+        db.session.execute(delete(OngoingGame).where(OngoingGame.game_id == game_id))
+        existing_game = db.session.execute(
+            select(Game).where(Game.game_id == game_id)
+        ).scalars().first()
+        if existing_game is not None:
+            abort(409, description='Game with provided game_id already exists')
+        # Manual submissions create GameHistory without a Game record, so game_id is always NULL
+        game_id = None
+
+    # === Begin writes (flush only, single commit at end) ===
+    try:
+        # Get or create ladder entries
+        winner_ladder = db.session.execute(
+            select(Ladder).where(Ladder.community_user_id == winner_comm_user.id, Ladder.tag_set_id == tag_set.id)
+        ).scalars().first()
+        if winner_ladder is None:
+            winner_ladder = Ladder(tag_set.id, winner_comm_user.id, cDefaultEloRating, cDefaultEloRd, cDefaultEloVol)
+            db.session.add(winner_ladder)
+            db.session.flush()
+
+        loser_ladder = db.session.execute(
+            select(Ladder).where(Ladder.community_user_id == loser_comm_user.id, Ladder.tag_set_id == tag_set.id)
+        ).scalars().first()
+        if loser_ladder is None:
+            loser_ladder = Ladder(tag_set.id, loser_comm_user.id, cDefaultEloRating, cDefaultEloRd, cDefaultEloVol)
+            db.session.add(loser_ladder)
+            db.session.flush()
+
+        # ELO is only calculated when the game is accepted at creation time.
+        # A game is accepted when an admin submits it (admin_accept=True).
+        # Player-only submissions still need the other player or admin to
+        # confirm via /update_game_status/ before ELO is affected.
+        winner_result_elo = None
+        loser_result_elo = None
+        needs_recalc = False
+
+        if admin_accept:
+            latest_game = db.session.execute(
+                select(GameHistory)
+                .where(GameHistory.tag_set_id == tag_set.id)
+                .order_by(GameHistory.date_created.desc())
+            ).scalars().first()
+            needs_recalc = latest_game is not None and date < latest_game.date_created
+
+            if not needs_recalc:
+                ratings = calc_elo(winner_ladder, loser_ladder)
+                winner_result_elo = ratings['winner_rating']
+                loser_result_elo = ratings['loser_rating']
+
+        new_game_history = GameHistory(
+            game_id, tag_set.id,
+            winner_comm_user.id, loser_comm_user.id,
+            winner_score, loser_score,
+            winner_ladder.rating, loser_ladder.rating,
+            winner_result_elo, loser_result_elo,
+            winner_accept, loser_accept, admin_accept, date,
+        )
+        db.session.add(new_game_history)
+        db.session.flush()
+
+        if needs_recalc:
+            recalc_elo(tag_set.id)
+
         db.session.commit()
-    if loser_ladder == None:
-        new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
-        loser_ladder = Ladder(tag_set_id, loser_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
-        db.session.add(loser_ladder)
-        db.session.commit()
-
-    winner_elo = winner_ladder.rating
-    loser_elo = loser_ladder.rating
-    
-    #Acceptance
-    #If full game is recorded (auto submitted, everyone accepts)
-    winner_accept = None
-    loser_accept = None
-    admin_accept = None
-
-    #Get submitters key, if it matches set accept for them
-    if submitter_key_provided:
-        submitter = db.session.query(
-            CommunityUser
-        ).join(
-            RioUser
-        ).filter(
-            (RioUser.rio_key == submitter_rio_key)
-            & (CommunityUser.community_id == winner_comm_user.community_id)
-        ).first()
-
-        if submitter == None:
-            return abort(413, description=f"Submitter not part of provided community")
-        if (submitter.id != winner_comm_user.id and submitter.id != loser_comm_user.id and not submitter.admin):
-            return abort(414, description=f"Submitter is not a player or admin")
-        winner_accept = True if (submitter.id == winner_comm_user.id) else None
-        loser_accept = True if (submitter.id == loser_comm_user.id) else None
-        admin_accept = True if (submitter.admin and (not winner_accept and not loser_accept)) else None
-    else: 
-        return abort(415, description=f"Submitter key not provided")
-
-    #Finally ready to write the row
-    new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id, 
-                                   winner_score, loser_score, 
-                                   winner_elo, loser_elo,
-                                   None, None, #We haven't calculated the new elo yet
-                                   winner_accept, loser_accept, admin_accept, date)
-    db.session.add(new_game_history)
-    db.session.commit()
-    
-    #Need to recalc in case games were played after this manually submitted game
-    if admin_accept and recalc:
-        recalc_elo(tag_set_id, log)
-        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        abort(500, description=f'Failed to submit game: {e}')
 
     return {'game_history_id': new_game_history.id}
 
 
 @app.route('/update_game_status/', methods=['POST'])
 def update_game_status():
-    game_history = None
-    game_id_provided =  request.is_json and 'game_id' in request.json
-    gamehistory_id_provided =  request.is_json and 'game_history_id' in request.json
+    if not request.is_json:
+        abort(400, description='Request must be JSON')
 
-    if (game_id_provided == gamehistory_id_provided):
-        return abort(409, description="Exactly one ID must be provided")
-    elif game_id_provided:
-        game_history = GameHistory.query.filter_by(game_id=request.json.get('game_id')).first()
-    elif gamehistory_id_provided:
-        game_history = GameHistory.query.filter_by(id=request.json.get('game_history_id')).first()
-    
-    if game_history == None:
-        return abort(410, description="Could not find GameHistory for given ID")
+    data = request.json
 
-    # Update ELO if tag_set is a season
-    tag_set = TagSet.query.filter_by(id=game_history.tag_set_id).first()
-    if (tag_set == None):
-        return abort(409, description='Somehow tagset is invalid')
+    # Validate required fields
+    required_fields = {
+        'game_history_id': data.get('game_history_id'),
+        'rio_key': data.get('rio_key'),
+        'accept': data.get('accept'),
+    }
+    missing = [name for name, value in required_fields.items() if value is None]
+    if missing:
+        abort(400, description=f'Missing required field(s): {", ".join(missing)}')
+
+    game_history_id = required_fields['game_history_id']
+    confirmer_rio_key = required_fields['rio_key']
+    confirmer_accept = required_fields['accept']
+
+    # === Resolve the GameHistory record ===
+    game_history = db.session.execute(
+        select(GameHistory).where(GameHistory.id == game_history_id)
+    ).scalars().first()
+    if game_history is None:
+        abort(404, description=f'Could not find GameHistory with id {game_history_id}')
+
+    tag_set = db.session.execute(
+        select(TagSet).where(TagSet.id == game_history.tag_set_id)
+    ).scalars().first()
+    if tag_set is None:
+        abort(404, description='TagSet for this GameHistory no longer exists')
 
     comm_id = tag_set.community_id
 
-    # Did this game previously count for ELO
+    # Snapshot current acceptance state before modifications
     users_already_accepted = (game_history.winner_accept and game_history.loser_accept)
-    # Has the admin already confirmed or rejected the game
-    admin_already_decided = game_history.admin_accept != None
+    admin_already_decided = game_history.admin_accept is not None
     admin_has_changed_accept = False
 
-    #Get confirmer info
-    confirmer_rio_key = request.json.get('rio_key')
-    confirmer_accept = request.json.get('accept')
+    # === Validate confirmer permissions ===
+    confirmer_user = db.session.execute(
+        select(RioUser).where(RioUser.rio_key == confirmer_rio_key)
+    ).scalars().first()
+    if confirmer_user is None:
+        abort(401, description='Invalid Rio Key')
 
-    # Check for admin verification
-    confirmer_comm_user = db.session.query(
-            CommunityUser
-        ).join(
-            RioUser
-        ).filter(
-            (RioUser.rio_key == confirmer_rio_key)
-          & (CommunityUser.community_id == comm_id)
-        ).first()
-    
-    if confirmer_comm_user == None:
-        return abort(413, description="Invalid Rio Key")
-    elif confirmer_comm_user.admin == False: #Confirmer is not an admin
-        if admin_already_decided:
-            return abort(412, description="Admin has already decided. Users cannot change the status")
-        else:
-            winner_comm_user = CommunityUser.query.filter_by(id=game_history.winner_comm_user_id).first()
-            loser_comm_user = CommunityUser.query.filter_by(id=game_history.loser_comm_user_id).first()
+    # Check site-level privileges (Admin or Trusted User)
+    confirmer_groups = db.session.execute(
+        select(UserGroup.name)
+        .join(UserGroupUser)
+        .where(UserGroupUser.user_id == confirmer_user.id)
+    ).scalars().all()
+    is_site_privileged = bool({'Admin', 'Trusted User'} & set(confirmer_groups))
 
-            if (confirmer_comm_user.id == winner_comm_user.id):
-                game_history.winner_accept = confirmer_accept
-            if (confirmer_comm_user.id == loser_comm_user.id):
-                game_history.loser_accept = confirmer_accept
-    elif confirmer_comm_user.admin:
-        if admin_already_decided:
-            if game_history.admin_accept == confirmer_accept:
-                return abort(412, description="Admin provided acceptance matches existing acceptance. No action necessary")
+    # Check community membership
+    confirmer_comm_user = db.session.execute(
+        select(CommunityUser).where(
+            CommunityUser.user_id == confirmer_user.id,
+            CommunityUser.community_id == comm_id,
+        )
+    ).scalars().first()
+
+    is_community_admin = confirmer_comm_user is not None and confirmer_comm_user.admin
+    is_winner = confirmer_comm_user is not None and confirmer_comm_user.id == game_history.winner_comm_user_id
+    is_loser = confirmer_comm_user is not None and confirmer_comm_user.id == game_history.loser_comm_user_id
+    is_admin = is_community_admin or is_site_privileged
+
+    if not (is_winner or is_loser or is_admin):
+        abort(403, description='Confirmer is not a player in this game, a community admin, or a site Admin/Trusted User')
+
+    # === Apply acceptance update ===
+    if is_admin and not is_winner and not is_loser:
+        # Admin action: can override, but no-op if same value already set
+        if admin_already_decided and game_history.admin_accept == confirmer_accept:
+            return {'message': 'Admin acceptance already matches. No action necessary.'}, 200
         game_history.admin_accept = confirmer_accept
         admin_has_changed_accept = True
+    else:
+        # Player action: can only update own acceptance if admin hasn't already decided
+        if admin_already_decided:
+            abort(409, description='Admin has already decided. Users cannot change the status')
+        if is_winner:
+            game_history.winner_accept = confirmer_accept
+        if is_loser:
+            game_history.loser_accept = confirmer_accept
 
-    # Commit changes to GameHistory
-    db.session.commit()
+    # === Commit and recalc if needed ===
+    try:
+        db.session.flush()
 
-    # See if we need to adjust the elo to ignore this game
-    recalc_needed = admin_has_changed_accept or ((game_history.winner_accept and game_history.winner_accept and game_history.admin_accept == None) and not users_already_accepted)
-    if (recalc_needed):
-        result = recalc_elo(tag_set.id)
+        # Recalc needed when: admin changed their decision, or both users just
+        # accepted (with no admin override) for the first time
+        both_users_now_accepted = (game_history.winner_accept and game_history.loser_accept
+                                   and game_history.admin_accept is None)
+        recalc_needed = admin_has_changed_accept or (both_users_now_accepted and not users_already_accepted)
+
+        result = {}
+        if recalc_needed:
+            result = recalc_elo(tag_set.id)
+
         db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        abort(500, description=f'Failed to update game status: {e}')
+
+    if recalc_needed:
         return result
-    return 'No recalculation needed', 200
+    return {'message': 'Status updated. No recalculation needed.'}, 200
 
 def calc_elo(winner_ladder, loser_ladder):
 
