@@ -374,9 +374,15 @@ def test_community_admin_override_reject():
     """A community admin can reject a game that both players accepted."""
     sponsor, community, tagset, player_away, player_home = setup_community_and_players()
 
-    # Player submits, other player accepts
+    # Submit a baseline game as admin so players stay on the ladder
+    baseline = submit_manual_game(player_away, player_home, tagset,
+                                  submitter=sponsor, date=int(time.time()))
+    assert baseline.status_code == 200
+
+    # Player submits a second game, other player accepts
     game_response = submit_manual_game(player_away, player_home, tagset,
-                                       submitter=player_away)
+                                       submitter=player_away,
+                                       date=int(time.time()) + 1)
     assert game_response.status_code == 200
     gh_id = game_response.json()['game_history_id']
 
@@ -392,7 +398,7 @@ def test_community_admin_override_reject():
     home_rating_accepted = ladder[player_home.username]['rating']
     assert away_rating_accepted > home_rating_accepted
 
-    # Community admin rejects — should undo the ELO
+    # Community admin rejects the second game — should undo its ELO
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
@@ -599,9 +605,15 @@ def test_admin_reject_blocks_accepted_game():
     """Admin rejecting a game that both players accepted should undo ELO."""
     sponsor, community, tagset, player_away, player_home = setup_community_and_players()
 
-    # Submit and both players accept
+    # Submit a baseline game as admin so players stay on the ladder
+    baseline = submit_manual_game(player_away, player_home, tagset,
+                                  submitter=sponsor, date=int(time.time()))
+    assert baseline.status_code == 200
+
+    # Submit a second game and both players accept
     game_response = submit_manual_game(player_away, player_home, tagset,
-                                       submitter=player_away)
+                                       submitter=player_away,
+                                       date=int(time.time()) + 1)
     assert game_response.status_code == 200
     gh_id = game_response.json()['game_history_id']
 
@@ -616,7 +628,7 @@ def test_admin_reject_blocks_accepted_game():
     ladder = get_ladder(tagset.name)
     away_rating_accepted = ladder[player_away.username]['rating']
 
-    # Admin rejects
+    # Admin rejects the second game
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
@@ -624,7 +636,7 @@ def test_admin_reject_blocks_accepted_game():
     })
     assert response.status_code == 200
 
-    # Ratings should revert (recalc without this game)
+    # Ratings should revert (recalc without the rejected game)
     ladder = get_ladder(tagset.name)
     away_rating_after_reject = ladder[player_away.username]['rating']
     assert away_rating_after_reject != away_rating_accepted
