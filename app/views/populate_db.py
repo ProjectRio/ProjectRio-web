@@ -6,7 +6,6 @@ from ..consts import *
 from ..util import *
 from ..user_util import *
 from ..glicko2 import Player
-from pprint import pprint
 from random import random
 from ..decorators import api_key_check
 import os
