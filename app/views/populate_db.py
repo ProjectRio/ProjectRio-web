@@ -1240,10 +1240,13 @@ def move_games():
     if not games:
         return 'Game is already in this game mode', 200
 
-    # Track which old tag sets need recalc
+    # Track which old tag sets need recalc, and build the comm_user_id remapping
+    # without touching ORM objects yet — all validation before any writes.
     old_tag_set_ids = set()
+    # Maps game.game_id -> (new_winner_comm_user_id, new_loser_comm_user_id) for
+    # cross-community moves. Same-community moves have no entry here.
+    comm_user_remap = {}
 
-    # Validate cross-community membership and remap comm_user_ids
     for game in games:
         old_tag_set = TagSet.query.filter_by(id=game.tag_set_id).first()
         old_tag_set_ids.add(game.tag_set_id)
@@ -1262,18 +1265,22 @@ def move_games():
                 loser_ru = RioUser.query.filter_by(id=old_loser_comm_user.user_id).first()
                 return abort(400, description=f"Loser '{loser_ru.username}' (game {game.game_id}) is not a member of the community that owns tag set '{new_tag_set_name}'")
 
-            game.winner_comm_user_id = new_winner_comm_user.id
-            game.loser_comm_user_id = new_loser_comm_user.id
+            comm_user_remap[game.game_id] = (new_winner_comm_user.id, new_loser_comm_user.id)
 
     try:
-        # Move all games to the new tag set
+        # Apply all mutations first, then flush so recalc_elo() sees the
+        # updated tag_set_id when it queries the DB.
         for game in games:
             game.tag_set_id = new_tag_set.id
+            if game.game_id in comm_user_remap:
+                game.winner_comm_user_id, game.loser_comm_user_id = comm_user_remap[game.game_id]
         db.session.flush()
 
-        # Recalc each affected tag set once
+        # Recalc source tag sets (games have been flushed out of them)
         for old_tag_set_id in old_tag_set_ids:
             recalc_elo(old_tag_set_id)
+
+        # Recalc destination tag set (games have been flushed into it)
         recalc_elo(new_tag_set.id)
 
         db.session.commit()
