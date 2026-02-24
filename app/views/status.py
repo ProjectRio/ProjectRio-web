@@ -3,6 +3,7 @@ from flask import current_app as app
 from sqlalchemy import desc, text
 from ..models import db, OngoingGame, RioUser, UserGroupUser, UserGroup
 from ..user_util import get_user
+from flask_jwt_extended import jwt_required
 import os
 import json
 import time
@@ -41,6 +42,7 @@ def _is_admin_request():
 
 
 @app.route('/upload_status/', methods=['GET'])
+@jwt_required(optional=True)
 def upload_status():
     """
     Game upload/ingestion pipeline status.
@@ -108,6 +110,7 @@ def upload_status():
 
 
 @app.route('/system_status/', methods=['GET'])
+@jwt_required(optional=True)
 def system_status():
     """
     Server health and resource usage.
