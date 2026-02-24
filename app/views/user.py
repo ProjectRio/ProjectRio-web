@@ -4,7 +4,7 @@ from flask_jwt_extended import create_access_token, set_access_cookies, jwt_requ
 from datetime import datetime, timedelta, timezone
 from pprint import pprint
 from .. import bc
-from ..models import db, RioUser, UserGroup, UserGroupUser, Community, CommunityUser
+from ..models import db, RioUser, UserGroup, UserGroupUser, Community, CommunityUser, Game, OngoingGame, UserIpAddress, ApiKey
 from ..util import *
 from ..consts import *
 from app.utils.send_email import send_email
@@ -513,6 +513,61 @@ def prune_users():
         db.session.delete(user)
         db.session.commit()
     return jsonify(deleted_users)
+
+@app.route('/user/delete', methods=['POST'])
+@jwt_required(optional=True)
+@api_key_check(['Admin'])
+def delete_user():
+    username = request.json.get('username')
+    if not username:
+        abort(400, 'Provide a username')
+
+    user = RioUser.query.filter_by(username=username).first()
+    if not user:
+        abort(404, 'User not found')
+
+    # Block deletion if user has any game history
+    game_count = Game.query.filter(
+        (Game.away_player_id == user.id) | (Game.home_player_id == user.id)
+    ).count()
+    if game_count > 0:
+        abort(400, f'Cannot delete user with {game_count} game(s) on record. Delete their games first.')
+
+    # Block deletion if user is in an ongoing game
+    ongoing_count = OngoingGame.query.filter(
+        (OngoingGame.away_player_id == user.id) | (OngoingGame.home_player_id == user.id)
+    ).count()
+    if ongoing_count > 0:
+        abort(400, 'Cannot delete user who is currently in an ongoing game')
+
+    # Block deletion if user sponsors any communities
+    sponsored = Community.query.filter_by(sponsor_id=user.id).first()
+    if sponsored:
+        abort(400, f'Cannot delete user who sponsors a community ({sponsored.name}). Remove sponsorship first.')
+
+    try:
+        # Clean up all FK references
+        UserGroupUser.query.filter_by(user_id=user.id).delete()
+        CommunityUser.query.filter_by(user_id=user.id).delete()
+        UserIpAddress.query.filter_by(user_id=user.id).delete()
+
+        # Handle API key
+        api_key_id = user.api_key_id
+        user.api_key_id = None
+        db.session.flush()
+        if api_key_id:
+            ApiKey.query.filter_by(id=api_key_id).delete()
+
+        db.session.delete(user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        abort(500, f'Failed to delete user: {str(e)}')
+
+    return jsonify({
+        'message': f'User {username} deleted successfully',
+        'user_id': user.id
+    }), 200
 
 @app.route('/user/get_ip_data', methods=['POST'])
 @jwt_required(optional=True)

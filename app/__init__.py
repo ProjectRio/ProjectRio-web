@@ -62,6 +62,7 @@ def init_app():
         from .views import sql_exec
         from .views import reverify_emails
         from .views import db_manage
+        from .views import status
         # from .views import log
 
         # Create a cron trigger for running every minute

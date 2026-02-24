@@ -211,7 +211,7 @@ def create_default_groups():
     patron_hof = UserGroup('Patron: Hall of Famer', 0, 0, 10)
     general = UserGroup('General', 0, 0, 0)
     banned = UserGroup('Banned', 0, 0, 0)
-    banned = UserGroup('TrustedUser', 0, 0, 0)
+    trusted_user = UserGroup('TrustedUser', 0, 0, 0)
 
     db.session.add(admin)
     db.session.add(developer)
@@ -221,6 +221,7 @@ def create_default_groups():
     db.session.add(patron_hof)
     db.session.add(general)
     db.session.add(banned)
+    db.session.add(trusted_user)
     db.session.commit()
 
 

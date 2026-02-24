@@ -5,12 +5,10 @@ import os
 class Connection(object):
     def __init__(self):
         self.db = os.getenv("POSTGRES_DB")
-        if self.db == "dev":
-            self.url = os.getenv("POSTGRES_URL")[:-5]
-            self.port = os.getenv("POSTGRES_URL")[-4:]
-        else:
-            self.url = os.getenv("POSTGRES_URL")[:-6]
-            self.port = os.getenv("POSTGRES_URL")[-5:]
+        postgres_url = os.getenv("POSTGRES_URL", "localhost:5432")
+        host_port = postgres_url.rsplit(":", 1)
+        self.url = host_port[0]
+        self.port = host_port[1] if len(host_port) > 1 else "5432"
         self.user = os.getenv("POSTGRES_USER")
         self.pw = os.getenv("POSTGRES_PW")
 
