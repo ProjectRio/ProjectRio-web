@@ -952,13 +952,6 @@ def test_populate_db():
 def test_ongoing_game():
     wipe_db()
 
-    with open('app/tests/data/20260219T212721_MattGree-Vs-Baltor33_1189820580.json') as file:
-        data = json.load(file)
-        data['Away Player'] = player_away.rk
-        data['Home Player'] = player_home.rk
-        data['TagSetID'] = tagset.pk
-        game_id = int(data['GameID'].strip(',')[-1],16)
-
     # === SETUP ===
     # Make official community
     sponsor = User()
@@ -989,6 +982,13 @@ def test_ongoing_game():
     player_home = User()
     player_home.register()
     # === END SETUP ===
+
+    with open('app/tests/data/20260219T212721_MattGree-Vs-Baltor33_1189820580.json') as file:
+        data = json.load(file)
+        data['Away Player'] = player_away.rk
+        data['Home Player'] = player_home.rk
+        data['TagSetID'] = tagset.pk
+        game_id = int(data['GameID'].strip(',')[-1],16)
 
     #Send a game
     game = {
