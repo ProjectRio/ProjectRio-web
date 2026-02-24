@@ -531,6 +531,11 @@ def wipe_db():
     response = requests.post(f"{BASE_URL}/wipe_db/", json={"ADMIN_KEY": os.getenv('ADMIN_KEY')})
     return response.status_code == 200
 
+def force_process_games():
+    """Immediately process all pending game files (bypasses the APScheduler cron)."""
+    response = requests.post(f"{BASE_URL}/populate_db/process/", json={"ADMIN_KEY": os.getenv('ADMIN_KEY')})
+    return response.status_code == 200
+
 def reset_db():
     response = requests.post(f"{BASE_URL}/init_db/", json={"ADMIN_KEY": os.getenv('ADMIN_KEY')})
     return response.status_code == 200

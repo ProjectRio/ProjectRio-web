@@ -217,6 +217,14 @@ def prune_stale_ongoing_games():
     ).delete()
     db.session.commit()
 
+@app.route('/populate_db/process/', methods=['POST'])
+def endpoint_process_games():
+    """Admin endpoint to immediately process all pending game files. Used in tests."""
+    if os.getenv('ADMIN_KEY') != request.json.get('ADMIN_KEY'):
+        return abort(403, 'Invalid admin key')
+    process_all_games()
+    return jsonify({'message': 'Games processed'})
+
 def process_all_games_job(app):
     with app.app_context():
         prune_stale_ongoing_games()

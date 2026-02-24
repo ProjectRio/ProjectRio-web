@@ -787,7 +787,7 @@ def test_populate_db():
     data = dict()
     tag_list = list()
 
-    with open('app/tests/data/20230315T212151_MaybeJon-Vs-PeacockSlayer_1867546158.json') as file:
+    with open('app/tests/data/20260219T212721_MattGree-Vs-Baltor33_1189820580.json') as file:
         data = json.load(file)
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
@@ -802,6 +802,9 @@ def test_populate_db():
     player_home.verify_user()
     response = requests.post(f"{BASE_URL}/populate_db/", json=data)
     assert response.status_code == 200
+
+    # Force game processing (normally done by APScheduler cron)
+    assert force_process_games() == True
 
     # Test the ladder
     ladder = get_ladder(tagset.name)
@@ -949,6 +952,13 @@ def test_populate_db():
 def test_ongoing_game():
     wipe_db()
 
+    with open('app/tests/data/20260219T212721_MattGree-Vs-Baltor33_1189820580.json') as file:
+        data = json.load(file)
+        data['Away Player'] = player_away.rk
+        data['Home Player'] = player_home.rk
+        data['TagSetID'] = tagset.pk
+        game_id = int(data['GameID'].strip(',')[-1],16)
+
     # === SETUP ===
     # Make official community
     sponsor = User()
@@ -982,7 +992,7 @@ def test_ongoing_game():
 
     #Send a game
     game = {
-        'GameID': '1867546158',
+        'GameID': str(game_id),
         'Away Player': player_away.rk,
         'Home Player': player_home.rk,
         'TagSetID': tagset.pk,
@@ -1041,7 +1051,7 @@ def test_ongoing_game():
 
     #Update game
     game_update = {
-        'GameID': '1867546158',
+        'GameID': str(game_id),
         'Inning': 1,
         'Half Inning': 0,
         'Away Score': 2,
@@ -1063,15 +1073,13 @@ def test_ongoing_game():
     assert response.status_code == 200
     assert response.json()['ongoing_games'][0]['inning'] == 1
 
-    with open('app/tests/data/20230315T212151_MaybeJon-Vs-PeacockSlayer_1867546158.json') as file:
-        data = json.load(file)
-        data['Away Player'] = player_away.rk
-        data['Home Player'] = player_home.rk
-        data['TagSetID'] = tagset.pk
-
     # Submit game, make sure ongoing game was cleared
     response = requests.post(f"{BASE_URL}/populate_db/", json=data)
     assert response.status_code == 200
+
+    # Force game processing (normally done by APScheduler cron)
+    assert force_process_games() == True
+
     response = requests.get(f"{BASE_URL}/populate_db/ongoing_game/")
     assert response.status_code == 200
     assert len(response.json()['ongoing_games']) == 0
