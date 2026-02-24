@@ -782,6 +782,18 @@ def submit_game_history():
     tag_set_name = required_fields['tag_set']
     date = required_fields['date']
 
+    # Validate scores are non-negative integers
+    if not isinstance(winner_score, int) or not isinstance(loser_score, int):
+        abort(400, description='winner_score and loser_score must be integers')
+    if winner_score < 0 or loser_score < 0:
+        abort(400, description='winner_score and loser_score must be >= 0')
+    if winner_score <= loser_score:
+        abort(400, description='winner_score must be greater than loser_score')
+
+    # Validate winner and loser are not the same user
+    if lower_and_remove_nonalphanumeric(winner_username) == lower_and_remove_nonalphanumeric(loser_username):
+        abort(400, description='winner and loser cannot be the same user')
+
     # Game ID: optional, at most one format allowed
     game_id = None
     if 'game_id_dec' in data and 'game_id_hex' in data:
@@ -948,6 +960,10 @@ def update_game_status():
     game_history_id = required_fields['game_history_id']
     confirmer_rio_key = required_fields['rio_key']
     confirmer_accept = required_fields['accept']
+
+    if confirmer_accept not in (0, 1):
+        abort(400, description='accept must be 0 (reject) or 1 (accept)')
+    confirmer_accept = bool(confirmer_accept)
 
     # === Resolve the GameHistory record ===
     game_history = db.session.execute(

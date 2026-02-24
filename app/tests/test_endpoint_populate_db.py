@@ -186,6 +186,57 @@ def test_manual_submit_invalid_username():
     assert response.status_code == 404
 
 
+def test_manual_submit_invalid_scores():
+    """Non-integer or negative scores should return 400."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    # String score
+    game = {
+        'winner_username': player_away.username,
+        'winner_score': 'ten',
+        'loser_username': player_home.username,
+        'loser_score': 0,
+        'tag_set': tagset.name,
+        'submitter_rio_key': player_away.rk,
+        'date': int(time.time()),
+    }
+    response = requests.post(f"{BASE_URL}/manual_submit_game/", json=game)
+    assert response.status_code == 400
+
+    # Negative score
+    game['winner_score'] = -1
+    response = requests.post(f"{BASE_URL}/manual_submit_game/", json=game)
+    assert response.status_code == 400
+
+    # Float score
+    game['winner_score'] = 5.5
+    response = requests.post(f"{BASE_URL}/manual_submit_game/", json=game)
+    assert response.status_code == 400
+
+    # Loser score greater than winner score
+    game['winner_score'] = 0
+    game['loser_score'] = 5
+    response = requests.post(f"{BASE_URL}/manual_submit_game/", json=game)
+    assert response.status_code == 400
+
+
+def test_manual_submit_same_winner_loser():
+    """Winner and loser cannot be the same user."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    game = {
+        'winner_username': player_away.username,
+        'winner_score': 10,
+        'loser_username': player_away.username,
+        'loser_score': 0,
+        'tag_set': tagset.name,
+        'submitter_rio_key': player_away.rk,
+        'date': int(time.time()),
+    }
+    response = requests.post(f"{BASE_URL}/manual_submit_game/", json=game)
+    assert response.status_code == 400
+
+
 def test_manual_submit_unverified_user():
     """Unverified users should return 422."""
     wipe_db()
@@ -362,7 +413,7 @@ def test_community_admin_override_accept():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 200
 
@@ -390,7 +441,7 @@ def test_community_admin_override_reject():
     requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': player_home.rk,
-        'accept': True,
+        'accept': 1,
     })
 
     ladder = get_ladder(tagset.name)
@@ -402,7 +453,7 @@ def test_community_admin_override_reject():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
-        'accept': False,
+        'accept': 0,
     })
     assert response.status_code == 200
 
@@ -432,7 +483,7 @@ def test_promoted_community_admin_override():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': comm_admin.user.rk if hasattr(comm_admin, 'user') else comm_admin.rk,
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 200
 
@@ -504,7 +555,7 @@ def test_update_status_invalid_game_history_id():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': 99999,
         'rio_key': 'some_key',
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 404
 
@@ -522,9 +573,53 @@ def test_update_status_invalid_rio_key():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': 'totally_invalid',
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 401
+
+
+def test_update_status_invalid_accept():
+    """accept must be 0 or 1; other values should return 400."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    game_response = submit_manual_game(player_away, player_home, tagset,
+                                       submitter=player_away)
+    assert game_response.status_code == 200
+    gh_id = game_response.json()['game_history_id']
+
+    # String instead of 0/1
+    response = requests.post(f"{BASE_URL}/update_game_status/", json={
+        'game_history_id': gh_id,
+        'rio_key': player_home.rk,
+        'accept': 'yes',
+    })
+    assert response.status_code == 400
+
+    # Integer 2 is not 0 or 1
+    response = requests.post(f"{BASE_URL}/update_game_status/", json={
+        'game_history_id': gh_id,
+        'rio_key': player_home.rk,
+        'accept': 2,
+    })
+    assert response.status_code == 400
+
+
+def test_player_reconfirm_no_op():
+    """Player re-confirming the same acceptance should be a no-op 200."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    game_response = submit_manual_game(player_away, player_home, tagset,
+                                       submitter=player_away)
+    assert game_response.status_code == 200
+    gh_id = game_response.json()['game_history_id']
+
+    # Winner already accepted via submission, re-confirm should be a no-op
+    response = requests.post(f"{BASE_URL}/update_game_status/", json={
+        'game_history_id': gh_id,
+        'rio_key': player_away.rk,
+        'accept': 1,
+    })
+    assert response.status_code == 200
 
 
 # ============================================================
@@ -544,7 +639,7 @@ def test_player_accept_flow():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': player_home.rk,
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 200
 
@@ -566,7 +661,7 @@ def test_player_reject_no_elo():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': player_home.rk,
-        'accept': False,
+        'accept': 0,
     })
     assert response.status_code == 200
 
@@ -592,7 +687,7 @@ def test_admin_accept_overrides():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 200
 
@@ -621,7 +716,7 @@ def test_admin_reject_blocks_accepted_game():
     requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': player_home.rk,
-        'accept': True,
+        'accept': 1,
     })
 
     # Snapshot ratings after acceptance
@@ -632,7 +727,7 @@ def test_admin_reject_blocks_accepted_game():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
-        'accept': False,
+        'accept': 0,
     })
     assert response.status_code == 200
 
@@ -655,14 +750,14 @@ def test_admin_no_op_same_accept():
     requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
-        'accept': True,
+        'accept': 1,
     })
 
     # Admin re-confirms — should be a no-op 200
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 200
     assert 'already matches' in response.json().get('message', '')
@@ -681,14 +776,14 @@ def test_player_cannot_change_after_admin_decides():
     requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': sponsor.rk,
-        'accept': True,
+        'accept': 1,
     })
 
     # Loser tries to reject — should fail
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': player_home.rk,
-        'accept': False,
+        'accept': 0,
     })
     assert response.status_code == 409
 
@@ -715,7 +810,7 @@ def test_site_admin_can_update_status():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': site_admin.rk,
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 200
 
@@ -741,7 +836,7 @@ def test_non_participant_cannot_update():
     response = requests.post(f"{BASE_URL}/update_game_status/", json={
         'game_history_id': gh_id,
         'rio_key': bystander.rk,
-        'accept': True,
+        'accept': 1,
     })
     assert response.status_code == 403
 
@@ -839,9 +934,9 @@ def test_populate_db():
     assert ladder[player_home.username]['rating'] == home_user_rating
 
     # Confirm/Reject the games
-    game1_winner_confirm = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': True}
-    game1_loser_reject   = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': False}
-    game1_loser_confirm  = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': True}
+    game1_winner_confirm = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': 1}
+    game1_loser_reject   = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': 0}
+    game1_loser_confirm  = {'game_history_id': game1_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': 1}
 
     # Winner confirm game
     response = requests.post(f"{BASE_URL}/update_game_status/", json=game1_winner_confirm)
@@ -867,8 +962,8 @@ def test_populate_db():
 
     # ============================================================
     # Game 2
-    game2_winner_confirm = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': True}
-    game2_loser_confirm  = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': True}
+    game2_winner_confirm = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_away.rk, 'accept': 1}
+    game2_loser_confirm  = {'game_history_id': game2_response.json()['game_history_id'], 'rio_key': player_home.rk, 'accept': 1}
 
     # Winner confirm game
     response = requests.post(f"{BASE_URL}/update_game_status/", json=game2_winner_confirm)
@@ -922,7 +1017,7 @@ def test_populate_db():
     assert ladder[player_home.username]['rating'] == home_user_rating
 
     # Game 4 - admin confirm
-    game4_admin_confirm = {'game_history_id': game4_response.json()['game_history_id'], 'rio_key': sponsor.rk, 'accept': True}
+    game4_admin_confirm = {'game_history_id': game4_response.json()['game_history_id'], 'rio_key': sponsor.rk, 'accept': 1}
 
     # Admin confirm game
     response = requests.post(f"{BASE_URL}/update_game_status/", json=game4_admin_confirm)
