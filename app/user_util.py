@@ -1,4 +1,6 @@
 from .models import db, RioUser, ApiKey, CommunityUser, UserIpAddress
+from .util import lower_and_remove_nonalphanumeric
+from sqlalchemy import select
 import time
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
@@ -67,7 +69,7 @@ def get_user(request):
 
 def get_user_via_rio_or_comm_key(key):
     user = None
-    if len(key) == 4: #Community Key 
+    if len(key) == 4: #Community Key
         user = db.session.query(
             RioUser
         ).join(
@@ -78,6 +80,14 @@ def get_user_via_rio_or_comm_key(key):
     else: #Rio Key
         user = RioUser.query.filter_by(rio_key=key).first()
     return user
+
+def get_user_by_username(username):
+    """Look up a RioUser by username (case-insensitive, non-alphanumeric stripped)."""
+    return db.session.execute(
+        select(RioUser).where(
+            RioUser.username_lowercase == lower_and_remove_nonalphanumeric(username)
+        )
+    ).scalars().first()
 
 def update_ip_address_entry(rio_user, request):
     # Get the user's public IP address from the request

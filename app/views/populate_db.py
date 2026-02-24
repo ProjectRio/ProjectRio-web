@@ -126,30 +126,78 @@ def save_game():
         if data is None:
             return jsonify({'error': 'Invalid JSON data in the request'}), 400
 
-        # Extract the 'game_id' field to use as the filename
-        game_id = int(data.get('GameID').replace(',', ''), 16)
+        # Validate required fields
+        game_id_raw = data.get('GameID')
         submit_time = data.get('Date - End')
-
-        # Validate users and basic info
-        if game_id is None or submit_time is None:
+        if game_id_raw is None or submit_time is None:
             return jsonify({'error': 'Missing or invalid GameID/Date field in JSON'}), 400
-        
-        version_split = data['Version'].split('.')
-        if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
-            return 'Not accepting games from clients below 1.9.5'
 
-        # Ignore game if it's a CPU game
-        if data['Home Player'] == "CPU" or data['Away Player'] == "CPU":
+        game_id = int(game_id_raw.replace(',', ''), 16)
+
+        # Version check
+        version = data.get('Version')
+        if version is None:
+            return jsonify({'error': 'Missing Version field in JSON'}), 400
+        version_split = version.split('.')
+        try:
+            if version_split[0] == '1' and version_split[1] == '9' and int(version_split[2]) < 5:
+                return jsonify({'error': 'Not accepting games from clients below 1.9.5'}), 400
+        except (IndexError, ValueError):
+            return jsonify({'error': f'Invalid Version format: {version}'}), 400
+
+        # Ignore CPU games
+        if data.get('Home Player') == 'CPU' or data.get('Away Player') == 'CPU':
             return jsonify({'error': 'Database does not accept CPU games'}), 400
 
-        # Check if rio_keys exist in the db and get associated players
-        home_player = get_user_via_rio_or_comm_key(data['Home Player'])
-        away_player = get_user_via_rio_or_comm_key(data['Away Player'])
+        # Determine submission mode: manual (admin/trusted user) vs client
+        # submitter_rio_key is passed as a query parameter, keeping the stat
+        # file JSON body unmodified.
+        submitter_rio_key = request.args.get('submitter_rio_key')
+        is_manual = False
 
-        if home_player is None or away_player is None:
-            return jsonify({'error': 'Invalid Rio User'}), 400
-        if home_player.verified is False or away_player.verified is False:
-            return jsonify({'error': 'Both users must be verified to submit games'}), 422
+        if submitter_rio_key is not None:
+            # Validate the submitter is an Admin or TrustedUser
+            submitter_user = db.session.execute(
+                select(RioUser).where(RioUser.rio_key == submitter_rio_key)
+            ).scalars().first()
+            if submitter_user is None:
+                return jsonify({'error': 'Invalid submitter rio key'}), 401
+
+            submitter_groups = db.session.execute(
+                select(UserGroup.name)
+                .join(UserGroupUser)
+                .where(UserGroupUser.user_id == submitter_user.id)
+            ).scalars().all()
+            is_privileged = bool({'Admin', 'TrustedUser'} & set(submitter_groups))
+
+            if not is_privileged:
+                return jsonify({'error': 'Submitter is not an Admin or Trusted User'}), 403
+
+            is_manual = True
+
+        # Resolve players
+        if is_manual:
+            # Manual flow: Home Player / Away Player contain usernames
+            home_player = get_user_by_username(data['Home Player'])
+            away_player = get_user_by_username(data['Away Player'])
+
+            if home_player is None or away_player is None:
+                return jsonify({'error': 'Invalid username for Home Player or Away Player'}), 400
+            if not home_player.verified or not away_player.verified:
+                return jsonify({'error': 'Both users must be verified to submit games'}), 422
+
+            # Overwrite usernames with rio_keys so process_game() can resolve them
+            data['Home Player'] = home_player.rio_key
+            data['Away Player'] = away_player.rio_key
+        else:
+            # Client flow: Home Player / Away Player contain rio_keys or community_keys
+            home_player = get_user_via_rio_or_comm_key(data['Home Player'])
+            away_player = get_user_via_rio_or_comm_key(data['Away Player'])
+
+            if home_player is None or away_player is None:
+                return jsonify({'error': 'Invalid Rio User'}), 400
+            if not home_player.verified or not away_player.verified:
+                return jsonify({'error': 'Both users must be verified to submit games'}), 422
 
         # Save the JSON data to a file with the name based on 'game_id'
         filename = os.path.join('..', app.config['GAMES_UPLOAD_FOLDER'], f'{game_id}_{submit_time}.json')
@@ -226,9 +274,9 @@ def process_game(game_json):
             return 'Innings Played < Innings Selected & Score Difference < 10'
         
         tag_set = TagSet.query.filter_by(id=game_json['TagSetID']).first()
-        tag_set_id = tag_set.id
-        if tag_set == None:
+        if tag_set is None:
             return 'Could not find TagSet'
+        tag_set_id = tag_set.id
 
         # Confirm that both users are community members for given TagSet
         # Get TagSet obj to verify users
@@ -746,9 +794,7 @@ def submit_game_history():
 
     users = {}
     for role, username in [('winner', winner_username), ('loser', loser_username)]:
-        user = db.session.execute(
-            select(RioUser).where(RioUser.username_lowercase == lower_and_remove_nonalphanumeric(username))
-        ).scalars().first()
+        user = get_user_by_username(username)
         if user is None:
             abort(404, description=f'No RioUser found for {role}: {username}')
         if not user.verified:

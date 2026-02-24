@@ -1213,3 +1213,148 @@ def test_ongoing_game_with_man_submit():
     response = requests.get(f"{BASE_URL}/populate_db/ongoing_game/")
     assert response.status_code == 200
     assert len(response.json()['ongoing_games']) == 0
+
+
+# ============================================================
+# Helper: load a game JSON file and prepare it for submission
+# ============================================================
+GAME_FILE = 'app/tests/data/20260219T212721_MattGree-Vs-Baltor33_1189820580.json'
+
+
+def load_game_json():
+    """Load the test game JSON file."""
+    with open(GAME_FILE) as f:
+        return json.load(f)
+
+
+# ============================================================
+# populate_db manual submission: Admin + Trusted User auth
+# ============================================================
+def test_admin_manual_populate_db():
+    """Admin can submit a full game JSON with usernames in Home/Away Player fields."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    data = load_game_json()
+    data['Away Player'] = player_away.username
+    data['Home Player'] = player_home.username
+    data['TagSetID'] = tagset.pk
+
+    response = requests.post(f"{BASE_URL}/populate_db/", json=data,
+                             params={'submitter_rio_key': sponsor.rk})
+    assert response.status_code == 200
+
+
+def test_trusted_user_manual_populate_db():
+    """TrustedUser can submit a full game JSON with usernames."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    trusted = User()
+    trusted.register()
+    trusted.verify_user()
+    assert trusted.add_to_group('TrustedUser') == True
+
+    data = load_game_json()
+    data['Away Player'] = player_away.username
+    data['Home Player'] = player_home.username
+    data['TagSetID'] = tagset.pk
+
+    response = requests.post(f"{BASE_URL}/populate_db/", json=data,
+                             params={'submitter_rio_key': trusted.rk})
+    assert response.status_code == 200
+
+
+def test_manual_populate_db_unauthorized():
+    """A regular user providing submitter_rio_key but not Admin/TrustedUser gets 403."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    bystander = User()
+    bystander.register()
+    bystander.verify_user()
+
+    data = load_game_json()
+    data['Away Player'] = player_away.username
+    data['Home Player'] = player_home.username
+    data['TagSetID'] = tagset.pk
+
+    response = requests.post(f"{BASE_URL}/populate_db/", json=data,
+                             params={'submitter_rio_key': bystander.rk})
+    assert response.status_code == 403
+
+
+def test_manual_populate_db_invalid_username():
+    """Admin submitting with a nonexistent username gets 400."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    data = load_game_json()
+    data['Away Player'] = 'nonexistent_player_xyz'
+    data['Home Player'] = player_home.username
+    data['TagSetID'] = tagset.pk
+
+    response = requests.post(f"{BASE_URL}/populate_db/", json=data,
+                             params={'submitter_rio_key': sponsor.rk})
+    assert response.status_code == 400
+
+
+def test_manual_populate_db_unverified_user():
+    """Admin submitting with an unverified player username gets 422."""
+    wipe_db()
+
+    sponsor = User()
+    sponsor.register()
+    sponsor.verify_user()
+    assert sponsor.add_to_group('admin') == True
+
+    community = Community(sponsor, True, False, False)
+    assert community.success == True
+
+    tag = Tag(community.founder, community)
+    tag.create()
+    tagset = TagSet(community.founder, community, [tag], 'Season')
+    tagset.create()
+    community.refresh()
+
+    # Unverified players
+    player_away = User()
+    player_away.register()
+    player_home = User()
+    player_home.register()
+
+    data = load_game_json()
+    data['Away Player'] = player_away.username
+    data['Home Player'] = player_home.username
+    data['TagSetID'] = tagset.pk
+
+    response = requests.post(f"{BASE_URL}/populate_db/", json=data,
+                             params={'submitter_rio_key': sponsor.rk})
+    assert response.status_code == 422
+
+
+def test_client_flow_unchanged():
+    """Client submitting with rio_keys (no submitter_rio_key) works as before."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    data = load_game_json()
+    data['Away Player'] = player_away.rk
+    data['Home Player'] = player_home.rk
+    data['TagSetID'] = tagset.pk
+
+    response = requests.post(f"{BASE_URL}/populate_db/", json=data)
+    assert response.status_code == 200
+
+
+def test_manual_populate_db_invalid_tagset():
+    """Admin submitting a game JSON with a nonexistent TagSetID gets 200 from
+    save_game (it writes to disk), but process_game will mark it as defective.
+    This test verifies save_game accepts the file — the TagSetID validation
+    happens in process_game."""
+    sponsor, community, tagset, player_away, player_home = setup_community_and_players()
+
+    data = load_game_json()
+    data['Away Player'] = player_away.username
+    data['Home Player'] = player_home.username
+    data['TagSetID'] = 5000  # nonexistent
+
+    response = requests.post(f"{BASE_URL}/populate_db/", json=data,
+                             params={'submitter_rio_key': sponsor.rk})
+    # save_game writes to disk without checking TagSetID
+    assert response.status_code == 200
