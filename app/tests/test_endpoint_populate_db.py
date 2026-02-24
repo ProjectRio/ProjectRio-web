@@ -988,11 +988,11 @@ def test_ongoing_game():
         data['Away Player'] = player_away.rk
         data['Home Player'] = player_home.rk
         data['TagSetID'] = tagset.pk
-        game_id = int(data['GameID'].strip(',')[-1],16)
+        game_id = data['GameID']
 
     #Send a game
     game = {
-        'GameID': str(game_id),
+        'GameID': game_id,
         'Away Player': player_away.rk,
         'Home Player': player_home.rk,
         'TagSetID': tagset.pk,
@@ -1051,7 +1051,7 @@ def test_ongoing_game():
 
     #Update game
     game_update = {
-        'GameID': str(game_id),
+        'GameID': game_id,
         'Inning': 1,
         'Half Inning': 0,
         'Away Score': 2,
