@@ -1371,7 +1371,8 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
             func.sum(CharacterGameSummary.rbi).label('summary_rbi'),
             func.sum(CharacterGameSummary.at_bats).label('summary_at_bats'),
             func.sum(CharacterGameSummary.hits).label('summary_hits'),
-            func.sum(CharacterGameSummary.star_hits).label('star_hits')
+            func.sum(CharacterGameSummary.star_hits).label('star_hits'),
+            func.sum(CharacterGameSummary.bases_stolen).label('summary_bases_stolen')
         )
         .select_from(CharacterGameSummary)
         .join(Character, CharacterGameSummary.char_id == Character.char_id)
