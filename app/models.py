@@ -307,6 +307,49 @@ class OngoingGame(db.Model):
     home_roster_6_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     home_roster_7_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     home_roster_8_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_logo = db.Column(db.Integer)
+    home_logo = db.Column(db.Integer)
+    away_roster_0_superstar = db.Column(db.Boolean)
+    away_roster_1_superstar = db.Column(db.Boolean)
+    away_roster_2_superstar = db.Column(db.Boolean)
+    away_roster_3_superstar = db.Column(db.Boolean)
+    away_roster_4_superstar = db.Column(db.Boolean)
+    away_roster_5_superstar = db.Column(db.Boolean)
+    away_roster_6_superstar = db.Column(db.Boolean)
+    away_roster_7_superstar = db.Column(db.Boolean)
+    away_roster_8_superstar = db.Column(db.Boolean)
+    home_roster_0_superstar = db.Column(db.Boolean)
+    home_roster_1_superstar = db.Column(db.Boolean)
+    home_roster_2_superstar = db.Column(db.Boolean)
+    home_roster_3_superstar = db.Column(db.Boolean)
+    home_roster_4_superstar = db.Column(db.Boolean)
+    home_roster_5_superstar = db.Column(db.Boolean)
+    home_roster_6_superstar = db.Column(db.Boolean)
+    home_roster_7_superstar = db.Column(db.Boolean)
+    home_roster_8_superstar = db.Column(db.Boolean)
+    away_roster_0_fielding_pos = db.Column(db.Integer)
+    away_roster_1_fielding_pos = db.Column(db.Integer)
+    away_roster_2_fielding_pos = db.Column(db.Integer)
+    away_roster_3_fielding_pos = db.Column(db.Integer)
+    away_roster_4_fielding_pos = db.Column(db.Integer)
+    away_roster_5_fielding_pos = db.Column(db.Integer)
+    away_roster_6_fielding_pos = db.Column(db.Integer)
+    away_roster_7_fielding_pos = db.Column(db.Integer)
+    away_roster_8_fielding_pos = db.Column(db.Integer)
+    home_roster_0_fielding_pos = db.Column(db.Integer)
+    home_roster_1_fielding_pos = db.Column(db.Integer)
+    home_roster_2_fielding_pos = db.Column(db.Integer)
+    home_roster_3_fielding_pos = db.Column(db.Integer)
+    home_roster_4_fielding_pos = db.Column(db.Integer)
+    home_roster_5_fielding_pos = db.Column(db.Integer)
+    home_roster_6_fielding_pos = db.Column(db.Integer)
+    home_roster_7_fielding_pos = db.Column(db.Integer)
+    home_roster_8_fielding_pos = db.Column(db.Integer)
+    away_inning_scores = db.Column(db.JSON)
+    home_inning_scores = db.Column(db.JSON)
+    star_chance = db.Column(db.Boolean)
+    pitcher_stats = db.Column(db.JSON)
+    batter_stats = db.Column(db.JSON)
     current_inning = db.Column(db.Integer)
     current_half_inning = db.Column(db.Integer)
     current_away_score = db.Column(db.Integer)
@@ -331,38 +374,81 @@ class OngoingGame(db.Model):
             "tag_set": self.tag_set_id,
             "away_captain": self.away_captain,
             "home_captain": self.home_captain,
+            "away_logo": self.away_logo,
+            "home_logo": self.home_logo,
             "start_time": self.date_time_start,
             "stadium_id": self.stadium_id,
             "inning": self.current_inning,
             "half_inning": self.current_half_inning,
             "away_score": self.current_away_score,
             "home_score": self.current_home_score,
+            "away_inning_scores": self.away_inning_scores,
+            "home_inning_scores": self.home_inning_scores,
             "away_roster_0_char": self.away_roster_0_char,
+            "away_roster_0_superstar": self.away_roster_0_superstar,
+            "away_roster_0_fielding_pos": self.away_roster_0_fielding_pos,
             "away_roster_1_char": self.away_roster_1_char,
+            "away_roster_1_superstar": self.away_roster_1_superstar,
+            "away_roster_1_fielding_pos": self.away_roster_1_fielding_pos,
             "away_roster_2_char": self.away_roster_2_char,
+            "away_roster_2_superstar": self.away_roster_2_superstar,
+            "away_roster_2_fielding_pos": self.away_roster_2_fielding_pos,
             "away_roster_3_char": self.away_roster_3_char,
+            "away_roster_3_superstar": self.away_roster_3_superstar,
+            "away_roster_3_fielding_pos": self.away_roster_3_fielding_pos,
             "away_roster_4_char": self.away_roster_4_char,
+            "away_roster_4_superstar": self.away_roster_4_superstar,
+            "away_roster_4_fielding_pos": self.away_roster_4_fielding_pos,
             "away_roster_5_char": self.away_roster_5_char,
+            "away_roster_5_superstar": self.away_roster_5_superstar,
+            "away_roster_5_fielding_pos": self.away_roster_5_fielding_pos,
             "away_roster_6_char": self.away_roster_6_char,
+            "away_roster_6_superstar": self.away_roster_6_superstar,
+            "away_roster_6_fielding_pos": self.away_roster_6_fielding_pos,
             "away_roster_7_char": self.away_roster_7_char,
+            "away_roster_7_superstar": self.away_roster_7_superstar,
+            "away_roster_7_fielding_pos": self.away_roster_7_fielding_pos,
             "away_roster_8_char": self.away_roster_8_char,
+            "away_roster_8_superstar": self.away_roster_8_superstar,
+            "away_roster_8_fielding_pos": self.away_roster_8_fielding_pos,
             "home_roster_0_char": self.home_roster_0_char,
+            "home_roster_0_superstar": self.home_roster_0_superstar,
+            "home_roster_0_fielding_pos": self.home_roster_0_fielding_pos,
             "home_roster_1_char": self.home_roster_1_char,
+            "home_roster_1_superstar": self.home_roster_1_superstar,
+            "home_roster_1_fielding_pos": self.home_roster_1_fielding_pos,
             "home_roster_2_char": self.home_roster_2_char,
+            "home_roster_2_superstar": self.home_roster_2_superstar,
+            "home_roster_2_fielding_pos": self.home_roster_2_fielding_pos,
             "home_roster_3_char": self.home_roster_3_char,
+            "home_roster_3_superstar": self.home_roster_3_superstar,
+            "home_roster_3_fielding_pos": self.home_roster_3_fielding_pos,
             "home_roster_4_char": self.home_roster_4_char,
+            "home_roster_4_superstar": self.home_roster_4_superstar,
+            "home_roster_4_fielding_pos": self.home_roster_4_fielding_pos,
             "home_roster_5_char": self.home_roster_5_char,
+            "home_roster_5_superstar": self.home_roster_5_superstar,
+            "home_roster_5_fielding_pos": self.home_roster_5_fielding_pos,
             "home_roster_6_char": self.home_roster_6_char,
+            "home_roster_6_superstar": self.home_roster_6_superstar,
+            "home_roster_6_fielding_pos": self.home_roster_6_fielding_pos,
             "home_roster_7_char": self.home_roster_7_char,
+            "home_roster_7_superstar": self.home_roster_7_superstar,
+            "home_roster_7_fielding_pos": self.home_roster_7_fielding_pos,
             "home_roster_8_char": self.home_roster_8_char,
+            "home_roster_8_superstar": self.home_roster_8_superstar,
+            "home_roster_8_fielding_pos": self.home_roster_8_fielding_pos,
             "away_stars": self.current_away_stars,
             "home_stars": self.current_home_stars,
             "outs": self.current_outs,
+            "star_chance": self.star_chance,
             "runner_on_first": self.current_runner_1b,
             "runner_on_second": self.current_runner_2b,
             "runner_on_third": self.current_runner_3b,
             "batter": self.batter_roster_loc,
-            "pitcher": self.pitcher_roster_loc
+            "pitcher": self.pitcher_roster_loc,
+            "pitcher_stats": self.pitcher_stats,
+            "batter_stats": self.batter_stats,
         }
 
 
