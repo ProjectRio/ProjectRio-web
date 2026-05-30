@@ -10,6 +10,7 @@
         <ul>
           <p>Username rules</p>
           <li id="username-tip">Username must be alphanumeric</li>
+          <li id="username-length-tip">Username must be 30 characters or fewer</li>
           <p>Password rules</p>
           <li id="lowercase-tip">At least 1 lowercase character</li>
           <li id="uppercase-tip">At least 1 uppercase character</li>
@@ -18,7 +19,7 @@
           <li id="length-tip">At least 8 characters in length</li>
           <li id="matching-tip">Password match</li>
         </ul>
-        <input id="username" placeholder="Username"/>
+        <input id="username" placeholder="Username" maxlength="30"/>
         <input id="password" placeholder="Password" type="password"/>
         <input id="password2" placeholder="Re-enter Password" type="password"/>
         <input id="email" placeholder="Email"/>
@@ -48,6 +49,7 @@
     const lengthTip = document.getElementById("length-tip");
     const matchingTip = document.getElementById("matching-tip");
     const usernameTip = document.getElementById("username-tip");
+    const usernameLengthTip = document.getElementById("username-length-tip");
 
     // Submission button
     const submitButton = document.getElementById("submit")
@@ -59,6 +61,12 @@
         usernameTip.style.color = "green";
       } else {
         usernameTip.style.color = "red";
+      }
+
+      if (input.length > 0 && input.length <= 30) {
+        usernameLengthTip.style.color = "green";
+      } else {
+        usernameLengthTip.style.color = "red";
       }
     })
 
@@ -109,6 +117,11 @@
     submitButton.addEventListener('click', () => {
       if (!alphanumericRegex.test(usernameInput.value)) {
         alert("Username must be alphanumeric")
+        return;
+      }
+
+      if (usernameInput.value.length > 30) {
+        alert("Username must be 30 characters or fewer.")
         return;
       }
 
