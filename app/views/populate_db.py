@@ -308,7 +308,6 @@ def process_game(game_json):
         # Delete ongoing game row once game is submitted
         OngoingGame.query.filter_by(game_id=game_id).delete()
 
-        date_time_end = None
         game = Game(
             game_id = game_id,
             away_player_id = away_player.id,
@@ -344,21 +343,13 @@ def process_game(game_json):
             winner_score = game.away_score
             loser_score = game.home_score
 
-        # Add game row to database
-        db.session.add(game)
-        db.session.commit()
-
         # ======== Create GameHistory row ========
-
-        #Get TagSet. If season, update/track ELO. Else just add the GameHistory row
-        winner_elo = None
-        loser_elo = None
 
         #Get ELOs
         winner_ladder = Ladder.query.filter_by(community_user_id=winner_comm_user.id, tag_set_id=tag_set_id).first()
         loser_ladder = Ladder.query.filter_by(community_user_id=loser_comm_user.id, tag_set_id=tag_set_id).first()
 
-        #Create elos for new players if needed
+        #Create ladder entries for new players if needed
         if winner_ladder == None:
             new_glicko_player = Player(rating=cDefaultEloRating, rd=cDefaultEloRd, vol=cDefaultEloVol)
             winner_ladder = Ladder(tag_set_id, winner_comm_user.id, new_glicko_player.rating , new_glicko_player.rd, new_glicko_player.vol)
@@ -376,12 +367,29 @@ def process_game(game_json):
         # Calc player elo
         ratings = calc_elo(winner_ladder, loser_ladder)
 
-        #Finally ready to write the row
-        new_game_history = GameHistory(game_id, tag_set_id, winner_comm_user.id, loser_comm_user.id,
-                                    winner_score, loser_score,
-                                    winner_elo, loser_elo,
-                                    ratings['winner_rating'], ratings['loser_rating'],
-                                    True, True, True, date_time_end)
+        # Build GameHistory but don't add to session yet — game_id backfilled below
+        # for normal submissions once the Game row exists. HUD resumes use NULL.
+        new_game_history = GameHistory(
+            None, tag_set_id, winner_comm_user.id, loser_comm_user.id,
+            winner_score, loser_score,
+            winner_elo, loser_elo,
+            ratings['winner_rating'], ratings['loser_rating'],
+            True, True, True, game.date_time_end
+        )
+
+        # Resumed games (loaded from HUD) have unreliable character/event data.
+        # Record the result as a GameHistory-only entry and skip full ingestion.
+        if game_json.get('Loaded from HUD') == '1':
+            db.session.add(new_game_history)
+            db.session.commit()
+            return 'OK'
+
+        # Add game row to database
+        db.session.add(game)
+        db.session.commit()
+
+        # Game row now exists — link GameHistory to it and commit
+        new_game_history.game_id = game_id
         db.session.add(new_game_history)
         db.session.commit()
         
