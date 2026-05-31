@@ -33,6 +33,10 @@ def update_ongoing_game():
             if home_player.verified is False or away_player.verified is False:
                 return abort(422, "Both users must be verified to submit games.")
 
+            runner_1b = request.json['Runner 1B Roster']
+            runner_2b = request.json['Runner 2B Roster']
+            runner_3b = request.json['Runner 3B Roster']
+
             game = OngoingGame(
                 game_id = game_id,
                 away_player_id = away_player.id,
@@ -40,40 +44,60 @@ def update_ongoing_game():
                 tag_set_id = request.json['TagSetID'],
                 away_captain = request.json['Away Captain'],
                 home_captain = request.json['Home Captain'],
+                away_logo = request.json['Away Logo'],
+                home_logo = request.json['Home Logo'],
                 date_time_start = request.json['Date - Start'],
                 stadium_id = request.json['StadiumID'],
-                current_inning = 1,
-                current_half_inning = 0,
-                current_away_score = 0,
-                current_home_score = 0,
+                innings_selected = request.json['Innings Selected'],
+                loaded_from_hud = request.json['Loaded from HUD'],
+                current_inning = request.json['Inning'],
+                current_half_inning = request.json['Half Inning'],
+                current_away_score = request.json['Away Score'],
+                current_home_score = request.json['Home Score'],
+                away_inning_scores = request.json['Away Inning Scores'],
+                home_inning_scores = request.json['Home Inning Scores'],
 
-                away_roster_0_char = request.json["Away Roster 0 CharID"],
-                away_roster_1_char = request.json["Away Roster 1 CharID"],
-                away_roster_2_char = request.json["Away Roster 2 CharID"],
-                away_roster_3_char = request.json["Away Roster 3 CharID"],
-                away_roster_4_char = request.json["Away Roster 4 CharID"],
-                away_roster_5_char = request.json["Away Roster 5 CharID"],
-                away_roster_6_char = request.json["Away Roster 6 CharID"],
-                away_roster_7_char = request.json["Away Roster 7 CharID"],
-                away_roster_8_char = request.json["Away Roster 8 CharID"],
-                home_roster_0_char = request.json["Home Roster 0 CharID"],
-                home_roster_1_char = request.json["Home Roster 1 CharID"],
-                home_roster_2_char = request.json["Home Roster 2 CharID"],
-                home_roster_3_char = request.json["Home Roster 3 CharID"],
-                home_roster_4_char = request.json["Home Roster 4 CharID"],
-                home_roster_5_char = request.json["Home Roster 5 CharID"],
-                home_roster_6_char = request.json["Home Roster 6 CharID"],
-                home_roster_7_char = request.json["Home Roster 7 CharID"],
-                home_roster_8_char = request.json["Home Roster 8 CharID"],
+                away_roster_0_char = request.json["Away CharIDs"][0],
+                away_roster_1_char = request.json["Away CharIDs"][1],
+                away_roster_2_char = request.json["Away CharIDs"][2],
+                away_roster_3_char = request.json["Away CharIDs"][3],
+                away_roster_4_char = request.json["Away CharIDs"][4],
+                away_roster_5_char = request.json["Away CharIDs"][5],
+                away_roster_6_char = request.json["Away CharIDs"][6],
+                away_roster_7_char = request.json["Away CharIDs"][7],
+                away_roster_8_char = request.json["Away CharIDs"][8],
+                away_char_ids = request.json["Away CharIDs"],
+                away_superstars = request.json["Away Superstars"],
+                away_fielding_positions = request.json["Away Fielding Positions"],
+                home_roster_0_char = request.json["Home CharIDs"][0],
+                home_roster_1_char = request.json["Home CharIDs"][1],
+                home_roster_2_char = request.json["Home CharIDs"][2],
+                home_roster_3_char = request.json["Home CharIDs"][3],
+                home_roster_4_char = request.json["Home CharIDs"][4],
+                home_roster_5_char = request.json["Home CharIDs"][5],
+                home_roster_6_char = request.json["Home CharIDs"][6],
+                home_roster_7_char = request.json["Home CharIDs"][7],
+                home_roster_8_char = request.json["Home CharIDs"][8],
+                home_char_ids = request.json["Home CharIDs"],
+                home_superstars = request.json["Home Superstars"],
+                home_fielding_positions = request.json["Home Fielding Positions"],
 
                 current_away_stars = request.json['Away Stars'],
                 current_home_stars = request.json['Home Stars'],
-                current_outs = 0,
-                current_runner_1b = False,
-                current_runner_2b = False,
-                current_runner_3b = False,
-                batter_roster_loc = 0,
-                pitcher_roster_loc = request.json['Pitcher']
+                current_outs = request.json['Outs'],
+                star_chance = request.json['Star Chance'],
+                current_runner_1b = runner_1b >= 0,
+                current_runner_1b_roster = runner_1b,
+                current_runner_2b = runner_2b >= 0,
+                current_runner_2b_roster = runner_2b,
+                current_runner_3b = runner_3b >= 0,
+                current_runner_3b_roster = runner_3b,
+                batter_roster_loc = request.json['Batter Roster Loc'],
+                batter_hand = request.json['Batter Hand'],
+                pitcher_roster_loc = request.json['Pitcher Roster Loc'],
+                chemistry_links_on_base = request.json['Chemistry Links on Base'],
+                pitcher_stats = request.json['Pitcher Stats'],
+                batter_stats = request.json['Batter Stats'],
             )
         else:
             game.current_inning = request.json['Inning']
@@ -83,11 +107,26 @@ def update_ongoing_game():
             game.current_away_stars = request.json['Away Stars']
             game.current_home_stars = request.json['Home Stars']
             game.current_outs = request.json['Outs']
-            game.current_runner_1b = request.json['Runner 1B']
-            game.current_runner_2b = request.json['Runner 2B']
-            game.current_runner_3b = request.json['Runner 3B']
-            game.batter_roster_loc = request.json['Batter']
-            game.pitcher_roster_loc = request.json['Pitcher']
+            game.away_inning_scores = request.json['Away Inning Scores']
+            game.home_inning_scores = request.json['Home Inning Scores']
+            game.star_chance = request.json['Star Chance']
+            runner_1b = request.json['Runner 1B Roster']
+            runner_2b = request.json['Runner 2B Roster']
+            runner_3b = request.json['Runner 3B Roster']
+            game.current_runner_1b = runner_1b >= 0
+            game.current_runner_1b_roster = runner_1b
+            game.current_runner_2b = runner_2b >= 0
+            game.current_runner_2b_roster = runner_2b
+            game.current_runner_3b = runner_3b >= 0
+            game.current_runner_3b_roster = runner_3b
+            game.batter_roster_loc = request.json['Batter Roster Loc']
+            game.batter_hand = request.json['Batter Hand']
+            game.pitcher_roster_loc = request.json['Pitcher Roster Loc']
+            game.chemistry_links_on_base = request.json['Chemistry Links on Base']
+            game.away_fielding_positions = request.json['Away Fielding Positions']
+            game.home_fielding_positions = request.json['Home Fielding Positions']
+            game.pitcher_stats = request.json['Pitcher Stats']
+            game.batter_stats = request.json['Batter Stats']
         
         db.session.add(game)
         db.session.commit()
