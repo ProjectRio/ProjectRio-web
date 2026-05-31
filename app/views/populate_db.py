@@ -92,9 +92,9 @@ def update_ongoing_game():
                 current_runner_2b_roster = runner_2b,
                 current_runner_3b = runner_3b >= 0,
                 current_runner_3b_roster = runner_3b,
-                batter_roster_loc = request.json['Batter'],
+                batter_roster_loc = request.json['Batter Roster Loc'],
                 batter_hand = request.json['Batter Hand'],
-                pitcher_roster_loc = request.json['Pitcher'],
+                pitcher_roster_loc = request.json['Pitcher Roster Loc'],
                 chemistry_links_on_base = request.json['Chemistry Links on Base'],
                 pitcher_stats = request.json['Pitcher Stats'],
                 batter_stats = request.json['Batter Stats'],
@@ -119,9 +119,9 @@ def update_ongoing_game():
             game.current_runner_2b_roster = runner_2b
             game.current_runner_3b = runner_3b >= 0
             game.current_runner_3b_roster = runner_3b
-            game.batter_roster_loc = request.json['Batter']
+            game.batter_roster_loc = request.json['Batter Roster Loc']
             game.batter_hand = request.json['Batter Hand']
-            game.pitcher_roster_loc = request.json['Pitcher']
+            game.pitcher_roster_loc = request.json['Pitcher Roster Loc']
             game.chemistry_links_on_base = request.json['Chemistry Links on Base']
             game.away_fielding_positions = request.json['Away Fielding Positions']
             game.home_fielding_positions = request.json['Home Fielding Positions']
