@@ -372,7 +372,6 @@ class Game(db.Model):
     home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
     date_time_start = db.Column(db.Integer)
     date_time_end = db.Column(db.Integer)
-    ranked = db.Column(db.Boolean)
     netplay = db.Column(db.Boolean)
     stadium_id = db.Column(db.Integer)
     away_score = db.Column(db.Integer)
