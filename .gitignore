@@ -8,4 +8,6 @@ Dockerfile
 /venv
 CLAUDE.md
 /.claude
-app/__pycache__/__init__.cpython-312.pyc
+**/__pycache__/
+**/*.pyc
+**/*.pyo
