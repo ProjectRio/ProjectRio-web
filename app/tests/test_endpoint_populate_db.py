@@ -1093,41 +1093,40 @@ def test_ongoing_game():
         'TagSetID': tagset.pk,
         'Away Captain': 0,
         'Home Captain': 2,
+        'Away Logo': 0,
+        'Home Logo': 0,
         'Date - Start': 1121904000,
         'StadiumID': 0,
-        'Inning': 0,
+        'Innings Selected': 9,
+        'Loaded from HUD': False,
+        'Inning': 1,
         'Half Inning': 0,
         'Away Score': 0,
         'Home Score': 0,
-        "Away Roster 0 CharID": 0,
-        "Away Roster 1 CharID": 0,
-        "Away Roster 2 CharID": 0,
-        "Away Roster 3 CharID": 0,
-        "Away Roster 4 CharID": 0,
-        "Away Roster 5 CharID": 0,
-        "Away Roster 6 CharID": 0,
-        "Away Roster 7 CharID": 0,
-        "Away Roster 8 CharID": 0,
-        "Home Roster 0 CharID": 0,
-        "Home Roster 1 CharID": 0,
-        "Home Roster 2 CharID": 0,
-        "Home Roster 3 CharID": 0,
-        "Home Roster 4 CharID": 0,
-        "Home Roster 5 CharID": 0,
-        "Home Roster 6 CharID": 0,
-        "Home Roster 7 CharID": 0,
-        "Home Roster 8 CharID": 0,
+        'Away Inning Scores': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Inning Scores': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Away CharIDs': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Away Superstars': [False, False, False, False, False, False, False, False, False],
+        'Away Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home CharIDs': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Superstars': [False, False, False, False, False, False, False, False, False],
+        'Home Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
         'Away Stars': 5,
         'Home Stars': 4,
         'Outs': 0,
-        'Runner 1B': False,
-        'Runner 2B': False,
-        'Runner 3B': False,
-        'Batter': 0,
-        'Pitcher': 0
+        'Star Chance': False,
+        'Runner 1B Roster': -1,
+        'Runner 2B Roster': -1,
+        'Runner 3B Roster': -1,
+        'Batter Roster Loc': 0,
+        'Batter Hand': 0,
+        'Pitcher Roster Loc': 0,
+        'Chemistry Links on Base': 0,
+        'Pitcher Stats': {},
+        'Batter Stats': {},
     }
 
-    # Start Game, uverified users
+    # Start Game, unverified users
     response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=game)
     assert response.status_code == 422
 
@@ -1137,7 +1136,6 @@ def test_ongoing_game():
     # Start Game, verified users
     response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=game)
     assert response.status_code == 200
-
 
     #Make sure game is there
     response = requests.get(f"{BASE_URL}/populate_db/ongoing_game/")
@@ -1154,11 +1152,20 @@ def test_ongoing_game():
         'Away Stars': 1,
         'Home Stars': 2,
         'Outs': 1,
-        'Runner 1B': True,
-        'Runner 2B': False,
-        'Runner 3B': True,
-        'Batter': 2,
-        'Pitcher': 5
+        'Away Inning Scores': [2, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Inning Scores': [3, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Star Chance': False,
+        'Runner 1B Roster': 0,
+        'Runner 2B Roster': -1,
+        'Runner 3B Roster': 1,
+        'Batter Roster Loc': 2,
+        'Batter Hand': 0,
+        'Pitcher Roster Loc': 5,
+        'Chemistry Links on Base': 0,
+        'Away Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Pitcher Stats': {},
+        'Batter Stats': {},
     }
     response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=game_update)
     assert response.status_code == 200
@@ -1178,6 +1185,53 @@ def test_ongoing_game():
     response = requests.get(f"{BASE_URL}/populate_db/ongoing_game/")
     assert response.status_code == 200
     assert len(response.json()['ongoing_games']) == 0
+
+def test_ongoing_game_legacy_client_graceful():
+    """2.1.1 clients (missing 'Pitcher Roster Loc') get 200 without creating a game."""
+    wipe_db()
+
+    legacy_post = {
+        'GameID': 'DEADBEEF',
+        'Away Player': 'some_key',
+        'Home Player': 'other_key',
+        'TagSetID': '',
+        'Away Captain': 0,
+        'Home Captain': 0,
+        'Date - Start': 1121904000,
+        'StadiumID': 0,
+        'Away Stars': 5,
+        'Home Stars': 4,
+        'Pitcher': 0,  # old key — no 'Pitcher Roster Loc'
+    }
+    response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=legacy_post)
+    assert response.status_code == 200
+
+    # No game should have been created
+    response = requests.get(f"{BASE_URL}/populate_db/ongoing_game/")
+    assert len(response.json()['ongoing_games']) == 0
+
+    legacy_update = {
+        'GameID': 'DEADBEEF',
+        'Inning': 1,
+        'Half Inning': 0,
+        'Away Score': 2,
+        'Home Score': 3,
+        'Away Stars': 1,
+        'Home Stars': 2,
+        'Outs': 1,
+        'Runner 1B': True,
+        'Runner 2B': False,
+        'Runner 3B': True,
+        'Batter': 2,
+        'Pitcher': 5,  # old key — no 'Pitcher Roster Loc'
+    }
+    response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=legacy_update)
+    assert response.status_code == 200
+
+    # Still no game
+    response = requests.get(f"{BASE_URL}/populate_db/ongoing_game/")
+    assert len(response.json()['ongoing_games']) == 0
+
 
 def test_ongoing_game_with_man_submit():
     wipe_db()
@@ -1227,41 +1281,40 @@ def test_ongoing_game_with_man_submit():
         'TagSetID': tagset.pk,
         'Away Captain': 0,
         'Home Captain': 2,
+        'Away Logo': 0,
+        'Home Logo': 0,
         'Date - Start': 1121904000,
         'StadiumID': 0,
-        'Inning': 0,
+        'Innings Selected': 9,
+        'Loaded from HUD': False,
+        'Inning': 1,
         'Half Inning': 0,
         'Away Score': 0,
         'Home Score': 0,
-        "Away Roster 0 CharID": 0,
-        "Away Roster 1 CharID": 0,
-        "Away Roster 2 CharID": 0,
-        "Away Roster 3 CharID": 0,
-        "Away Roster 4 CharID": 0,
-        "Away Roster 5 CharID": 0,
-        "Away Roster 6 CharID": 0,
-        "Away Roster 7 CharID": 0,
-        "Away Roster 8 CharID": 0,
-        "Home Roster 0 CharID": 0,
-        "Home Roster 1 CharID": 0,
-        "Home Roster 2 CharID": 0,
-        "Home Roster 3 CharID": 0,
-        "Home Roster 4 CharID": 0,
-        "Home Roster 5 CharID": 0,
-        "Home Roster 6 CharID": 0,
-        "Home Roster 7 CharID": 0,
-        "Home Roster 8 CharID": 0,
+        'Away Inning Scores': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Inning Scores': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Away CharIDs': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Away Superstars': [False, False, False, False, False, False, False, False, False],
+        'Away Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home CharIDs': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Superstars': [False, False, False, False, False, False, False, False, False],
+        'Home Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
         'Away Stars': 5,
         'Home Stars': 4,
         'Outs': 0,
-        'Runner 1B': False,
-        'Runner 2B': False,
-        'Runner 3B': False,
-        'Batter': 0,
-        'Pitcher': 0
+        'Star Chance': False,
+        'Runner 1B Roster': -1,
+        'Runner 2B Roster': -1,
+        'Runner 3B Roster': -1,
+        'Batter Roster Loc': 0,
+        'Batter Hand': 0,
+        'Pitcher Roster Loc': 0,
+        'Chemistry Links on Base': 0,
+        'Pitcher Stats': {},
+        'Batter Stats': {},
     }
 
-    # Start Game, uverified users
+    # Start Game, unverified users
     response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=game)
     assert response.status_code == 422
 
@@ -1271,7 +1324,6 @@ def test_ongoing_game_with_man_submit():
     # Start Game, verified users
     response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=game)
     assert response.status_code == 200
-
 
     #Make sure game is there
     response = requests.get(f"{BASE_URL}/populate_db/ongoing_game/")
@@ -1288,11 +1340,20 @@ def test_ongoing_game_with_man_submit():
         'Away Stars': 1,
         'Home Stars': 2,
         'Outs': 1,
-        'Runner 1B': True,
-        'Runner 2B': False,
-        'Runner 3B': True,
-        'Batter': 2,
-        'Pitcher': 5
+        'Away Inning Scores': [2, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Inning Scores': [3, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Star Chance': False,
+        'Runner 1B Roster': 0,
+        'Runner 2B Roster': -1,
+        'Runner 3B Roster': 1,
+        'Batter Roster Loc': 2,
+        'Batter Hand': 0,
+        'Pitcher Roster Loc': 5,
+        'Chemistry Links on Base': 0,
+        'Away Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Home Fielding Positions': [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        'Pitcher Stats': {},
+        'Batter Stats': {},
     }
     response = requests.post(f"{BASE_URL}/populate_db/ongoing_game/", json=game_update)
     assert response.status_code == 200
