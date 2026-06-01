@@ -16,6 +16,9 @@ import json
 @app.route('/populate_db/ongoing_game/', methods=['POST', 'GET'])
 def update_ongoing_game():
     if request.method == 'POST':
+        if 'Pitcher Roster Loc' not in request.json:
+            return {'message': 'Client out of date, please update to 2.2.0'}, 200
+
         game_id = int(request.json['GameID'].replace(',', ''), 16)
         game = OngoingGame.query.filter_by(game_id=game_id).first()
 
