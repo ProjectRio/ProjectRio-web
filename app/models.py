@@ -307,6 +307,19 @@ class OngoingGame(db.Model):
     home_roster_6_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     home_roster_7_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
     home_roster_8_char = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    away_logo = db.Column(db.Integer)
+    home_logo = db.Column(db.Integer)
+    away_char_ids = db.Column(db.JSON)
+    home_char_ids = db.Column(db.JSON)
+    away_superstars = db.Column(db.JSON)
+    home_superstars = db.Column(db.JSON)
+    away_fielding_positions = db.Column(db.JSON)
+    home_fielding_positions = db.Column(db.JSON)
+    away_inning_scores = db.Column(db.JSON)
+    home_inning_scores = db.Column(db.JSON)
+    star_chance = db.Column(db.Boolean)
+    pitcher_stats = db.Column(db.JSON)
+    batter_stats = db.Column(db.JSON)
     current_inning = db.Column(db.Integer)
     current_half_inning = db.Column(db.Integer)
     current_away_score = db.Column(db.Integer)
@@ -319,6 +332,13 @@ class OngoingGame(db.Model):
     current_runner_3b = db.Column(db.Boolean)
     batter_roster_loc = db.Column(db.Integer)
     pitcher_roster_loc = db.Column(db.Integer)
+    innings_selected = db.Column(db.Integer)
+    loaded_from_hud = db.Column(db.Boolean)
+    chemistry_links_on_base = db.Column(db.Integer)
+    batter_hand = db.Column(db.Integer)
+    current_runner_1b_roster = db.Column(db.Integer)
+    current_runner_2b_roster = db.Column(db.Integer)
+    current_runner_3b_roster = db.Column(db.Integer)
 
     away_user = db.relationship('RioUser', foreign_keys = [away_player_id], backref = 'ongoing_away_games')
     home_user = db.relationship('RioUser', foreign_keys = [home_player_id], backref = 'ongoing_home_games')
@@ -331,12 +351,16 @@ class OngoingGame(db.Model):
             "tag_set": self.tag_set_id,
             "away_captain": self.away_captain,
             "home_captain": self.home_captain,
+            "away_logo": self.away_logo,
+            "home_logo": self.home_logo,
             "start_time": self.date_time_start,
             "stadium_id": self.stadium_id,
             "inning": self.current_inning,
             "half_inning": self.current_half_inning,
             "away_score": self.current_away_score,
             "home_score": self.current_home_score,
+            "away_inning_scores": self.away_inning_scores,
+            "home_inning_scores": self.home_inning_scores,
             "away_roster_0_char": self.away_roster_0_char,
             "away_roster_1_char": self.away_roster_1_char,
             "away_roster_2_char": self.away_roster_2_char,
@@ -346,6 +370,9 @@ class OngoingGame(db.Model):
             "away_roster_6_char": self.away_roster_6_char,
             "away_roster_7_char": self.away_roster_7_char,
             "away_roster_8_char": self.away_roster_8_char,
+            "away_char_ids": self.away_char_ids,
+            "away_superstars": self.away_superstars,
+            "away_fielding_positions": self.away_fielding_positions,
             "home_roster_0_char": self.home_roster_0_char,
             "home_roster_1_char": self.home_roster_1_char,
             "home_roster_2_char": self.home_roster_2_char,
@@ -355,14 +382,27 @@ class OngoingGame(db.Model):
             "home_roster_6_char": self.home_roster_6_char,
             "home_roster_7_char": self.home_roster_7_char,
             "home_roster_8_char": self.home_roster_8_char,
+            "home_char_ids": self.home_char_ids,
+            "home_superstars": self.home_superstars,
+            "home_fielding_positions": self.home_fielding_positions,
             "away_stars": self.current_away_stars,
             "home_stars": self.current_home_stars,
             "outs": self.current_outs,
+            "star_chance": self.star_chance,
             "runner_on_first": self.current_runner_1b,
             "runner_on_second": self.current_runner_2b,
             "runner_on_third": self.current_runner_3b,
             "batter": self.batter_roster_loc,
-            "pitcher": self.pitcher_roster_loc
+            "pitcher": self.pitcher_roster_loc,
+            "pitcher_stats": self.pitcher_stats,
+            "batter_stats": self.batter_stats,
+            "innings_selected": self.innings_selected,
+            "loaded_from_hud": self.loaded_from_hud,
+            "chemistry_links_on_base": self.chemistry_links_on_base,
+            "batter_hand": self.batter_hand,
+            "runner_on_first_roster": self.current_runner_1b_roster,
+            "runner_on_second_roster": self.current_runner_2b_roster,
+            "runner_on_third_roster": self.current_runner_3b_roster,
         }
 
 
@@ -372,7 +412,6 @@ class Game(db.Model):
     home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
     date_time_start = db.Column(db.Integer)
     date_time_end = db.Column(db.Integer)
-    ranked = db.Column(db.Boolean)
     netplay = db.Column(db.Boolean)
     stadium_id = db.Column(db.Integer)
     away_score = db.Column(db.Integer)

@@ -216,7 +216,6 @@ def recreate_stat_file():
     "GameId": game.game_id,
     "Date - Start": game.date_time_start,
     "Date - End": game.date_time_end,
-    "Ranked": game.ranked,
     "Netplay": game.netplay,
     "StadiumID": game.stadium_id,
     "Away Player": away_player.username,
