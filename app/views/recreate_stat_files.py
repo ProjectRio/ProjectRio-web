@@ -1,7 +1,8 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from ..models import db, Game, Event, RioUser, CharacterGameSummary
-from .stat_retrieval import endpoint_games, endpoint_event
+from .games import endpoint_games
+from .stat_retrieval import endpoint_event
 from ..util import format_tuple_for_SQL, sanitize_ints
 import json
 import itertools
