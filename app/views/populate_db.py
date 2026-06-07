@@ -421,7 +421,7 @@ def process_game(game_json):
 
         # Resumed games (loaded from HUD) have unreliable character/event data.
         # Record the result as a GameHistory-only entry and skip full ingestion.
-        if game_json.get('Loaded from HUD') == '1':
+        if game_json.get('Loaded from HUD') == 1:
             db.session.add(new_game_history)
             db.session.commit()
             return 'OK'

@@ -52,6 +52,7 @@ def init_app():
         from .views import delete_game
         from .views import recreate_stat_files
         from .views import client_routes
+        from .views import games
         from .views import stat_retrieval
         from .views.stats import box_score
         from .views.stats import user_summary
