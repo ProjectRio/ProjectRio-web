@@ -2,7 +2,7 @@ from flask import request, abort
 from flask import current_app as app
 from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, Runner, GameHistory, tagsettag
 from ..util import *
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import aliased
 
 
@@ -43,11 +43,12 @@ def get_rosters_for_games(game_ids):
 
 def build_linescore_and_scoring_plays(game_innings, include_linescore, include_scoring_plays):
     # game_innings: {game_id: innings_played}
-    # Query all RBI events — needed for linescore scoring tracking and/or scoring plays
+    # Find events where at least one runner scored (result_base == 4).
+    # COUNT of scoring runners per event is the actual runs scored on that play.
     batter_cgs = aliased(CharacterGameSummary)
     pitcher_cgs = aliased(CharacterGameSummary)
+    scored_runner = aliased(Runner)
 
-    # Events with RBI > 0
     rows = db.session.execute(
         select(
             Event.id,
@@ -55,7 +56,6 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
             Event.event_num,
             Event.inning,
             Event.half_inning,
-            Event.result_rbi,
             Event.result_of_ab,
             Event.away_score,
             Event.home_score,
@@ -66,17 +66,29 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
             Event.runner_on_3,
             batter_cgs.char_id.label('batter'),
             pitcher_cgs.char_id.label('pitcher'),
+            func.count(scored_runner.id).label('runs_scored'),
         )
         .join(batter_cgs, Event.batter_id == batter_cgs.id)
         .join(pitcher_cgs, Event.pitcher_id == pitcher_cgs.id)
+        .join(scored_runner, or_(
+            Event.runner_on_0 == scored_runner.id,
+            Event.runner_on_1 == scored_runner.id,
+            Event.runner_on_2 == scored_runner.id,
+            Event.runner_on_3 == scored_runner.id,
+        ))
         .where(
             Event.game_id.in_(game_innings.keys()),
-            Event.result_rbi > 0,
+            scored_runner.result_base == 4,
+        )
+        .group_by(
+            Event.id,
+            batter_cgs.char_id,
+            pitcher_cgs.char_id,
         )
         .order_by(Event.game_id, Event.event_num)
     ).all()
 
-    # Batch-query runners if scoring plays are requested
+    # Batch-query all runners for these events (for scoring play runner state display)
     runner_lookup = {}
     if include_scoring_plays:
         runner_ids = set()
@@ -108,18 +120,18 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
                     'steal': r.steal,
                 }
 
-    # Accumulate RBI per (game_id, inning, half_inning) and build scoring plays in one pass
-    rbi_by_half = {}  # {game_id: {(inning, half_inning): runs}}
+    # Accumulate runs per (game_id, inning, half_inning) and build scoring plays in one pass
+    runs_by_half = {}  # {game_id: {(inning, half_inning): runs}}
     scoring_plays = {}
 
     for row in rows:
         game_id = row.game_id
 
         if include_linescore:
-            if game_id not in rbi_by_half:
-                rbi_by_half[game_id] = {}
+            if game_id not in runs_by_half:
+                runs_by_half[game_id] = {}
             key = (row.inning, row.half_inning)
-            rbi_by_half[game_id][key] = rbi_by_half[game_id].get(key, 0) + row.result_rbi
+            runs_by_half[game_id][key] = runs_by_half[game_id].get(key, 0) + row.runs_scored
 
         if include_scoring_plays:
             if game_id not in scoring_plays:
@@ -134,7 +146,7 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
                 'inning': row.inning,
                 'half_inning': row.half_inning,
                 'event_num': row.event_num,
-                'result_rbi': row.result_rbi,
+                'result_rbi': row.runs_scored,
                 'result_of_ab': row.result_of_ab,
                 'batter': row.batter,
                 'pitcher': row.pitcher,
@@ -148,8 +160,8 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
     linescores = {}
     if include_linescore:
         for game_id, innings_played in game_innings.items():
-            away = [rbi_by_half.get(game_id, {}).get((i, 0), 0) for i in range(1, innings_played + 1)]
-            home = [rbi_by_half.get(game_id, {}).get((i, 1), 0) for i in range(1, innings_played + 1)]
+            away = [runs_by_half.get(game_id, {}).get((i, 0), 0) for i in range(1, innings_played + 1)]
+            home = [runs_by_half.get(game_id, {}).get((i, 1), 0) for i in range(1, innings_played + 1)]
             if home[-1] == 0 and sum(home) > sum(away):
                 home[-1] = 'X'
             linescores[game_id] = [away, home]
