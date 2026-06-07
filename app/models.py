@@ -408,12 +408,12 @@ class OngoingGame(db.Model):
 
 class Game(db.Model):
     game_id = db.Column(db.BigInteger, primary_key = True)
-    away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
-    home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False) #One-to-One
+    away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False, index=True) #One-to-One
+    home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False, index=True) #One-to-One
     date_time_start = db.Column(db.Integer)
-    date_time_end = db.Column(db.Integer)
+    date_time_end = db.Column(db.Integer, index=True) # ORDER BY / range filter for "last X games"
     netplay = db.Column(db.Boolean)
-    stadium_id = db.Column(db.Integer)
+    stadium_id = db.Column(db.Integer, index=True)
     away_score = db.Column(db.Integer)
     home_score = db.Column(db.Integer)
     innings_selected = db.Column(db.Integer)
@@ -439,10 +439,16 @@ class Game(db.Model):
         }
 
 class CharacterGameSummary(db.Model):
+    __table_args__ = (
+        # Captain lookup join used by /games/ hydration
+        db.Index('ix_character_game_summary_game_id_captain', 'game_id', 'captain'),
+        # Roster lookup (team_id + roster_loc) used by get_rosters_for_games
+        db.Index('ix_character_game_summary_game_id_team_roster', 'game_id', 'team_id', 'roster_loc'),
+    )
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
     char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False, index=True)
     character_position_summary_id = db.Column(db.Integer, db.ForeignKey('character_position_summary.id'), nullable=False)
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8
@@ -543,7 +549,7 @@ class CharacterPositionSummary(db.Model):
 
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False, index=True)
     pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False) #Based on "Pitcher Roster Loc" in JSON
     batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
     catcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
@@ -699,7 +705,9 @@ class GeckoCodeTag(db.Model):
 # Join table for tags and tag set
 tagsettag = db.Table('tag_set_tag',
     db.Column('tag_id', db.Integer, db.ForeignKey('tag.id'), primary_key=True),
-    db.Column('tagset_id', db.Integer, db.ForeignKey('tag_set.id'), primary_key=True)
+    db.Column('tagset_id', db.Integer, db.ForeignKey('tag_set.id'), primary_key=True),
+    # Composite PK leads with tag_id; add reverse index for tagset_id -> tag lookups
+    db.Index('ix_tag_set_tag_tagset_id', 'tagset_id')
 )
 
 class TagSet(db.Model):
@@ -761,8 +769,8 @@ class Ladder(db.Model):
 
 class GameHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=True)
-    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False)
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=True, index=True)
+    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False, index=True)
     winner_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     loser_comm_user_id = db.Column(db.Integer, db.ForeignKey('community_user.id'), nullable=False)
     winner_score = db.Column(db.Integer)
@@ -775,7 +783,7 @@ class GameHistory(db.Model):
     winner_accept = db.Column(db.Boolean)
     loser_accept = db.Column(db.Boolean, nullable=True)
     admin_accept = db.Column(db.Boolean, nullable=True)
-    date_created = db.Column(db.Integer, nullable=True)
+    date_created = db.Column(db.Integer, nullable=True, index=True) # ORDER BY for /ladder/games/
 
     tag_set = db.relationship('TagSet', backref = 'tag_set')
 

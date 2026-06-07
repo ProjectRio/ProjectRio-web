@@ -1,10 +1,10 @@
 from flask import request, jsonify, abort
 from flask import current_app as app
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet, PitchSummary, ContactSummary, CharacterPositionSummary, FieldingSummary, Runner
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, TagSet, PitchSummary, ContactSummary, CharacterPositionSummary, FieldingSummary, Runner, GameHistory, tagsettag
 from ..consts import *
 from ..util import *
-from sqlalchemy import select, func, case
+from sqlalchemy import select, func, case, or_, and_, exists, text
 from sqlalchemy.orm import aliased
 import time
 import datetime
@@ -183,91 +183,43 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
     except:
         return None, error_msg
     
+def _empty_roster_pair():
+    return ([None] * 9, [None] * 9)
+
+
+def get_rosters_for_games(game_ids):
+    """Batch-fetch away/home rosters for many games in a single query.
+
+    Returns {game_id: (away_list, home_list)} where each list is indexed
+    by roster_loc 0-8 (None if that slot is missing).
+    Replaces the per-game 18-way self-join (N+1) that get_rosters_from_game used.
+    """
+    rosters = {game_id: _empty_roster_pair() for game_id in game_ids}
+    if not game_ids:
+        return rosters
+
+    rows = db.session.execute(
+        select(
+            CharacterGameSummary.game_id,
+            CharacterGameSummary.team_id,
+            CharacterGameSummary.roster_loc,
+            CharacterGameSummary.char_id,
+        ).where(CharacterGameSummary.game_id.in_(game_ids))
+    ).all()
+
+    for row in rows:
+        pair = rosters.get(row.game_id)
+        if pair is None or row.roster_loc is None or not (0 <= row.roster_loc <= 8):
+            continue
+        away_list, home_list = pair
+        target = away_list if row.team_id == 0 else home_list
+        target[row.roster_loc] = row.char_id
+
+    return rosters
+
+
 def get_rosters_from_game(game_id):
-    query = (
-        " SELECT  \n"
-        "    away_0.char_id AS away_0, \n"
-        "    away_1.char_id AS away_1, \n"
-        "    away_2.char_id AS away_2, \n"
-        "    away_3.char_id AS away_3, \n"
-        "    away_4.char_id AS away_4, \n"
-        "    away_5.char_id AS away_5, \n"
-        "    away_6.char_id AS away_6, \n"
-        "    away_7.char_id AS away_7, \n"
-        "    away_8.char_id AS away_8, \n"
-        "    home_0.char_id AS home_0, \n"
-        "    home_1.char_id AS home_1, \n"
-        "    home_2.char_id AS home_2, \n"
-        "    home_3.char_id AS home_3, \n"
-        "    home_4.char_id AS home_4, \n"
-        "    home_5.char_id AS home_5, \n"
-        "    home_6.char_id AS home_6, \n"
-        "    home_7.char_id AS home_7, \n"
-        "    home_8.char_id AS home_8 \n"
-        "    FROM  \n"
-        "        game \n"
-        "    LEFT JOIN character_game_summary AS away_0 ON game.game_id = away_0.game_id \n"
-        "        AND away_0.team_id = 0 AND away_0.roster_loc = 0 \n"
-        "    LEFT JOIN character_game_summary AS away_1 ON game.game_id = away_1.game_id \n"
-        "        AND away_1.team_id = 0 AND away_1.roster_loc = 1 \n"
-        "    LEFT JOIN character_game_summary AS away_2 ON game.game_id = away_2.game_id \n"
-        "        AND away_2.team_id = 0 AND away_2.roster_loc = 2 \n"
-        "    LEFT JOIN character_game_summary AS away_3 ON game.game_id = away_3.game_id \n"
-        "        AND away_3.team_id = 0 AND away_3.roster_loc = 3 \n"
-        "    LEFT JOIN character_game_summary AS away_4 ON game.game_id = away_4.game_id \n"
-        "        AND away_4.team_id = 0 AND away_4.roster_loc = 4 \n"
-        "    LEFT JOIN character_game_summary AS away_5 ON game.game_id = away_5.game_id \n"
-        "        AND away_5.team_id = 0 AND away_5.roster_loc = 5 \n"
-        "    LEFT JOIN character_game_summary AS away_6 ON game.game_id = away_6.game_id \n"
-        "        AND away_6.team_id = 0 AND away_6.roster_loc = 6 \n"
-        "    LEFT JOIN character_game_summary AS away_7 ON game.game_id = away_7.game_id \n"
-        "        AND away_7.team_id = 0 AND away_7.roster_loc = 7 \n"
-        "    LEFT JOIN character_game_summary AS away_8 ON game.game_id = away_8.game_id \n"
-        "        AND away_8.team_id = 0 AND away_8.roster_loc = 8 \n"
-        "    LEFT JOIN character_game_summary AS home_0 ON game.game_id = home_0.game_id \n"
-        "        AND home_0.team_id = 1 AND home_0.roster_loc = 0 \n"
-        "    LEFT JOIN character_game_summary AS home_1 ON game.game_id = home_1.game_id \n"
-        "        AND home_1.team_id = 1 AND home_1.roster_loc = 1 \n"
-        "    LEFT JOIN character_game_summary AS home_2 ON game.game_id = home_2.game_id \n"
-        "        AND home_2.team_id = 1 AND home_2.roster_loc = 2 \n"
-        "    LEFT JOIN character_game_summary AS home_3 ON game.game_id = home_3.game_id \n"
-        "        AND home_3.team_id = 1 AND home_3.roster_loc = 3 \n"
-        "    LEFT JOIN character_game_summary AS home_4 ON game.game_id = home_4.game_id \n"
-        "        AND home_4.team_id = 1 AND home_4.roster_loc = 4 \n"
-        "    LEFT JOIN character_game_summary AS home_5 ON game.game_id = home_5.game_id \n"
-        "        AND home_5.team_id = 1 AND home_5.roster_loc = 5 \n"
-        "    LEFT JOIN character_game_summary AS home_6 ON game.game_id = home_6.game_id \n"
-        "        AND home_6.team_id = 1 AND home_6.roster_loc = 6 \n"
-        "    LEFT JOIN character_game_summary AS home_7 ON game.game_id = home_7.game_id \n"
-        "        AND home_7.team_id = 1 AND home_7.roster_loc = 7 \n"
-        "    LEFT JOIN character_game_summary AS home_8 ON game.game_id = home_8.game_id \n"
-        "        AND home_8.team_id = 1 AND home_8.roster_loc = 8 \n"
-        "    WHERE  \n"
-       f"        game.game_id = {game_id} \n"
-    )
-
-    results = db.session.execute(query).all()
-
-    away_dict = {0: results[0]['away_0'],
-                 1: results[0]['away_1'],
-                 2: results[0]['away_2'],
-                 3: results[0]['away_3'],
-                 4: results[0]['away_4'],
-                 5: results[0]['away_5'],
-                 6: results[0]['away_6'],
-                 7: results[0]['away_7'],
-                 8: results[0]['away_8']}
-    
-    home_dict = {0: results[0]['home_0'],
-                 1: results[0]['home_1'],
-                 2: results[0]['home_2'],
-                 3: results[0]['home_3'],
-                 4: results[0]['home_4'],
-                 5: results[0]['home_5'],
-                 6: results[0]['home_6'],
-                 7: results[0]['home_7'],
-                 8: results[0]['home_8']}
-    return away_dict, home_dict
+    return get_rosters_for_games([game_id]).get(game_id, _empty_roster_pair())
 
 
 def build_linescore_and_scoring_plays(game_innings, include_linescore, include_scoring_plays):
@@ -299,7 +251,7 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
         .join(batter_cgs, Event.batter_id == batter_cgs.id)
         .join(pitcher_cgs, Event.pitcher_id == pitcher_cgs.id)
         .where(
-            Event.game_id.in_(list(game_innings.keys())),
+            Event.game_id.in_(game_innings.keys()),
             Event.result_rbi > 0,
         )
         .order_by(Event.game_id, Event.event_num)
@@ -354,10 +306,10 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
             if game_id not in scoring_plays:
                 scoring_plays[game_id] = []
 
-            runners = {}
-            for base, rid in enumerate((row.runner_on_0, row.runner_on_1, row.runner_on_2, row.runner_on_3)):
-                if rid is not None and rid in runner_lookup:
-                    runners[base] = runner_lookup[rid]
+            runners = [
+                runner_lookup.get(rid) if rid is not None else None
+                for rid in (row.runner_on_0, row.runner_on_1, row.runner_on_2, row.runner_on_3)
+            ]
 
             scoring_plays[game_id].append({
                 'inning': row.inning,
@@ -381,7 +333,7 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
             home = [rbi_by_half.get(game_id, {}).get((i, 1), 0) for i in range(1, innings_played + 1)]
             if home[-1] == 0 and sum(home) > sum(away):
                 home[-1] = 'X'
-            linescores[game_id] = {0: away, 1: home}
+            linescores[game_id] = [away, home]
 
     return linescores, scoring_plays
 
@@ -391,305 +343,309 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
 @ Params:
     - tag - list of tags to filter by
     - exclude_tag - List of tags to exclude from search
-    - start_time - Unix time. Provides the lower (older) end of the range of games to retreive.
-    - end_time - Unix time. Provides the lower (older) end of the range of games to retreive. Defaults to now (time of query).
+    - start_time - Unix time. Lower (older) bound; filtered against a game's end time.
+    - end_time - Unix time. Upper (newer) bound; filtered against a game's end time.
+                 Defaults to no upper bound.
     - username - list of users who appear in games to retreive
-    - vs_username - list of users who MUST also appear in the game along with users
+    - vs_username - list of users, one of whom MUST also appear in the game along with users
     - exclude_username - list of users to NOT include in query results
     - captain - captain name to appear in games to retrieve
-    - vs_captain - captain name who MUST appear in game along with captain
-    - exclude_captian -  captain name to EXLCUDE from results
+     - vs_captain - list of captain names, one of whom MUST appear in game along with captain
+    - exclude_captain - captain name to EXCLUDE from results
     - limit_games - Int of number of games || False to return all
-    - include_teams - bool to iclude team roster dicts (TODO likely not performant)
     - include_linescore - bool to include per-half-inning run totals (away/home arrays)
     - include_scoring_plays - bool to include events where runs scored (batter, pitcher, rbi, score, etc.)
+
+    Note: both start_time and end_time are compared against Game.date_time_end. A game
+    is bucketed by when it ENDED, so a game is never split across a time boundary.
 
 @ Output:
     - List of games and highlevel info based on flags
 
 @ URL example: http://127.0.0.1:5000/games/?limit=5&username=demOuser4&username=demouser1&username=demouser5
 '''
-@app.route('/games/', methods = ['GET'])
-def endpoint_games(called_internally=False):
-    # === validate passed parameters ===
-    try:
-        # Check if tags are valid and get a list of corresponding ids
-        tags = request.args.getlist('tag')
-        tags_lowercase = tuple([lower_and_remove_nonalphanumeric(tag) for tag in tags])
-        tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(tags_lowercase)).all()
-        include_tag_ids = tuple([str(tag.id) for tag in tag_rows])
-        if len(include_tag_ids) != len(tags):
-            abort(400)
+def _resolve_names(values, id_col, name_col, label, *, transform):
+    """Resolve a list of human-supplied names to their DB ids.
 
-        # Check if exclude_tags are valid and get a list of corresponding ids
-        exclude_tags = request.args.getlist('exclude_tag')
-        exclude_tags_lowercase = tuple([lower_and_remove_nonalphanumeric(exclude_tag) for exclude_tag in exclude_tags])
-        exclude_tag_rows = db.session.query(Tag).filter(Tag.name_lowercase.in_(exclude_tags_lowercase)).all()
-        exclude_tag_ids = tuple([str(exclude_tag.id) for exclude_tag in exclude_tag_rows])
-        if len(exclude_tag_ids) != len(exclude_tags):
-            abort(400)
+    All supplied values must resolve or the request is aborted (400).
+    Duplicate / case-variant inputs that map to the same row are allowed:
+    validation is done against the deduplicated set of normalized names.
 
-        #Get user ids from list of users
-        usernames = request.args.getlist('username')
-        usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in usernames])
-        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-        list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
-        # using list comprehension
-        list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
-        tuple_user_ids = tuple(list_of_user_id)
-        if len(usernames) != len(list_of_user_id_tuples):
-            abort(400)
+    Returns a list of ids, one per matched row (order not guaranteed; callers
+    feed this into .in_() clauses where order and duplicates are irrelevant).
+    """
+    if not values:
+        return []
+    normalized = [transform(v) for v in values]
+    rows = db.session.execute(
+        select(id_col, name_col).where(name_col.in_(normalized))
+    ).all()
+    found = {row._mapping[name_col] for row in rows}
+    if len(found) != len(set(normalized)):
+        unknown = [v for v in values if transform(v) not in found]
+        abort(400, f'Unknown {label}: {unknown}')
+    return [row._mapping[id_col] for row in rows]
 
-        #Get user ids from list of users
-        vs_usernames = request.args.getlist('vs_username')
-        vs_usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in vs_usernames])
-        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-        list_of_vs_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(vs_usernames_lowercase)).all()
-        # using list comprehension
-        list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
-        tuple_vs_user_ids = tuple(list_of_vs_user_id)
 
-        #Get user ids from list of users
-        exclude_usernames = request.args.getlist('exclude_username')
-        exclude_usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in exclude_usernames])
-        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-        list_of_exclude_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(exclude_usernames_lowercase)).all()
-        # using list comprehension
-        list_of_exclude_user_id = list(itertools.chain(*list_of_exclude_user_id_tuples))
-        tuple_exclude_user_ids = tuple(list_of_exclude_user_id)
+def _get_game_ids(args, limit=None):
+    """Resolve filter args to an ordered list of game_ids.
 
-        #Get captain ids from Captain
-        captains = request.args.getlist('captain')
-        captains_lowercase = tuple([captain.lower() for captain in captains])
-        list_of_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(captains_lowercase)).all()
-        list_of_captain_ids = list(itertools.chain(*list_of_captain_id_tuples))
-        tuple_captain_ids = tuple(list_of_captain_ids)
+    Args:
+        args: request.args (or any MultiDict with the same interface)
+        limit: max games to return; None means no limit
 
-        vs_captains = request.args.getlist('vs_captain')
-        vs_captains_lowercase = tuple([vs_captain.lower() for vs_captain in vs_captains])
-        list_of_vs_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(vs_captains_lowercase)).all()
-        list_of_vs_captain_ids = list(itertools.chain(*list_of_vs_captain_id_tuples))
-        tuple_vs_captain_ids = tuple(list_of_vs_captain_ids)
-        
-        exclude_captains = request.args.getlist('exclude_captain')
-        exclude_captains_lowercase = tuple([exclude_captain.lower() for exclude_captain in exclude_captains])
-        list_of_exclude_captain_id_tuples = db.session.query(Character.char_id).filter(Character.name_lowercase.in_(exclude_captains_lowercase)).all()
-        list_of_exclude_captain_ids =list(itertools.chain(*list_of_exclude_captain_id_tuples))
-        tuple_exclude_captain_ids = tuple(list_of_exclude_captain_ids)
+    Returns:
+        Ordered list of game_ids matching the filters (newest first).
+        Calls abort(400) directly on invalid input.
+    """
+    # === Resolve names -> ids (each set must fully resolve) ===
+    include_tag_ids = _resolve_names(
+        args.getlist('tag'), Tag.id, Tag.name_lowercase,
+        'tag(s)', transform=lower_and_remove_nonalphanumeric)
+    exclude_tag_ids = _resolve_names(
+        args.getlist('exclude_tag'), Tag.id, Tag.name_lowercase,
+        'exclude_tag(s)', transform=lower_and_remove_nonalphanumeric)
 
-        stadium = request.args.getlist('stadium')
-        tuple_stadium_ids = tuple(stadium)
+    user_ids = _resolve_names(
+        args.getlist('username'), RioUser.id, RioUser.username_lowercase,
+        'username(s)', transform=lower_and_remove_nonalphanumeric)
+    vs_user_ids = _resolve_names(
+        args.getlist('vs_username'), RioUser.id, RioUser.username_lowercase,
+        'vs_username(s)', transform=lower_and_remove_nonalphanumeric)
+    exclude_user_ids = _resolve_names(
+        args.getlist('exclude_username'), RioUser.id, RioUser.username_lowercase,
+        'exclude_username(s)', transform=lower_and_remove_nonalphanumeric)
 
-        limit = int()
+    captain_ids = _resolve_names(
+        args.getlist('captain'), Character.char_id, Character.name_lowercase,
+        'captain(s)', transform=lower_and_remove_nonalphanumeric)
+    vs_captain_ids = _resolve_names(
+        args.getlist('vs_captain'), Character.char_id, Character.name_lowercase,
+        'vs_captain(s)', transform=lower_and_remove_nonalphanumeric)
+    exclude_captain_ids = _resolve_names(
+        args.getlist('exclude_captain'), Character.char_id, Character.name_lowercase,
+        'exclude_captain(s)', transform=lower_and_remove_nonalphanumeric)
+
+    # Stadiums (numeric ids)
+    # TODO resolve stadium names. Tackle with fuzzy resolve throughout
+    stadium_ids = []
+    for s in args.getlist('stadium'):
         try:
-            if request.args.get('limit_games') is None:
-                limit = None if called_internally else 50
-            elif request.args.get('limit_games') in ['False', 'false', 'f']:
-                limit = None
-            else:
-                limit = int(request.args.get('limit_games'))
-        except:
-            abort(400, 'Invalid Limit provided')
+            stadium_ids.append(int(s))
+        except ValueError:
+            abort(400, f'Invalid stadium id: {s!r}')
 
-    except:
-       return abort(400, 'Invalid Username, Captain, or Tag')
-
-
-    # Build WHERE statement
-    where_statement = 'WHERE '
-
-    #Get and validate start_time and end_time parameters from URL
-    start_time_unix = 1
-    if (request.args.get('start_time') != None):
+    # === Time bounds (both compared against Game.date_time_end) ===
+    start_time_unix = None
+    if args.get('start_time') is not None:
         try:
-            start_time = request.args.get('start_time')
-            start_time_unix = int(start_time)
-        except:
-            return abort(408, 'Invalid start time format')
-    
-    end_time_unix = 0
-    if (request.args.get('end_time') != None):
+            start_time_unix = int(args.get('start_time'))
+        except ValueError:
+            abort(400, f'Invalid start_time: {args.get("start_time")!r}')
+
+    end_time_unix = None
+    if args.get('end_time') is not None:
         try:
-            end_time = request.args.get('end_time')
-            end_time_unix = int(end_time)
-        except:
-            return abort(408, 'Invalid end time format')
+            end_time_unix = int(args.get('end_time'))
+        except ValueError:
+            abort(400, f'Invalid end_time: {args.get("end_time")!r}')
 
-    # Add start and end_time parameters to WHERE statement
-    where_statement += f"game.date_time_start > {start_time_unix} \n"
-    if (end_time_unix != 0):
-        where_statement += f"AND game.date_time_end < {end_time_unix} \n"
+    if (end_time_unix is not None and start_time_unix is not None
+            and end_time_unix <= start_time_unix):
+        abort(400, f'end_time ({end_time_unix}) must be greater than '
+                   f'start_time ({start_time_unix})')
+
+    # === Build filter conditions ===
+    conditions = []
+
+    if start_time_unix is not None:
+        conditions.append(Game.date_time_end >= start_time_unix)
+    if end_time_unix is not None:
+        conditions.append(Game.date_time_end <= end_time_unix)
+
+    # Users — filter directly on the indexed game columns.
+    if user_ids:
+        conditions.append(or_(Game.away_player_id.in_(user_ids),
+                              Game.home_player_id.in_(user_ids)))
+    if vs_user_ids:
+        conditions.append(or_(Game.away_player_id.in_(vs_user_ids),
+                              Game.home_player_id.in_(vs_user_ids)))
+    if exclude_user_ids:
+        conditions.append(and_(Game.away_player_id.notin_(exclude_user_ids),
+                               Game.home_player_id.notin_(exclude_user_ids)))
+
+    # Captains — match against the game's captain CharacterGameSummary rows via EXISTS
+    def _captain_exists(char_ids):
+        cap = aliased(CharacterGameSummary)
+        return (
+            select(cap.game_id)
+            .where(
+                cap.game_id == Game.game_id,
+                cap.captain.is_(True),
+                cap.char_id.in_(char_ids),
+            )
+            .exists()
+        )
+    if captain_ids:
+        conditions.append(_captain_exists(captain_ids))
+    if vs_captain_ids:
+        conditions.append(_captain_exists(vs_captain_ids))
+    if exclude_captain_ids:
+        conditions.append(~_captain_exists(exclude_captain_ids))
+
+    # Tags — match against the game's tag_set (via game_history) using EXISTS.
+    # include: game's tag_set contains any requested tag.
+    # exclude: game's tag_set contains none of the excluded tags.
+    def _tag_exists(tag_ids):
+        return (
+            select(GameHistory.game_id)
+            .join(tagsettag, tagsettag.c.tagset_id == GameHistory.tag_set_id)
+            .where(
+                GameHistory.game_id == Game.game_id,
+                tagsettag.c.tag_id.in_(tag_ids),
+            )
+            .exists()
+        )
+    if include_tag_ids:
+        conditions.append(_tag_exists(include_tag_ids))
+    if exclude_tag_ids:
+        conditions.append(~_tag_exists(exclude_tag_ids))
+
+    if stadium_ids:
+        conditions.append(Game.stadium_id.in_(stadium_ids))
+
+    # ORDER BY date_time_end DESC + LIMIT is applied here, before any display joins,
+    # so Postgres can walk the date_time_end index and stop at the limit.
+    game_id_stmt = (
+        select(Game.game_id)
+        .where(*conditions)
+        .order_by(Game.date_time_end.desc())
+    )
+    if limit is not None:
+        game_id_stmt = game_id_stmt.limit(limit)
+
+    return db.session.execute(game_id_stmt).scalars().all()
 
 
-    # === Set dynamic query values ===
-    # count_matching_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(tag_ids)}) THEN 1 ELSE 0 END) AS having_tag_count \n" if len(tag_ids) > 0 else ""
-    # count_matching_exclude_tags = f"SUM(CASE WHEN game_tag.tag_id IN ({', '.join(exclude_tag_ids)}) THEN 1 ELSE 0 END) AS exclude_tag_count \n" if len(exclude_tag_ids) > 0 else ""
-    # having_matching_tags =  f'having_tag_count = {len(tag_ids)} ' if count_matching_tags != "" else ""
-    # having_exclude_tags = f'exclude_tag_count = 0' if count_matching_exclude_tags != "" else ""
-    
-    # with_tags = str()
-    # where_tags = str()
-    # if count_matching_tags != "" or count_matching_exclude_tags != "":
-    #     with_tags = (
-    #         'WITH game_id_and_tag_counts AS ( \n'
-    #         '   SELECT \n' 
-    #         '       game_id, \n'
-    #                 f'{count_matching_tags}'
-    #                 f'{", " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
-    #                 f'{count_matching_exclude_tags}'
-    #         '   FROM game_tag \n'
-    #         '   GROUP BY game_id \n'
-    #         ')  \n'
-    #     )
-    #     where_tags = (
-    #         'AND game.game_id IN ( \n'
-    #         '  SELECT game_id  \n'
-    #         '  FROM game_id_and_tag_counts \n'
-    #         '  WHERE ' 
-    #         f'{having_matching_tags}'
-    #         f'{" AND " if count_matching_tags != "" and count_matching_exclude_tags != "" else ""}'
-    #         f'{having_exclude_tags}'
-    #         '\n)\n '
-    #     )
-    #     where_statement += where_tags
+@app.route('/games/', methods=['GET'])
+def endpoint_games():
+    # Parse limit before delegating to _get_game_ids
+    limit_games_param = request.args.get('limit_games')
+    if limit_games_param is None:
+        limit = 50
+    #TODO - support truthy and falsy values more broadly (e.g., true/false, yes/no)
+    elif limit_games_param in ('False', 'false', 'f'):
+        limit = None
+    else:
+        try:
+            limit = int(limit_games_param)
+        except ValueError:
+            abort(400, f'Invalid limit_games: {limit_games_param}')
 
+    ordered_game_ids = _get_game_ids(request.args, limit=limit)
 
-
-    #Build User strings
-    user_id_string, user_empty = format_tuple_for_SQL(tuple_user_ids)
-    vs_user_id_string, vs_user_empty = format_tuple_for_SQL(tuple_vs_user_ids)
-    exclude_user_id_string, exclude_user_empty = format_tuple_for_SQL(tuple_exclude_user_ids)
-
-    if (not user_empty):
-        where_statement += f"AND (game.away_player_id IN {user_id_string} OR game.home_player_id IN {user_id_string}) \n"
-    if (not vs_user_empty):
-        where_statement += f"AND (game.away_player_id IN {vs_user_id_string} OR game.home_player_id IN {vs_user_id_string}) \n"
-    if (not exclude_user_empty):
-        where_statement += f"AND game.away_player_id NOT IN {exclude_user_id_string} AND game.home_player_id NOT IN {exclude_user_id_string} \n"
-
-    #Build captain strings
-    captain_id_string, captain_empty = format_tuple_for_SQL(tuple_captain_ids)
-    vs_captain_id_string, vs_captain_empty = format_tuple_for_SQL(tuple_vs_captain_ids)
-    exclude_captain_id_string, exclude_captain_empty = format_tuple_for_SQL(tuple_exclude_captain_ids)
-
-    if (not captain_empty):
-        where_statement += f"AND (away_captain.char_id IN {captain_id_string} OR home_captain.char_id IN {captain_id_string}) \n"
-    if (not vs_captain_empty):
-        where_statement += f"AND (away_captain.char_id IN {vs_captain_id_string} OR home_captain.char_id IN {vs_captain_id_string}) \n"
-    if (not exclude_captain_empty):
-        where_statement += f"AND away_captain.char_id NOT IN {exclude_captain_id_string} AND home_captain.char_id NOT IN {exclude_captain_id_string} \n"
-
-    #Build Tag strings
-    include_tag_id_string, include_tag_empty = format_tuple_for_SQL(include_tag_ids)
-    exclude_tag_id_string, exclude_tag_empty = format_tuple_for_SQL(exclude_tag_ids)
-    if (not include_tag_empty):
-        where_statement += f"AND tag.id IN {include_tag_id_string} \n"
-    if (not exclude_tag_empty):
-        where_statement += f"AND tag.id NOT IN {exclude_tag_id_string} \n"
-
-    #Stadium args
-    stadium_id_string, stadium_empty = format_tuple_for_SQL(tuple_stadium_ids)
-    if (not stadium_empty):
-        where_statement += f"AND game.stadium_id IN {stadium_id_string} \n"
-
-    #Include_team args
-    include_teams = (request.args.get('include_teams') == '1')
     include_linescore = (request.args.get('include_linescore') == '1')
     include_scoring_plays = (request.args.get('include_scoring_plays') == '1')
 
+    if not ordered_game_ids:
+        return {'games': []}
 
-    # === Construct query === 
-    query = (
-        'SELECT game.game_id, \n'
-        '   game.stadium_id AS stadium, \n'
-        '   game.date_time_start AS date_time_start, \n'
-        '   game.date_time_end AS date_time_end, \n'
-        '   game.away_score AS away_score, \n'
-        '   game.home_score AS home_score, \n'
-        '   game.innings_played AS innings_played, \n'
-        '   game.innings_selected AS innings_selected, \n'
-        '   away_player.username AS away_player, \n'
-        '   home_player.username AS home_player, \n'
-        '   away_captain.name AS away_captain, \n'
-        '   home_captain.name AS home_captain, \n'
-        '   game_history.winner_incoming_elo AS winner_incoming_elo, \n'
-        '   game_history.loser_incoming_elo AS loser_incoming_elo, \n'
-        '   game_history.winner_result_elo AS winner_result_elo, \n'
-        '   game_history.loser_result_elo AS loser_result_elo, \n'
-        '   game_history.tag_set_id AS tag_set \n'
-        'FROM game \n'
-        'LEFT JOIN game_history ON game.game_id = game_history.game_id \n'
-        'LEFT JOIN tag_set ON game_history.tag_set_id = tag_set.id \n'
-        'LEFT JOIN tag_set_tag AS tst ON tag_set.id = tst.tagset_id \n'
-        'LEFT JOIN tag ON tst.tag_id = tag.id \n'
-        'LEFT JOIN rio_user AS away_player ON game.away_player_id = away_player.id \n'
-        'LEFT JOIN rio_user AS home_player ON game.home_player_id = home_player.id \n'
-        'JOIN character_game_summary AS away_cgs \n'
-        '	ON game.game_id = away_cgs.game_id \n'
-        '   AND away_cgs.user_id = away_player.id \n'
-        'JOIN character AS away_captain \n'
-        '   ON away_cgs.char_id = away_captain.char_id \n'
-        '   AND away_cgs.captain = True \n'
-        'JOIN character_game_summary AS home_cgs \n'
-        '	ON game.game_id = home_cgs.game_id \n'
-        '   AND home_cgs.user_id = home_player.id \n'
-        'JOIN character AS home_captain \n'
-        '   ON home_cgs.char_id = home_captain.char_id \n'
-        '   AND home_cgs.captain = True \n'
-        f'{where_statement} \n'
-        'GROUP BY game.game_id, stadium, away_player, home_player, away_captain, home_captain, winner_incoming_elo, loser_incoming_elo, winner_result_elo, loser_result_elo, tag_set \n'
-        'ORDER BY game.date_time_start DESC \n'
-        f"{('LIMIT ' + str(limit)) if limit != None else ''}"
+    # === Stage 2: hydrate display fields for just this page (bounded by limit) ===
+    away_player = aliased(RioUser)
+    home_player = aliased(RioUser)
+    away_cgs = aliased(CharacterGameSummary)
+    home_cgs = aliased(CharacterGameSummary)
+    away_captain = aliased(Character)
+    home_captain = aliased(Character)
+    gh = aliased(GameHistory)
+
+    hydrate_stmt = (
+        select(
+            Game.game_id,
+            Game.stadium_id.label('stadium'),
+            Game.date_time_start,
+            Game.date_time_end,
+            Game.away_score,
+            Game.home_score,
+            Game.innings_played,
+            Game.innings_selected,
+            away_player.username.label('away_player'),
+            home_player.username.label('home_player'),
+            away_captain.name.label('away_captain'),
+            home_captain.name.label('home_captain'),
+            gh.winner_incoming_elo.label('winner_incoming_elo'),
+            gh.loser_incoming_elo.label('loser_incoming_elo'),
+            gh.winner_result_elo.label('winner_result_elo'),
+            gh.loser_result_elo.label('loser_result_elo'),
+            gh.tag_set_id.label('tag_set'),
+        )
+        .select_from(Game)
+        .outerjoin(away_player, Game.away_player_id == away_player.id)
+        .outerjoin(home_player, Game.home_player_id == home_player.id)
+        .join(away_cgs, and_(
+            Game.game_id == away_cgs.game_id,
+            away_cgs.user_id == Game.away_player_id,
+            away_cgs.captain.is_(True),
+        ))
+        .join(away_captain, away_cgs.char_id == away_captain.char_id)
+        .join(home_cgs, and_(
+            Game.game_id == home_cgs.game_id,
+            home_cgs.user_id == Game.home_player_id,
+            home_cgs.captain.is_(True),
+        ))
+        .join(home_captain, home_cgs.char_id == home_captain.char_id)
+        .outerjoin(gh, Game.game_id == gh.game_id)
+        .where(Game.game_id.in_(ordered_game_ids))
     )
 
-    results = db.session.execute(query).all()
+    # A game has at most one joining game_history, so the LEFT JOIN yields one row
+    # per game. Key by game_id (guarding against any unexpected duplicate) and
+    # re-apply the Stage 1 ordering, which IN (...) does not preserve.
+    hydrate_by_id = {}
+    for row in db.session.execute(hydrate_stmt).all():
+        if row.game_id not in hydrate_by_id:
+            hydrate_by_id[row.game_id] = row
+    results = [hydrate_by_id[gid] for gid in ordered_game_ids if gid in hydrate_by_id]
+
+    rosters_by_game = get_rosters_for_games(ordered_game_ids)
+
+    linescores = {}
+    scoring_plays_by_game = {}
+    if results and (include_linescore or include_scoring_plays):
+        game_innings = {game.game_id: game.innings_played for game in results}
+        linescores, scoring_plays_by_game = build_linescore_and_scoring_plays(game_innings, include_linescore, include_scoring_plays)
 
     games = []
-    game_ids = []
-    if called_internally:
-        for game in results:
-            game_ids.append(game.game_id)
-        return { "game_ids": game_ids }
-    else:
-        # Collect game_ids and innings_played for optional event queries
-        game_innings = {game.game_id: game.innings_played for game in results}
+    for game in results:
+        away_roster, home_roster = rosters_by_game[game.game_id]
+        game_dict = {
+            'game_id': game.game_id,
+            'stadium': game.stadium,
+            'date_time_start': game.date_time_start,
+            'date_time_end': game.date_time_end,
+            'away_user': game.away_player,
+            'away_captain': game.away_captain,
+            'away_roster': away_roster,
+            'away_score': game.away_score,
+            'home_user': game.home_player,
+            'home_captain': game.home_captain,
+            'home_roster': home_roster,
+            'home_score': game.home_score,
+            'innings_played': game.innings_played,
+            'innings_selected': game.innings_selected,
+            'winner_incoming_elo': game.winner_incoming_elo,
+            'loser_incoming_elo': game.loser_incoming_elo,
+            'winner_result_elo': game.winner_result_elo,
+            'loser_result_elo': game.loser_result_elo,
+            'game_mode': game.tag_set
+        }
+        if include_linescore:
+            game_dict['linescore'] = linescores.get(game.game_id, [[], []])
+        if include_scoring_plays:
+            game_dict['scoring_plays'] = scoring_plays_by_game.get(game.game_id, [])
+        games.append(game_dict)
 
-        linescores = {}
-        scoring_plays_by_game = {}
-        if game_innings and (include_linescore or include_scoring_plays):
-            linescores, scoring_plays_by_game = build_linescore_and_scoring_plays(game_innings, include_linescore, include_scoring_plays)
-
-        for game in results:
-            game_dict = {
-                'game_id': game.game_id,
-                'stadium': game.stadium,
-                'date_time_start': game.date_time_start,
-                'date_time_end': game.date_time_end,
-                'away_user': game.away_player,
-                'away_captain': game.away_captain,
-                'away_score': game.away_score,
-                'home_user': game.home_player,
-                'home_captain': game.home_captain,
-                'home_score': game.home_score,
-                'innings_played': game.innings_played,
-                'innings_selected': game.innings_selected,
-                'winner_incoming_elo': game.winner_incoming_elo,
-                'loser_incoming_elo': game.loser_incoming_elo,
-                'winner_result_elo': game.winner_result_elo,
-                'loser_result_elo': game.loser_result_elo,
-                'game_mode': game.tag_set
-            }
-            if (include_teams):
-                away_roster_dict, home_roster_dict = get_rosters_from_game(game.game_id)
-                game_dict['away_roster'] = away_roster_dict
-                game_dict['home_roster'] = home_roster_dict
-            if include_linescore:
-                game_dict['linescore'] = linescores.get(game.game_id, {0: [], 1: []})
-            if include_scoring_plays:
-                game_dict['scoring_plays'] = scoring_plays_by_game.get(game.game_id, [])
-            games.append(game_dict)
-
-        return {'games': games}
+    return {'games': games}
 
 '''
 @Endpoint: Events
@@ -733,9 +689,7 @@ def endpoint_event(called_internally=False):
                 return abort(408, description='Provided GameIDs not found')
 
         else:
-            games = endpoint_games(True)   # List of dicts of games we want data from and info about those games
-            for game_id in games['game_ids']:
-                list_of_game_ids.append(game_id)
+            list_of_game_ids = _get_game_ids(request.args, limit=None)
     except:
         return abort(408, description='Invalid GameID')
 
@@ -1272,8 +1226,7 @@ def endpoint_detailed_stats():
         if missing_ids:
             return abort(404, description=f'Game IDs not found: {missing_ids}')
     else:
-        games = endpoint_games(True)
-        game_ids = set(games['game_ids'])
+        game_ids = set(_get_game_ids(request.args, limit=None))
         if not game_ids:
             return abort(404, description='No games found for provided parameters')
 
@@ -1908,12 +1861,11 @@ def endpoint_ladder_games():
         'ORDER BY game_history.date_created DESC \n'
         'LIMIT 50'
     )
-    print(query)
 
-    results = db.session.execute(query).all()
-    
+    results = db.session.execute(text(query)).all()
+
     games = []
     for game in results:
-        games.append(game._asdict())
+        games.append(dict(game._mapping))
     return {'games': games}
     
