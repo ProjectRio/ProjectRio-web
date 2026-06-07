@@ -12,3 +12,4 @@ CLAUDE.md
 **/*.pyc
 **/*.pyo
 scripts/bench_results/
+RIO_WEB_MANAGEMENT.md

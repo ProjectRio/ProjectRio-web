@@ -233,6 +233,14 @@ class TestTimeFilter:
         assert r.status_code == 200
         assert r.json()['games'] == []
 
+    def test_invalid_start_time_returns_400(self, server, base_url):
+        r = server.get(f'{base_url}/games/', params={'start_time': 'notanumber'})
+        assert r.status_code == 400
+
+    def test_invalid_end_time_returns_400(self, server, base_url):
+        r = server.get(f'{base_url}/games/', params={'end_time': 'notanumber'})
+        assert r.status_code == 400
+
 
 # ---------------------------------------------------------------------------
 # Linescore
@@ -263,6 +271,27 @@ class TestLinescore:
             away, home = game['linescore']
             assert len(away) == game['innings_played']
             assert len(home) == game['innings_played']
+
+    def test_linescore_sums_match_game_score(self, server, base_url):
+        r = server.get(f'{base_url}/games/', params={'tag': S13_TAG, 'limit_games': '20', 'include_linescore': '1'})
+        for game in r.json()['games']:
+            away, home = game['linescore']
+            assert sum(away) == game['away_score'], f'Away linescore sum mismatch in game {game["game_id"]}'
+            home_runs = sum(x for x in home if x != 'X')
+            assert home_runs == game['home_score'], f'Home linescore sum mismatch in game {game["game_id"]}'
+
+    def test_linescore_walk_off_inning_shown_as_X(self, server, base_url):
+        r = server.get(f'{base_url}/games/', params={'tag': S13_TAG, 'limit_games': '100', 'include_linescore': '1'})
+        found_x = False
+        for game in r.json()['games']:
+            _, home = game['linescore']
+            if home[-1] == 'X':
+                found_x = True
+                assert game['home_score'] > game['away_score'], (
+                    f'X in final home inning but home did not win game {game["game_id"]}'
+                )
+        if not found_x:
+            pytest.skip('No games with walk-off X found in sample — increase limit or seed data')
 
 
 # ---------------------------------------------------------------------------
@@ -339,3 +368,56 @@ class TestTagFilter:
         exc_ids = {g['game_id'] for g in r_exc.json()['games']}
         overlap = inc_ids & exc_ids
         assert not overlap, f'{len(overlap)} game(s) appear in both tag and exclude_tag results'
+
+
+# ---------------------------------------------------------------------------
+# Stadium filter
+# ---------------------------------------------------------------------------
+
+class TestStadiumFilter:
+    def test_stadium_filter_returns_only_matching_games(self, server, base_url, sample_game):
+        stadium_id = sample_game['stadium']
+        r = server.get(f'{base_url}/games/', params={'tag': S13_TAG, 'stadium': str(stadium_id), 'limit_games': '20'})
+        assert r.status_code == 200
+        games = r.json()['games']
+        assert games, f'No S13 games found for stadium_id={stadium_id}'
+        for game in games:
+            assert game['stadium'] == stadium_id
+
+    def test_invalid_stadium_id_returns_400(self, server, base_url):
+        r = server.get(f'{base_url}/games/', params={'stadium': 'notanumber'})
+        assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# Multiple filter values (getlist support)
+# ---------------------------------------------------------------------------
+
+class TestMultipleFilterValues:
+    def test_multiple_usernames_returns_games_with_either_user(self, server, base_url, two_usernames):
+        user_a, user_b = two_usernames
+        r = server.get(f'{base_url}/games/', params=[
+            ('tag', S13_TAG), ('username', user_a), ('username', user_b), ('limit_games', '20'),
+        ])
+        assert r.status_code == 200
+        for game in r.json()['games']:
+            assert game['away_user'] in (user_a, user_b) or game['home_user'] in (user_a, user_b)
+
+    def test_multiple_captains_returns_games_with_either_captain(self, server, base_url, two_captains):
+        cap_a, cap_b = two_captains
+        r = server.get(f'{base_url}/games/', params=[
+            ('tag', S13_TAG), ('captain', cap_a), ('captain', cap_b), ('limit_games', '20'),
+        ])
+        assert r.status_code == 200
+        for game in r.json()['games']:
+            assert game['away_captain'] in (cap_a, cap_b) or game['home_captain'] in (cap_a, cap_b)
+
+    def test_multiple_tags_same_tag_twice_is_idempotent(self, server, base_url):
+        r_single = server.get(f'{base_url}/games/', params={'tag': S13_TAG, 'limit_games': '20'})
+        r_double = server.get(f'{base_url}/games/', params=[
+            ('tag', S13_TAG), ('tag', S13_TAG), ('limit_games', '20'),
+        ])
+        assert r_double.status_code == 200
+        ids_single = [g['game_id'] for g in r_single.json()['games']]
+        ids_double = [g['game_id'] for g in r_double.json()['games']]
+        assert ids_single == ids_double
