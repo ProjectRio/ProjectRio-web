@@ -407,6 +407,11 @@ class OngoingGame(db.Model):
 
 
 class Game(db.Model):
+    __table_args__ = (
+        # Head-to-head queries: both directions needed since home/away can be either player
+        db.Index('ix_game_away_player_home_player', 'away_player_id', 'home_player_id'),
+        db.Index('ix_game_home_player_away_player', 'home_player_id', 'away_player_id'),
+    )
     game_id = db.Column(db.BigInteger, primary_key = True)
     away_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False, index=True) #One-to-One
     home_player_id = db.Column(db.ForeignKey('rio_user.id'), nullable=False, index=True) #One-to-One
@@ -447,9 +452,9 @@ class CharacterGameSummary(db.Model):
     )
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False)
-    char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False)
+    char_id = db.Column(db.Integer, db.ForeignKey('character.char_id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False, index=True)
-    character_position_summary_id = db.Column(db.Integer, db.ForeignKey('character_position_summary.id'), nullable=False)
+    character_position_summary_id = db.Column(db.Integer, db.ForeignKey('character_position_summary.id'), nullable=False, index=True)
     team_id = db.Column(db.Integer)
     roster_loc = db.Column(db.Integer) #0-8
     captain = db.Column(db.Boolean)
@@ -550,14 +555,14 @@ class CharacterPositionSummary(db.Model):
 class Event(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id'), nullable=False, index=True)
-    pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False) #Based on "Pitcher Roster Loc" in JSON
-    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
-    catcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    pitcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False, index=True) #Based on "Pitcher Roster Loc" in JSON
+    batter_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False, index=True)
+    catcher_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False, index=True)
     runner_on_0 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=False)
     runner_on_1 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=True)
     runner_on_2 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=True)
     runner_on_3 = db.Column(db.Integer, db.ForeignKey('runner.id'), nullable=True)
-    pitch_summary_id = db.Column(db.Integer, db.ForeignKey('pitch_summary.id'), nullable=True)
+    pitch_summary_id = db.Column(db.Integer, db.ForeignKey('pitch_summary.id'), nullable=True, index=True)
     event_num = db.Column(db.Integer)
     away_score = db.Column(db.Integer)
     home_score = db.Column(db.Integer)
@@ -577,7 +582,7 @@ class Event(db.Model):
 
 class PitchSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=True)
+    contact_summary_id = db.Column(db.Integer, db.ForeignKey('contact_summary.id'), nullable=True, index=True)
     pitch_type = db.Column(db.Integer)
     charge_pitch_type = db.Column(db.Integer)
     star_pitch = db.Column(db.Integer)
@@ -593,7 +598,7 @@ class PitchSummary(db.Model):
 
 class ContactSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    fielding_summary_id = db.Column(db.Integer, db.ForeignKey('fielding_summary.id'), nullable=True)
+    fielding_summary_id = db.Column(db.Integer, db.ForeignKey('fielding_summary.id'), nullable=True, index=True)
     type_of_contact = db.Column(db.Integer)
     charge_power_up = db.Column(db.Float)
     charge_power_down = db.Column(db.Float)
@@ -626,7 +631,7 @@ class ContactSummary(db.Model):
 
 class FieldingSummary(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False)
+    fielder_character_game_summary_id = db.Column(db.Integer, db.ForeignKey('character_game_summary.id'), nullable=False, index=True)
     position = db.Column(db.Integer)
     action = db.Column(db.Integer)
     jump = db.Column(db.Integer)

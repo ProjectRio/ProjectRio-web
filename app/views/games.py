@@ -2,6 +2,7 @@ from flask import request, abort
 from flask import current_app as app
 from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, Runner, GameHistory, tagsettag
 from ..util import *
+from ..utils.db_helpers import resolve_names
 from sqlalchemy import select, func, or_, and_
 from sqlalchemy.orm import aliased
 
@@ -169,28 +170,6 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
     return linescores, scoring_plays
 
 
-def _resolve_names(values, id_col, name_col, label, *, transform):
-    """Resolve a list of human-supplied names to their DB ids.
-
-    All supplied values must resolve or the request is aborted (400).
-    Duplicate / case-variant inputs that map to the same row are allowed:
-    validation is done against the deduplicated set of normalized names.
-
-    Returns a list of ids, one per matched row (order not guaranteed; callers
-    feed this into .in_() clauses where order and duplicates are irrelevant).
-    """
-    if not values:
-        return []
-    normalized = [transform(v) for v in values]
-    rows = db.session.execute(
-        select(id_col, name_col).where(name_col.in_(normalized))
-    ).all()
-    found = {row._mapping[name_col] for row in rows}
-    if len(found) != len(set(normalized)):
-        unknown = [v for v in values if transform(v) not in found]
-        abort(400, f'Unknown {label}: {unknown}')
-    return [row._mapping[id_col] for row in rows]
-
 
 def get_game_ids(args, limit=None):
     """Resolve filter args to an ordered list of game_ids.
@@ -204,30 +183,30 @@ def get_game_ids(args, limit=None):
         Calls abort(400) directly on invalid input.
     """
     # === Resolve names -> ids (each set must fully resolve) ===
-    include_tag_ids = _resolve_names(
+    include_tag_ids = resolve_names(
         args.getlist('tag'), Tag.id, Tag.name_lowercase,
         'tag(s)', transform=lower_and_remove_nonalphanumeric)
-    exclude_tag_ids = _resolve_names(
+    exclude_tag_ids = resolve_names(
         args.getlist('exclude_tag'), Tag.id, Tag.name_lowercase,
         'exclude_tag(s)', transform=lower_and_remove_nonalphanumeric)
 
-    user_ids = _resolve_names(
+    user_ids = resolve_names(
         args.getlist('username'), RioUser.id, RioUser.username_lowercase,
         'username(s)', transform=lower_and_remove_nonalphanumeric)
-    vs_user_ids = _resolve_names(
+    vs_user_ids = resolve_names(
         args.getlist('vs_username'), RioUser.id, RioUser.username_lowercase,
         'vs_username(s)', transform=lower_and_remove_nonalphanumeric)
-    exclude_user_ids = _resolve_names(
+    exclude_user_ids = resolve_names(
         args.getlist('exclude_username'), RioUser.id, RioUser.username_lowercase,
         'exclude_username(s)', transform=lower_and_remove_nonalphanumeric)
 
-    captain_ids = _resolve_names(
+    captain_ids = resolve_names(
         args.getlist('captain'), Character.char_id, Character.name_lowercase,
         'captain(s)', transform=lower_and_remove_nonalphanumeric)
-    vs_captain_ids = _resolve_names(
+    vs_captain_ids = resolve_names(
         args.getlist('vs_captain'), Character.char_id, Character.name_lowercase,
         'vs_captain(s)', transform=lower_and_remove_nonalphanumeric)
-    exclude_captain_ids = _resolve_names(
+    exclude_captain_ids = resolve_names(
         args.getlist('exclude_captain'), Character.char_id, Character.name_lowercase,
         'exclude_captain(s)', transform=lower_and_remove_nonalphanumeric)
 
