@@ -5,12 +5,13 @@ from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Ev
 from ..consts import *
 from ..util import *
 from sqlalchemy import select, func, case, text
+from sqlalchemy.orm import aliased
 import time
 import datetime
-import itertools
 from .stats.pitcher_wins import calculate_pitcher_wins_for_games
 from .stats.runs_scored import calculate_runs_scored_for_games
 from .games import get_game_ids
+from ..utils.db_helpers import sanitize_int_list, resolve_names
 
 # === Parameterized Grouping Configuration ===
 # Universal grouping dimensions that apply to all stat types (Batting, Pitching, Fielding, Misc)
@@ -169,20 +170,7 @@ def build_where_statement(game_ids, char_ids, user_ids):
             where_statement += f"character_game_summary.char_id IN {char_string} \n"
     return where_statement
 
-def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
-    if int_list == None or len(int_list) == 0:
-        return [], ''
-    try:
-        for index, item in enumerate(int_list):
-            sanitized_id = int(int_list[index])
-            if sanitized_id in range (lower_bound,upper_bound):
-                int_list[index] = sanitized_id
-            else:
-                return None, error_msg
-        return int_list, ''
-    except:
-        return None, error_msg
-    
+
 
 '''
 @Endpoint: Events
@@ -190,9 +178,9 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
 @Params:
     - Game params:           Params for /games/ (tags/users/date/etc)
     - games:           [0-x],   games if not using the game endpoint params
-    - pitcher_char:    [0-54],  pitcher char ids
-    - batter_char:     [0-54],  batter char ids
-    - fielder_char:    [0-54],  fielder char ids
+    - pitcher_char:    [0-53],  pitcher char ids
+    - batter_char:     [0-53],  batter char ids
+    - fielder_char:    [0-53],  fielder char ids
     - fielder_pos:     [0-54],  fielder pos
     - contact:         [0-5],   contact types (0-4: in-game values, 5: no contact)
     - swing:           [0-4],   swing types ()
@@ -213,244 +201,209 @@ def sanitize_int_list(int_list, error_msg, upper_bound, lower_bound = 0):
     - final_result     [0-16],  value for the final result of the event
     - limit_events            int or False, value to limit the events
 '''
-@app.route('/events/', methods = ['GET'])
-def endpoint_event(called_internally=False):
-    # === Construct query === 
-    #Sanitize games params 
-    try:
-        list_of_game_ids = list() # Holds IDs for all the games we want data from
-        if (len(request.args.getlist('games')) != 0):
-            list_of_game_ids = [int(game_id) for game_id in request.args.getlist('games')]
-            list_of_game_id_tuples = db.session.query(Game.game_id).filter(Game.game_id.in_(tuple(list_of_game_ids))).all()
-            if (len(list_of_game_id_tuples) != len(list_of_game_ids)):
-                return abort(408, description='Provided GameIDs not found')
+def _parse_event_args(args):
+    if len(args.getlist('games')) != 0:
+        try:
+            list_of_game_ids = [int(game_id) for game_id in args.getlist('games')]
+        except ValueError:
+            abort(400, description='Invalid GameID')
+        existing_ids = db.session.execute(
+            select(Game.game_id).where(Game.game_id.in_(list_of_game_ids))
+        ).scalars().all()
+        if len(existing_ids) != len(list_of_game_ids):
+            abort(404, description='Provided GameIDs not found')
+    else:
+        list_of_game_ids = get_game_ids(args, limit=None)
 
-        else:
-            list_of_game_ids = get_game_ids(request.args, limit=None)
-    except:
-        return abort(408, description='Invalid GameID')
-
-    
     list_of_batter_user_ids = []
     list_of_pitcher_user_ids = []
-    if ( request.args.getlist('username') != None or request.args.getlist('vs_username') != None ):
-        #Get user ids from list of users
-        vs_usernames = request.args.getlist('vs_username')
-        vs_usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in vs_usernames])
-        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-        list_of_vs_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(vs_usernames_lowercase)).all()
-        # using list comprehension
-        list_of_vs_user_id = list(itertools.chain(*list_of_vs_user_id_tuples))
-        if (request.args.get('users_as_batter') == "1"):
-            list_of_batter_user_ids += list_of_vs_user_id
-        if (request.args.get('users_as_pitcher') == "1"):
-            list_of_pitcher_user_ids += list_of_vs_user_id
 
-        #Get user ids from list of users
-        usernames = request.args.getlist('username')
-        usernames_lowercase = tuple([lower_and_remove_nonalphanumeric(username) for username in usernames])
-        #List returns a list of user_ids, each in a tuple. Convert to list and return to tuple for SQL query
-        list_of_user_id_tuples = db.session.query(RioUser.id).filter(RioUser.username_lowercase.in_(usernames_lowercase)).all()
-        # using list comprehension
-        list_of_user_id = list(itertools.chain(*list_of_user_id_tuples))
-        if (request.args.get('users_as_batter') == "1"):
-            list_of_batter_user_ids += list_of_user_id
-        if (request.args.get('users_as_pitcher') == "1"):
-            list_of_pitcher_user_ids += list_of_user_id
+    vs_user_ids = resolve_names(args.getlist('vs_username'), RioUser.id, RioUser.username_lowercase,
+                                'vs_username(s)', transform=lower_and_remove_nonalphanumeric)
+    user_ids = resolve_names(args.getlist('username'), RioUser.id, RioUser.username_lowercase,
+                             'username(s)', transform=lower_and_remove_nonalphanumeric)
 
-    # Pitcher Char Id
-    list_of_pitcher_char_ids, error = sanitize_int_list(request.args.getlist('pitcher_char'), "Pitcher Char ID not in range", 55)
-    if list_of_pitcher_char_ids == None:
-        return abort(400, description = error)
+    for uid_list in [vs_user_ids, user_ids]:
+        if args.get('users_as_batter') == "1":
+            list_of_batter_user_ids += uid_list
+        if args.get('users_as_pitcher') == "1":
+            list_of_pitcher_user_ids += uid_list
 
-    # Batter Char Id
-    list_of_batter_char_ids, error = sanitize_int_list(request.args.getlist('batter_char'), "Batter Char ID not in range", 55)
-    if list_of_batter_char_ids == None:
-        return abort(400, description = error)
-
-    #Contact Type
-    list_of_contact, error = sanitize_int_list(request.args.getlist('contact'), "Contact Type not in range", 6)
-    if list_of_contact == None:
-        return abort(400, description = error)
-    
-    #Swing Type
-    list_of_swings, error = sanitize_int_list(request.args.getlist('swing'), "Swing Type not in range", 5)
-    if list_of_swings == None:
-        return abort(400, description = error)
-
-    #Pitch Type - 0,1,2,3,4 (curve, slider, perfect charge, changeup, star swing)
-    list_of_pitches, error = sanitize_int_list(request.args.getlist('pitch'), "Pitch Type not in range", 5)
-    if list_of_pitches == None:
-        return abort(400, description = error)
-
-    #Chem Links
-    list_of_chem, error = sanitize_int_list(request.args.getlist('chem_link'), "Chem Links not in range", 4)
-    if list_of_chem == None:
-        return abort(400, description = error)
-
-    #Batter Handedness
-    list_of_bh, error = sanitize_int_list(request.args.getlist('batter_hand'), "Batter hand not in range", 2)
-    if list_of_bh == None:
-        return abort(400, description = error)
-
-    #Pitcher Handedness
-    list_of_ph, error = sanitize_int_list(request.args.getlist('pitcher_hand'), "Batter hand not in range", 2)
-    if list_of_ph == None:
-        return abort(400, description = error)
-
-    #Fielder Id
-    list_of_fielder_char_ids, error = sanitize_int_list(request.args.getlist('fielder_char'), "Fielder Char ID not in range", 55)
-    if list_of_fielder_char_ids == None:
-        return abort(400, description = error)
-
-    #Fielder Pos
-    list_of_fielder_pos, error = sanitize_int_list(request.args.getlist('fielder_pos'), "Fielder position not in range", 9)
-    if list_of_fielder_pos == None:
-        return abort(400, description = error)
-
-    #Inning list
-    list_of_innings, error = sanitize_int_list(request.args.getlist('inning'), "Inning not in range", 50)
-    if list_of_innings == None:
-        return abort(400, description = error)
-
-    #Half Inning list
-    list_of_half_inning, error = sanitize_int_list(request.args.getlist('half_inning'), "Half Inning not in range", 2)
-    if list_of_half_inning == None:
-        return abort(400, description = error)
-
-    #Balls list
-    list_of_balls, error = sanitize_int_list(request.args.getlist('balls'), "Balls not in range", 4)
-    if list_of_balls == None:
-        return abort(400, description = error)
-
-    #Strike list
-    list_of_strikes, error = sanitize_int_list(request.args.getlist('strikes'), "Strikes not in range", 3)
-    if list_of_strikes == None:
-        return abort(400, description = error)
-
-    #Outs list
-    list_of_outs, error = sanitize_int_list(request.args.getlist('outs'), "Outs not in range", 3)
-    if list_of_outs == None:
-        return abort(400, description = error)
-    
-    #Home scores list
-    list_of_home_scores, error = sanitize_int_list(request.args.getlist('home_score'), "Score not in range", 50)
-    if list_of_outs == None:
-        return abort(400, description = error)
-    
-    #Away scores list
-    list_of_away_scores, error = sanitize_int_list(request.args.getlist('away_score'), "Score not in range", 50)
-    if list_of_outs == None:
-        return abort(400, description = error)
-    
-    #Final result
-    list_of_results, error = sanitize_int_list(request.args.getlist('final_result'), "Final result not in range", 17)
-    if list_of_results == None:
-        return abort(400, description = error)
-
-    star_chance_flag = [1] if (request.args.get('star_chance') == '1') else []
-
-    #list of args, the attribute to select from, null value
-    where_list = [
-        (list_of_game_ids, 'event.game_id', None),
-        (list_of_pitcher_char_ids, 'pitcher.char_id', None),
-        (list_of_batter_char_ids, 'batter.char_id', None),
-        (list_of_contact, 'contact.type_of_contact', 5),
-        (list_of_swings, 'pitch.type_of_swing', None),
-       #(list_of_pitches, 'pitch.type_of_swing', None) #This one needs a DB rework. Manually add later
-        (list_of_chem, 'event.chem_links_ob', None),
-        (list_of_bh, 'batter.batting_hand', None),
-        (list_of_ph, 'pitcher.fielding_hand', None),
-        (list_of_fielder_char_ids, 'fielder.char_id', None),
-        (list_of_fielder_pos, 'fielder.position', None),
-        (list_of_innings, 'event.inning', None),
-        (list_of_half_inning, 'event.half_inning', None),
-        (list_of_balls, 'event.balls', None),
-        (list_of_strikes, 'event.strikes', None),
-        (list_of_outs, 'event.outs', None),
-        (list_of_home_scores, 'event.home_score', None),
-        (list_of_away_scores, 'event.away_score', None),
-        (star_chance_flag, 'event.star_chance', None),
-        (list_of_batter_user_ids, 'batter.user_id', None),
-        (list_of_pitcher_user_ids, 'pitcher.user_id', None),
-        (list_of_results, 'event.result_of_ab', None)
+    int_params = [
+        ('pitcher_char',  cMAX_CHAR_ID),
+        ('batter_char',   cMAX_CHAR_ID),
+        ('contact',       cMAX_CONTACT_TYPES),
+        ('swing',         len(cTYPE_OF_SWING)),
+        ('pitch',         len(cTYPE_OF_SWING)),
+        ('chem_link',     cMAX_CHEM_LINKS),
+        ('batter_hand',   len(cHANDEDNESS)),
+        ('pitcher_hand',  len(cHANDEDNESS)),
+        ('fielder_char',  cMAX_CHAR_ID),
+        ('fielder_pos',   cMAX_FIELDER_POS),
+        ('inning',        cMAX_INNING),
+        ('half_inning',   len(cHANDEDNESS)),
+        ('balls',         cMAX_BALLS),
+        ('strikes',       cMAX_STRIKES),
+        ('outs',          cMAX_OUTS),
+        ('home_score',    cMAX_SCORE),
+        ('away_score',    cMAX_SCORE),
+        ('final_result',  cMAX_FINAL_RESULT),
     ]
 
-    #Go through all of the lists from the args
-    #If they are empty, skip entire list, do not add to the statement
-    #If not empty, use the SQL provided in tuple[1] to write a where statement and append it
-    #Grab NULL values for column if tuple[3] is provided and also present in the list
-    def build_where_statement(where_list):
-        where_statement = 'WHERE ('
-        and_needed = False
-        for item in where_list:
-            formatted_tuple, empty = format_list_for_SQL(item[0])
-            if empty:
-                continue
-            if and_needed:
-                where_statement += 'AND '
-            #Check if there are values that will represent null (contact=5 is not a real value, but its used to represent 'no contact' AKA null in the table)
-            null_statement = ''
-            if ((item[2] != None) and (item[2] in item[0])):
-                null_statement = f' OR {item[1]} IS NULL'
-            where_statement += f'({item[1]} IN {formatted_tuple}{null_statement})\n'
-            and_needed = True
-        where_statement += ')'
-        #If we have at least a single where statement, return it
-        if and_needed:
-            return where_statement
-        return ''
+    parsed = {
+        'game_ids':         list_of_game_ids,
+        'batter_user_ids':  list_of_batter_user_ids,
+        'pitcher_user_ids': list_of_pitcher_user_ids,
+        'star_chance':      [1] if args.get('star_chance') == '1' else [],
+    }
 
-    where_statement = build_where_statement(where_list)
+    for param, max_val in int_params:
+        values, error = sanitize_int_list(args.getlist(param), f'Invalid {param}', max_val)
+        if values is None:
+            abort(400, description=error)
+        parsed[param] = values
 
-    columns_statement = 'event.game_id AS game_id, \n event.event_num AS event_num, \n' if not called_internally else ''
+    return parsed
 
-    limit_statement = ''
+
+def _build_event_filters(parsed):
+    batter   = aliased(CharacterGameSummary)
+    pitcher  = aliased(CharacterGameSummary)
+    fielder  = aliased(CharacterGameSummary)
+    pitch    = aliased(PitchSummary)
+    contact  = aliased(ContactSummary)
+    fielding = aliased(FieldingSummary)
+
+    # (values, column expression, null_sentinel)
+    # Empty value lists are skipped entirely (no predicate added).
+    where_specs = [
+        (parsed['game_ids'],        Event.game_id,           ),
+        (parsed['pitcher_char'],    pitcher.char_id,         ),
+        (parsed['batter_char'],     batter.char_id,          ),
+        (parsed['swing'],           pitch.type_of_swing,     ),
+       #(parsed['pitch'],           pitch.type_of_swing,     ) #This one needs a DB rework. Manually add later
+        (parsed['chem_link'],       Event.chem_links_ob,     ),
+        (parsed['batter_hand'],     batter.batting_hand,     ),
+        (parsed['pitcher_hand'],    pitcher.fielding_hand,   ),
+        (parsed['fielder_char'],    fielder.char_id,         ),
+        (parsed['fielder_pos'],     fielding.position,       ),
+        (parsed['inning'],          Event.inning,            ),
+        (parsed['half_inning'],     Event.half_inning,       ),
+        (parsed['balls'],           Event.balls,             ),
+        (parsed['strikes'],         Event.strikes,           ),
+        (parsed['outs'],            Event.outs,              ),
+        (parsed['home_score'],      Event.home_score,        ),
+        (parsed['away_score'],      Event.away_score,        ),
+        (parsed['star_chance'],     Event.star_chance,       ),
+        (parsed['batter_user_ids'], batter.user_id,          ),
+        (parsed['pitcher_user_ids'],pitcher.user_id,         ),
+        (parsed['final_result'],    Event.result_of_ab,      ),
+    ]
+
+    filters = []
+    for values, column in where_specs:
+        if not values:
+            continue
+        filters.append(column.in_(values))
+
+    # TODO: contact=5 is a sentinel for "no contact" (miss/foul), stored as NULL in the DB.
+    #       Fix by storing an explicit contact type value instead of NULL, with a migration +
+    #       emulator upload change. That would let this be a plain filter like all others.
+    contact_vals = parsed['contact']
+    if contact_vals:
+        no_contact = 5 in contact_vals
+        real_vals  = [v for v in contact_vals if v != 5]
+        if real_vals and no_contact:
+            filters.append(contact.type_of_contact.in_(real_vals) | contact.type_of_contact.is_(None))
+        elif no_contact:
+            filters.append(contact.type_of_contact.is_(None))
+        else:
+            filters.append(contact.type_of_contact.in_(real_vals))
+
+    aliases = {
+        'batter': batter,
+        'pitcher': pitcher,
+        'fielder': fielder,
+        'pitch': pitch,
+        'contact': contact,
+        'fielding': fielding,
+    }
+
+    return filters, aliases
+
+
+def _build_event_stmt(filters, aliases, columns):
+    batter   = aliases['batter']
+    pitcher  = aliases['pitcher']
+    fielder  = aliases['fielder']
+    pitch    = aliases['pitch']
+    contact  = aliases['contact']
+    fielding = aliases['fielding']
+
+    stmt = (
+        select(*columns)
+        .select_from(Event)
+        .join(pitch,    Event.pitch_summary_id == pitch.id)
+        .outerjoin(contact,  pitch.contact_summary_id == contact.id)        # Contact left-joined for misses
+        .outerjoin(fielding, contact.fielding_summary_id == fielding.id)    # Fielding left-joined for HRs and misses
+        .join(batter,   Event.batter_id == batter.id)
+        .join(pitcher,  Event.pitcher_id == pitcher.id)
+        .outerjoin(fielder, fielding.fielder_character_game_summary_id == fielder.id)
+    )
+    if filters:
+        stmt = stmt.where(*filters)
+    return stmt
+
+
+def get_event_ids(args, limit=None):
+    """Return a flat list of event IDs matching the given query args.
+
+    Args:
+        args: request.args (or any MultiDict with the same interface)
+        limit: max events to return; None means no limit
+
+    Returns:
+        List of event IDs matching the filters.
+    """
+    parsed = _parse_event_args(args)
+    filters, aliases = _build_event_filters(parsed)
+    stmt = _build_event_stmt(filters, aliases, [Event.id.label('event_id')])
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    return [row.event_id for row in db.session.execute(stmt).all()]
+
+
+@app.route('/events/', methods = ['GET'])
+def endpoint_event():
+    parsed = _parse_event_args(request.args)
+    filters, aliases = _build_event_filters(parsed)
+
     default_limit = 1000
     max_limit     = 150000
-    if (request.args.get('limit_events') != None):
+    limit_raw = request.args.get('limit_events')
+    if limit_raw is not None:
         try:
-            limit = int(request.args.get('limit_events')) if int(request.args.get('limit_events')) <= max_limit else max_limit
-            limit_statement = f' LIMIT {limit}'
-        except:
-            if request.args.get('limit_events') in ["false", "False", "F", "f"]:
-                limit_statement = f' LIMIT {max_limit}'
-            elif request.args.get('limit_events') in ["true", "True", "T", "t"]:
-                limit_statement = f' LIMIT {default_limit}'
-            else:
-                return abort(400, description = "Invalid event_limit")
+            limit_value = min(int(limit_raw), max_limit)
+        except ValueError:
+            abort(400, description="limit_events must be an integer")
     else:
-        limit_statement = '' if called_internally else f' LIMIT {default_limit}'
+        limit_value = default_limit
 
-    query = (
-        'SELECT \n'
-        f'{columns_statement}'
-        'event.id AS event_id \n'
-        'FROM event \n'
-        'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
-        'LEFT JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'       #Contact gets a left joiin for misses
-        'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n' #Fielding gets a left joiin for HRs and misses
-        'JOIN character_game_summary AS batter ON event.batter_id = batter.id \n'
-        'JOIN character_game_summary AS pitcher ON event.pitcher_id = pitcher.id \n'
-        'LEFT JOIN character_game_summary AS fielder ON fielding.fielder_character_game_summary_id = fielder.id \n'
-       f'{where_statement}'
-       f'{limit_statement}'
-    )
+    columns = [
+        Event.game_id.label('game_id'),
+        Event.event_num.label('event_num'),
+        Event.id.label('event_id'),
+    ]
+    stmt = _build_event_stmt(filters, aliases, columns)
+    if limit_value is not None:
+        stmt = stmt.limit(limit_value)
 
-    result = db.session.execute(query).all()
+    events = {}
+    for entry in db.session.execute(stmt).all():
+        if entry.game_id not in events:
+            events[entry.game_id] = {}
+        events[entry.game_id][entry.event_num] = entry.event_id
 
-    if called_internally:
-        events = []
-        for entry in result:
-            events.append(entry.event_id )
-        events = { 'Events': events }
-    else:
-        events = {}
-        for entry in result:
-            if entry.game_id not in events:
-                events[entry.game_id] = {}
-            events[entry.game_id][entry.event_num] = entry.event_id
-        
     return events
 
 
@@ -466,7 +419,7 @@ def endpoint_event(called_internally=False):
 #                 return abort(408, description='Provided Events not found')
 
 #         else:
-#             list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
+#             list_of_event_ids = get_event_ids(request.args)
 #     except:
 #         return abort(408, description='Invalid GameID')
 
@@ -526,7 +479,7 @@ def endpoint_landing_data():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = get_event_ids(request.args)
     except:
         return abort(408, description='Invalid GameID')
 
@@ -626,7 +579,7 @@ def endpoint_star_chances():
                 return abort(408, description='Provided Events not found')
 
         else:
-            list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
+            list_of_event_ids = get_event_ids(request.args)
     except:
         return abort(408, description='Invalid GameID')
 
@@ -681,7 +634,7 @@ def endpoint_star_chances():
 #                 return abort(408, description='Provided Events not found')
 
 #         else:
-#             list_of_event_ids = endpoint_event(True)['Events']   # List of dicts of games we want data from and info about those games
+#             list_of_event_ids = get_event_ids(request.args)
 #     except:
 #         return abort(408, description='Invalid GameID')
 
