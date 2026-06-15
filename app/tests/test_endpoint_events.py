@@ -143,6 +143,38 @@ class TestGameFilter:
 
 
 # ---------------------------------------------------------------------------
+# limit_games parameter  (regression: dropped on the internal path in v1.6.1)
+# ---------------------------------------------------------------------------
+
+class TestLimitGames:
+    # The events response is keyed by game_id, so the number of outer keys is
+    # exactly the number of resolved games. Before the fix, limit_games was
+    # ignored here and the full tag was resolved.
+    def test_limit_games_1_returns_at_most_one_game(self, server, base_url):
+        r = server.get(f'{base_url}/events/', params={'tag': S13_TAG, 'limit_games': '1'})
+        assert r.status_code == 200
+        assert len(r.json()) <= 1
+
+    def test_more_games_returns_at_least_as_many_games(self, server, base_url):
+        # A generous limit_events keeps the event cap from truncating games.
+        r1 = server.get(f'{base_url}/events/', params={
+            'tag': S13_TAG, 'limit_games': '1', 'limit_events': '5000',
+        })
+        r3 = server.get(f'{base_url}/events/', params={
+            'tag': S13_TAG, 'limit_games': '3', 'limit_events': '5000',
+        })
+        assert r1.status_code == 200
+        assert r3.status_code == 200
+        assert len(r1.json()) <= 1
+        assert len(r3.json()) <= 3
+        assert len(r3.json()) >= len(r1.json())
+
+    def test_invalid_limit_games_returns_400(self, server, base_url):
+        r = server.get(f'{base_url}/events/', params={'tag': S13_TAG, 'limit_games': 'notanumber'})
+        assert r.status_code == 400
+
+
+# ---------------------------------------------------------------------------
 # Tag filter (uses game-level filtering)
 # ---------------------------------------------------------------------------
 
