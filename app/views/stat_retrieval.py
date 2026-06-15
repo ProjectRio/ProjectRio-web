@@ -866,7 +866,10 @@ def query_detailed_batting_stats(stat_dict, game_ids, user_ids, char_ids, active
         .join(PitchSummary, PitchSummary.id == Event.pitch_summary_id)
         .outerjoin(ContactSummary, contact_join_condition)
         .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
-        .where(*filters)
+        # Redundant predicate (an event's game always matches its batter's game).
+        # It lets Postgres restrict the event scan via idx_event_game_id instead of
+        # seq-scanning the whole event table before applying the game filter.
+        .where(*filters, Event.game_id.in_(game_ids))
     )
 
     if group_cols:
@@ -966,7 +969,10 @@ def query_detailed_pitching_stats(stat_dict, game_ids, user_ids, char_ids, activ
         .join(Event, CharacterGameSummary.id == Event.pitcher_id)
         .join(PitchSummary, PitchSummary.id == Event.pitch_summary_id)
         .join(RioUser, CharacterGameSummary.user_id == RioUser.id)
-        .where(*filters)
+        # Redundant predicate (an event's game always matches its pitcher's game).
+        # It lets Postgres restrict the event scan via idx_event_game_id instead of
+        # seq-scanning the whole event table before applying the game filter.
+        .where(*filters, Event.game_id.in_(game_ids))
     )
 
     if group_cols:
