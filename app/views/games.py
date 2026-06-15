@@ -193,7 +193,7 @@ def parse_limit_games(args, default=None):
         abort(400, f'Invalid limit_games: {raw}')
 
 
-def get_game_ids(args, default_limit=50):
+def get_game_ids(args, default_limit=None):
     """Resolve filter args to an ordered list of game_ids.
 
     ``limit_games`` is parsed here (via parse_limit_games) so that every caller
@@ -204,11 +204,13 @@ def get_game_ids(args, default_limit=50):
 
     Args:
         args: request.args (or any MultiDict with the same interface)
-        default_limit: cap applied when ``limit_games`` is absent. Defaults to 50
-            (the newest 50 games) so no endpoint resolves an entire tag by
-            accident. Pass None for no default cap. An explicit limit_games is
-            always honored with no ceiling — limit_games=False returns every
-            matching game and limit_games=N returns N.
+        default_limit: cap applied when ``limit_games`` is absent. None means no
+            cap (resolve every matching game). The endpoints that page through
+            individual games — /games/ and /landing_data/ — pass 50; the
+            aggregate / event-bounded endpoints (/stats/, /star_chances/,
+            /events/) leave it None. An explicit limit_games is always honored
+            with no ceiling: limit_games=False returns every matching game and
+            limit_games=N returns N.
 
     Returns:
         Ordered list of game_ids matching the filters (newest first).
@@ -373,8 +375,9 @@ def get_game_ids(args, default_limit=50):
 '''
 @app.route('/games/', methods=['GET'])
 def endpoint_games():
-    # get_game_ids parses limit_games and defaults to the newest 50 games.
-    ordered_game_ids = get_game_ids(request.args)
+    # /games/ pages through games, so it caps at the newest 50 when limit_games
+    # is absent; get_game_ids parses limit_games itself.
+    ordered_game_ids = get_game_ids(request.args, default_limit=50)
 
     include_linescore = (request.args.get('include_linescore') == '1')
     include_scoring_plays = (request.args.get('include_scoring_plays') == '1')

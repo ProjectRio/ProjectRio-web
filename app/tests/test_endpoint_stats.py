@@ -255,24 +255,6 @@ class TestGroupingByGame:
         assert r.status_code == 200
         assert len(r.json()['Stats']) == 1
 
-    def test_default_no_limit_games_caps_at_50(self, server, base_url):
-        # With no limit_games, /stats/ resolves at most the newest 50 games
-        # (the shared get_game_ids default) instead of the entire tag.
-        r = server.get(f'{base_url}/stats/', params={'tag': S13_TAG, 'by_game': '1'})
-        assert r.status_code == 200
-        assert len(r.json()['Stats']) <= 50
-
-    def test_false_limit_games_exceeds_default(self, server, base_url):
-        # limit_games=False opts out of the 50 default and returns the whole tag,
-        # so it resolves at least as many games as the default-capped request.
-        r_default = server.get(f'{base_url}/stats/', params={'tag': S13_TAG, 'by_game': '1'})
-        r_all = server.get(f'{base_url}/stats/', params={
-            'tag': S13_TAG, 'by_game': '1', 'limit_games': 'False',
-        })
-        assert r_default.status_code == 200
-        assert r_all.status_code == 200
-        assert len(r_all.json()['Stats']) >= len(r_default.json()['Stats'])
-
 
 class TestGroupingByRosterOrder:
     def test_by_roster_order_nests_correctly(self, server, base_url):
