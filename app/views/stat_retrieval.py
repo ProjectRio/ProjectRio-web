@@ -201,7 +201,7 @@ def build_where_statement(game_ids, char_ids, user_ids):
     - final_result     [0-16],  value for the final result of the event
     - limit_events            int or False, value to limit the events
 '''
-def _parse_event_args(args):
+def _parse_event_args(args, default_game_limit=None):
     if len(args.getlist('games')) != 0:
         try:
             list_of_game_ids = [int(game_id) for game_id in args.getlist('games')]
@@ -213,7 +213,9 @@ def _parse_event_args(args):
         if len(existing_ids) != len(list_of_game_ids):
             abort(404, description='Provided GameIDs not found')
     else:
-        list_of_game_ids = get_game_ids(args, limit=None)
+        # default_game_limit is the cap applied when limit_games is absent:
+        # /landing_data/ passes 50; the aggregate/event-bounded callers leave it None.
+        list_of_game_ids = get_game_ids(args, default_limit=default_game_limit)
 
     list_of_batter_user_ids = []
     list_of_pitcher_user_ids = []
@@ -355,17 +357,19 @@ def _build_event_stmt(filters, aliases, columns):
     return stmt
 
 
-def get_event_ids(args, limit=None):
+def get_event_ids(args, limit=None, default_game_limit=None):
     """Return a flat list of event IDs matching the given query args.
 
     Args:
         args: request.args (or any MultiDict with the same interface)
         limit: max events to return; None means no limit
+        default_game_limit: game cap applied when limit_games is absent, forwarded
+            to get_game_ids (None = resolve every matching game).
 
     Returns:
         List of event IDs matching the filters.
     """
-    parsed = _parse_event_args(args)
+    parsed = _parse_event_args(args, default_game_limit=default_game_limit)
     filters, aliases = _build_event_filters(parsed)
     stmt = _build_event_stmt(filters, aliases, [Event.id.label('event_id')])
     if limit is not None:
@@ -467,21 +471,36 @@ def endpoint_event():
 #         'Data': data
 #     }
 
+def _resolve_event_ids(args, default_game_limit=None):
+    """Resolve an events-based request to a list of event ids.
+
+    If explicit ``events`` ids are supplied they are validated (400 if any is
+    non-integer, 404 if any does not exist). Otherwise the game/event filters
+    are resolved via get_event_ids(), which honors limit_games (defaulting to
+    default_game_limit games when it is absent). Aborts with the matching 4xx
+    code on bad input; database errors are left to propagate rather than being
+    masked behind a misleading 408 "Invalid GameID".
+    """
+    explicit_events = args.getlist('events')
+    if explicit_events:
+        try:
+            event_ids = [int(event_id) for event_id in explicit_events]
+        except ValueError:
+            abort(400, description='Invalid event ID (must be an integer)')
+        found = db.session.execute(
+            select(Event.id).where(Event.id.in_(event_ids))
+        ).scalars().all()
+        if set(found) != set(event_ids):
+            abort(404, description='Provided Events not found')
+        return event_ids
+    return get_event_ids(args, default_game_limit=default_game_limit)
+
+
 @app.route('/landing_data/', methods = ['GET'])
 def endpoint_landing_data():
-    #Sanitize games params 
-    try:
-        list_of_event_ids = list() # Holds IDs for all the events we want data from
-        if (len(request.args.getlist('events')) != 0):
-            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
-            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
-            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
-                return abort(408, description='Provided Events not found')
-
-        else:
-            list_of_event_ids = get_event_ids(request.args)
-    except:
-        return abort(408, description='Invalid GameID')
+    # /landing_data/ pages through games, so it caps at the newest 50 games when
+    # limit_games is absent (keeping the per-event join bounded).
+    list_of_event_ids = _resolve_event_ids(request.args, default_game_limit=50)
 
     event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
 
@@ -569,19 +588,8 @@ def endpoint_landing_data():
 '''
 @app.route('/star_chances/', methods = ['GET'])
 def endpoint_star_chances():
-    #Sanitize games params 
-    try:
-        list_of_event_ids = list() # Holds IDs for all the events we want data from
-        if (len(request.args.getlist('events')) != 0):
-            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
-            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
-            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
-                return abort(408, description='Provided Events not found')
-
-        else:
-            list_of_event_ids = get_event_ids(request.args)
-    except:
-        return abort(408, description='Invalid GameID')
+    # Aggregate view: resolve every matching game by default (no 50-game cap).
+    list_of_event_ids = _resolve_event_ids(request.args)
 
     event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
 
@@ -716,7 +724,8 @@ def endpoint_detailed_stats():
         if missing_ids:
             return abort(404, description=f'Game IDs not found: {missing_ids}')
     else:
-        game_ids = set(get_game_ids(request.args, limit=None))
+        # Aggregate view: resolve every matching game by default (no 50-game cap).
+        game_ids = set(get_game_ids(request.args))
         if not game_ids:
             return abort(404, description='No games found for provided parameters')
 
