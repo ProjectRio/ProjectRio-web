@@ -171,17 +171,48 @@ def build_linescore_and_scoring_plays(game_innings, include_linescore, include_s
 
 
 
-def get_game_ids(args, limit=None):
+def parse_limit_games(args, default=None):
+    """Parse the ``limit_games`` query param into a row limit.
+
+    Returns:
+        - ``default`` when ``limit_games`` is absent
+        - ``None`` (no limit) for the falsy sentinels 'False'/'false'/'f'
+        - the integer value otherwise
+
+    Calls abort(400) on a non-integer value.
+    """
+    raw = args.get('limit_games')
+    if raw is None:
+        return default
+    #TODO - support truthy and falsy values more broadly (e.g., true/false, yes/no)
+    if raw in ('False', 'false', 'f'):
+        return None
+    try:
+        return int(raw)
+    except ValueError:
+        abort(400, f'Invalid limit_games: {raw}')
+
+
+def get_game_ids(args, default_limit=None):
     """Resolve filter args to an ordered list of game_ids.
+
+    ``limit_games`` is parsed here (via parse_limit_games) so that every caller
+    — the public /games/ endpoint and the internal event/stat endpoints alike —
+    honors it through one shared code path. (Previously the limit was parsed only
+    in endpoint_games(); internal callers passed a hardcoded limit and silently
+    dropped limit_games, which left /landing_data/ etc. resolving an entire tag.)
 
     Args:
         args: request.args (or any MultiDict with the same interface)
-        limit: max games to return; None means no limit
+        default_limit: cap applied when ``limit_games`` is absent. None means no
+            cap. /games/ passes 50; internal callers leave it at None.
 
     Returns:
         Ordered list of game_ids matching the filters (newest first).
         Calls abort(400) directly on invalid input.
     """
+    limit = parse_limit_games(args, default=default_limit)
+
     # === Resolve names -> ids (each set must fully resolve) ===
     include_tag_ids = resolve_names(
         args.getlist('tag'), Tag.id, Tag.name_lowercase,
@@ -339,20 +370,8 @@ def get_game_ids(args, limit=None):
 '''
 @app.route('/games/', methods=['GET'])
 def endpoint_games():
-    # Parse limit before delegating to get_game_ids
-    limit_games_param = request.args.get('limit_games')
-    if limit_games_param is None:
-        limit = 50
-    #TODO - support truthy and falsy values more broadly (e.g., true/false, yes/no)
-    elif limit_games_param in ('False', 'false', 'f'):
-        limit = None
-    else:
-        try:
-            limit = int(limit_games_param)
-        except ValueError:
-            abort(400, f'Invalid limit_games: {limit_games_param}')
-
-    ordered_game_ids = get_game_ids(request.args, limit=limit)
+    # /games/ caps at 50 games when limit_games is absent; get_game_ids parses it.
+    ordered_game_ids = get_game_ids(request.args, default_limit=50)
 
     include_linescore = (request.args.get('include_linescore') == '1')
     include_scoring_plays = (request.args.get('include_scoring_plays') == '1')

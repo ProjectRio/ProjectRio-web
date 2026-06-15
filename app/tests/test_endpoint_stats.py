@@ -240,8 +240,18 @@ class TestGroupingByGame:
         assert STAT_CATEGORIES <= set(stats[str(sample_game_id)].keys())
 
     def test_by_game_single_explicit_game_returns_1_game(self, server, base_url, sample_game_id):
-        # /stats/ ignores limit_games; use explicit games= to get a single game
+        # Explicit games= pins the result to exactly one game.
         r = server.get(f'{base_url}/stats/', params={'games': sample_game_id, 'by_game': '1'})
+        assert r.status_code == 200
+        assert len(r.json()['Stats']) == 1
+
+    def test_limit_games_1_resolves_a_single_game(self, server, base_url):
+        # Regression: limit_games was dropped on the /stats/ game-resolution path
+        # in v1.6.1. by_game nests one entry per resolved game, so limit_games=1
+        # must collapse the result to a single game.
+        r = server.get(f'{base_url}/stats/', params={
+            'tag': S13_TAG, 'limit_games': '1', 'by_game': '1',
+        })
         assert r.status_code == 200
         assert len(r.json()['Stats']) == 1
 

@@ -213,7 +213,8 @@ def _parse_event_args(args):
         if len(existing_ids) != len(list_of_game_ids):
             abort(404, description='Provided GameIDs not found')
     else:
-        list_of_game_ids = get_game_ids(args, limit=None)
+        # default_limit=None: no cap unless the caller passes limit_games.
+        list_of_game_ids = get_game_ids(args)
 
     list_of_batter_user_ids = []
     list_of_pitcher_user_ids = []
@@ -467,21 +468,33 @@ def endpoint_event():
 #         'Data': data
 #     }
 
+def _resolve_event_ids(args):
+    """Resolve an events-based request to a list of event ids.
+
+    If explicit ``events`` ids are supplied they are validated (400 if any is
+    non-integer, 404 if any does not exist). Otherwise the game/event filters
+    are resolved via get_event_ids(), which honors limit_games. Aborts with the
+    matching 4xx code on bad input; database errors are left to propagate rather
+    than being masked behind a misleading 408 "Invalid GameID".
+    """
+    explicit_events = args.getlist('events')
+    if explicit_events:
+        try:
+            event_ids = [int(event_id) for event_id in explicit_events]
+        except ValueError:
+            abort(400, description='Invalid event ID (must be an integer)')
+        found = db.session.execute(
+            select(Event.id).where(Event.id.in_(event_ids))
+        ).scalars().all()
+        if set(found) != set(event_ids):
+            abort(404, description='Provided Events not found')
+        return event_ids
+    return get_event_ids(args)
+
+
 @app.route('/landing_data/', methods = ['GET'])
 def endpoint_landing_data():
-    #Sanitize games params 
-    try:
-        list_of_event_ids = list() # Holds IDs for all the events we want data from
-        if (len(request.args.getlist('events')) != 0):
-            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
-            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
-            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
-                return abort(408, description='Provided Events not found')
-
-        else:
-            list_of_event_ids = get_event_ids(request.args)
-    except:
-        return abort(408, description='Invalid GameID')
+    list_of_event_ids = _resolve_event_ids(request.args)
 
     event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
 
@@ -569,19 +582,7 @@ def endpoint_landing_data():
 '''
 @app.route('/star_chances/', methods = ['GET'])
 def endpoint_star_chances():
-    #Sanitize games params 
-    try:
-        list_of_event_ids = list() # Holds IDs for all the events we want data from
-        if (len(request.args.getlist('events')) != 0):
-            list_of_event_ids = [int(game_id) for game_id in request.args.getlist('events')]
-            list_of_event_id_tuples = db.session.query(Event.id).filter(Event.id.in_(tuple(list_of_event_ids))).all()
-            if (len(list_of_event_id_tuples) != len(list_of_event_ids)):
-                return abort(408, description='Provided Events not found')
-
-        else:
-            list_of_event_ids = get_event_ids(request.args)
-    except:
-        return abort(408, description='Invalid GameID')
+    list_of_event_ids = _resolve_event_ids(request.args)
 
     event_id_string, event_empty = format_list_for_SQL(list_of_event_ids)
 
@@ -716,7 +717,8 @@ def endpoint_detailed_stats():
         if missing_ids:
             return abort(404, description=f'Game IDs not found: {missing_ids}')
     else:
-        game_ids = set(get_game_ids(request.args, limit=None))
+        # default_limit=None: no cap unless the caller passes limit_games.
+        game_ids = set(get_game_ids(request.args))
         if not game_ids:
             return abort(404, description='No games found for provided parameters')
 
