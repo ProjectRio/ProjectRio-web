@@ -6,6 +6,9 @@ Usage:
     # Run a benchmark and save results
     python scripts/bench_stats.py --base-url http://127.0.0.1:5000 --label main
 
+    # Run with recovery wait: if a scenario fails completely, wait 300s before next scenario
+    python scripts/bench_stats.py --base-url https://api.projectrio.app/ --label web_before --recovery-wait 300
+
     # Compare two saved result files
     python scripts/bench_stats.py --compare scripts/bench_results/20260607_120000_main.json \\
                                             scripts/bench_results/20260607_130000_optimized.json
@@ -67,7 +70,7 @@ def _timed_get(session, url, params):
     return r, (time.perf_counter() - t0) * 1000
 
 
-def run_scenario(session, base_url, name, path, params, warmup, runs):
+def run_scenario(session, base_url, name, path, params, warmup, runs, recovery_wait=None):
     url = base_url.rstrip('/') + path
     print(f"  {name:60s} ", end='', flush=True)
 
@@ -80,7 +83,8 @@ def run_scenario(session, base_url, name, path, params, warmup, runs):
     print(' | ', end='', flush=True)
 
     times, failures = [], 0
-    for _ in range(runs):
+    failed = False
+    for i in range(runs):
         try:
             r, ms = _timed_get(session, url, params)
             if r.status_code == 200:
@@ -89,9 +93,17 @@ def run_scenario(session, base_url, name, path, params, warmup, runs):
             else:
                 failures += 1
                 print('✗', end='', flush=True)
+                failed = True
         except Exception:
             failures += 1
             print('!', end='', flush=True)
+            failed = True
+
+        if failed and recovery_wait:
+            remaining = runs - i - 1
+            if remaining > 0:
+                print(f" (skipping {remaining} remaining)", end='', flush=True)
+            break
     print()
 
     result = {'name': name, 'params': params or {}, 'n_ok': len(times), 'n_fail': failures}
@@ -99,6 +111,15 @@ def run_scenario(session, base_url, name, path, params, warmup, runs):
         result.update(_stats(times))
     else:
         result['error'] = 'all_failed'
+
+    if failed and recovery_wait:
+        print(f"    Waiting {recovery_wait}s for server recovery...", end='', flush=True)
+        for i in range(recovery_wait):
+            time.sleep(1)
+            if (i + 1) % 10 == 0:
+                print(f" {i+1}s", end='', flush=True)
+        print(" done.")
+
     return result
 
 
@@ -107,7 +128,7 @@ def run_scenario(session, base_url, name, path, params, warmup, runs):
 # ---------------------------------------------------------------------------
 
 BENCH_USERNAME = 'MattGree'
-S13 = 'S13SuperstarsOff'
+S13 = 'S13SuperstarsOn'
 BOX_SCORE_GAME_ID = '73655420823'
 
 
@@ -244,6 +265,8 @@ def main():
                         help=f'Timed requests per scenario (default: {DEFAULT_RUNS})')
     parser.add_argument('--include-expensive', action='store_true',
                         help='Add pitcher_wins and runs_scored scenarios (slow on large datasets)')
+    parser.add_argument('--recovery-wait', type=int, default=None,
+                        help='If a scenario fails completely, wait N seconds before next scenario (skips remaining runs of failed scenario)')
     parser.add_argument('--compare', nargs=2, metavar=('FILE_A', 'FILE_B'),
                         help='Compare two saved result files instead of running a benchmark')
     args = parser.parse_args()
@@ -271,7 +294,7 @@ def main():
 
     print("Running:")
     results = [
-        run_scenario(session, args.base_url, name, path, params, args.warmup, args.runs)
+        run_scenario(session, args.base_url, name, path, params, args.warmup, args.runs, args.recovery_wait)
         for name, path, params in scenarios
     ]
 
