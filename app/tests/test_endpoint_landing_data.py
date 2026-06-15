@@ -110,6 +110,14 @@ class TestLimitGames:
         assert len(g3) <= 3
         assert len(g3) >= len(g1)
 
+    def test_default_no_limit_games_caps_at_50(self, server, base_url):
+        # The original timeout came from resolving an entire tag with no limit.
+        # With no limit_games, the request now resolves at most the newest 50
+        # games (the shared get_game_ids default), so it stays bounded.
+        r = server.get(f'{base_url}/landing_data/', params={'tag': S13_TAG})
+        assert r.status_code == 200
+        assert len(_distinct_game_ids(r.json()['Data'])) <= 50
+
 
 # ---------------------------------------------------------------------------
 # Explicit events filter

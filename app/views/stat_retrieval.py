@@ -213,7 +213,7 @@ def _parse_event_args(args):
         if len(existing_ids) != len(list_of_game_ids):
             abort(404, description='Provided GameIDs not found')
     else:
-        # default_limit=None: no cap unless the caller passes limit_games.
+        # get_game_ids defaults to the newest 50 games unless limit_games is set.
         list_of_game_ids = get_game_ids(args)
 
     list_of_batter_user_ids = []
@@ -717,7 +717,7 @@ def endpoint_detailed_stats():
         if missing_ids:
             return abort(404, description=f'Game IDs not found: {missing_ids}')
     else:
-        # default_limit=None: no cap unless the caller passes limit_games.
+        # get_game_ids defaults to the newest 50 games unless limit_games is set.
         game_ids = set(get_game_ids(request.args))
         if not game_ids:
             return abort(404, description='No games found for provided parameters')

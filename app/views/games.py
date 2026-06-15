@@ -193,7 +193,7 @@ def parse_limit_games(args, default=None):
         abort(400, f'Invalid limit_games: {raw}')
 
 
-def get_game_ids(args, default_limit=None):
+def get_game_ids(args, default_limit=50):
     """Resolve filter args to an ordered list of game_ids.
 
     ``limit_games`` is parsed here (via parse_limit_games) so that every caller
@@ -204,8 +204,11 @@ def get_game_ids(args, default_limit=None):
 
     Args:
         args: request.args (or any MultiDict with the same interface)
-        default_limit: cap applied when ``limit_games`` is absent. None means no
-            cap. /games/ passes 50; internal callers leave it at None.
+        default_limit: cap applied when ``limit_games`` is absent. Defaults to 50
+            (the newest 50 games) so no endpoint resolves an entire tag by
+            accident. Pass None for no default cap. An explicit limit_games is
+            always honored with no ceiling — limit_games=False returns every
+            matching game and limit_games=N returns N.
 
     Returns:
         Ordered list of game_ids matching the filters (newest first).
@@ -370,8 +373,8 @@ def get_game_ids(args, default_limit=None):
 '''
 @app.route('/games/', methods=['GET'])
 def endpoint_games():
-    # /games/ caps at 50 games when limit_games is absent; get_game_ids parses it.
-    ordered_game_ids = get_game_ids(request.args, default_limit=50)
+    # get_game_ids parses limit_games and defaults to the newest 50 games.
+    ordered_game_ids = get_game_ids(request.args)
 
     include_linescore = (request.args.get('include_linescore') == '1')
     include_scoring_plays = (request.args.get('include_scoring_plays') == '1')
