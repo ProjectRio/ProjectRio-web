@@ -122,13 +122,14 @@ def get_group_member():
     if not user_group:
         return abort(409, description='UserGroup does not exist.')
 
-    # Get UserGroupUser user_ids
+    # Get the RioUsers in the group (querying RioUser, not UserGroup — the
+    # previous version returned UserGroup rows which have no .username)
     users = db.session.query(
-        UserGroup
-    ).join(
-        UserGroupUser
-    ).join(
         RioUser
+    ).join(
+        UserGroupUser, RioUser.id == UserGroupUser.user_id
+    ).join(
+        UserGroup, UserGroupUser.user_group_id == UserGroup.id
     ).filter(
         UserGroup.name_lowercase == in_group_name_lower
     ).all()
