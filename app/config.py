@@ -23,7 +23,9 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 # JWT CONFIG
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
-JWT_TOKEN_LOCATION = os.getenv("JWT_TOKEN_LOCATION")
+# Accept JWTs from the Authorization header as well as cookies. The env var
+# (comma-separated, e.g. "cookies" or "headers,cookies") still overrides.
+JWT_TOKEN_LOCATION = [loc.strip() for loc in os.getenv("JWT_TOKEN_LOCATION", "headers,cookies").split(",") if loc.strip()]
 JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE")
 JWT_COOKIE_CSRF_PROTECT = True
 JWT_ACCESS_TOKEN_EXPIRES = timedelta(weeks=2)

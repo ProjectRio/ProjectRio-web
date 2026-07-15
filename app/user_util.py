@@ -2,7 +2,7 @@ from .models import db, RioUser, ApiKey, CommunityUser, UserIpAddress
 from .util import lower_and_remove_nonalphanumeric
 from sqlalchemy import select
 import time
-from flask_jwt_extended import jwt_required, get_jwt_identity
+from flask_jwt_extended import jwt_required, get_jwt_identity, verify_jwt_in_request
 from flask_jwt_extended import create_access_token, set_access_cookies, jwt_required, get_jwt_identity, get_jwt, unset_jwt_cookies
 
 def get_user(request):
@@ -59,7 +59,14 @@ def get_user(request):
     return user
   
   #JWT
-  current_user_username = get_jwt_identity()
+  # Verify here (optional=True) so JWT auth works even on routes that are not
+  # decorated with @jwt_required — e.g. the user_group endpoints that only use
+  # @api_key_check. Without this, get_jwt_identity() raises on those routes.
+  try:
+    verify_jwt_in_request(optional=True)
+    current_user_username = get_jwt_identity()
+  except Exception:
+    current_user_username = None
   if current_user_username:
     user = RioUser.query.filter_by(username=current_user_username).first()
     return user

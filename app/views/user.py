@@ -242,27 +242,26 @@ def login():
     # filter User out of database through email
     user = RioUser.query.filter_by(email=in_email).first()
 
+    # Same response whether the email is unknown or the password is wrong, so
+    # the endpoint cannot be used to probe which emails have accounts.
+    if not user or not bc.check_password_hash(user.password, in_password):
+        return abort(401, description='Incorrect email or password')
+
     if not user.verified:
-        abort(401, description='Please verify your account before logging in')
+        return abort(401, description='Please verify your account before logging in')
 
-    if user:
-        if bc.check_password_hash(user.password, in_password):
-            # Creating JWT and Cookies
-            access_token = create_access_token(identity=user.username)
-            
-            response = jsonify({
-                'msg': 'login successful',
-                'username': user.username,
-                'access_token': access_token
-            })
-            
-            set_access_cookies(response, access_token)
+    # Creating JWT and Cookies
+    access_token = create_access_token(identity=user.username)
 
-            return response
-        else:
-            return abort(401, description='Incorrect password')
-    else:
-        return abort(408, description='Incorrect Username or Password')
+    response = jsonify({
+        'msg': 'login successful',
+        'username': user.username,
+        'access_token': access_token
+    })
+
+    set_access_cookies(response, access_token)
+
+    return response
 
 @app.route('/logout/', methods=['GET'])
 @jwt_required()
