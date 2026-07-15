@@ -1,6 +1,6 @@
 from flask import request, abort
 from flask import current_app as app
-from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, Runner, GameHistory, tagsettag
+from ..models import db, RioUser, Character, Game, CharacterGameSummary, Tag, Event, Runner, GameHistory, tagsettag, PitchSummary, ContactSummary, FieldingSummary
 from ..util import *
 from ..utils.db_helpers import resolve_names
 from sqlalchemy import select, func, or_, and_
@@ -481,3 +481,217 @@ def endpoint_games():
         games.append(game_dict)
 
     return {'games': games}
+
+
+def _cgs_ref(cgs):
+    # Compact reference to a character-in-game; usernames are resolvable on the
+    # client from team_id + the /games/ payload, so they are not repeated here.
+    if cgs is None:
+        return None
+    return {
+        'char_id': cgs.char_id,
+        'team_id': cgs.team_id,
+        'roster_loc': cgs.roster_loc,
+        'captain': cgs.captain,
+        'superstar': cgs.superstar,
+        'batting_hand': cgs.batting_hand,
+        'fielding_hand': cgs.fielding_hand,
+    }
+
+
+def _pitch_dict(pitch):
+    if pitch is None:
+        return None
+    return {
+        'pitch_type': pitch.pitch_type,
+        'charge_pitch_type': pitch.charge_pitch_type,
+        'star_pitch': pitch.star_pitch,
+        'pitch_speed': pitch.pitch_speed,
+        'd_ball': pitch.d_ball,
+        'ball_position_strikezone': pitch.ball_position_strikezone,
+        'in_strikezone': pitch.in_strikezone,
+        'type_of_swing': pitch.type_of_swing,
+        'bat_x_contact_pos': pitch.bat_x_contact_pos,
+        'bat_z_contact_pos': pitch.bat_z_contact_pos,
+    }
+
+
+def _contact_dict(contact):
+    if contact is None:
+        return None
+    return {
+        'type_of_contact': contact.type_of_contact,
+        'charge_power_up': contact.charge_power_up,
+        'charge_power_down': contact.charge_power_down,
+        'star_swing_five_star': contact.star_swing_five_star,
+        'input_direction': contact.input_direction,
+        'input_direction_stick': contact.input_direction_stick,
+        'frame_of_swing_upon_contact': contact.frame_of_swing_upon_contact,
+        'ball_power': contact.ball_power,
+        # populate_db historically wrote the stat file's Vert Angle into
+        # ball_horiz_angle and Horiz Angle into ball_vert_angle. Emit them
+        # under their true meanings so clients never inherit the swap.
+        'ball_vert_angle': contact.ball_horiz_angle,
+        'ball_horiz_angle': contact.ball_vert_angle,
+        'contact_absolute': contact.contact_absolute,
+        'contact_quality': contact.contact_quality,
+        'rng1': contact.rng1,
+        'rng2': contact.rng2,
+        'rng3': contact.rng3,
+        'ball_x_velocity': contact.ball_x_velocity,
+        'ball_y_velocity': contact.ball_y_velocity,
+        'ball_z_velocity': contact.ball_z_velocity,
+        'ball_x_contact_pos': contact.ball_x_contact_pos,
+        'ball_z_contact_pos': contact.ball_z_contact_pos,
+        'ball_x_landing_pos': contact.ball_x_landing_pos,
+        'ball_y_landing_pos': contact.ball_y_landing_pos,
+        'ball_z_landing_pos': contact.ball_z_landing_pos,
+        'ball_max_height': contact.ball_max_height,
+        'ball_hang_time': contact.ball_hang_time,
+        'primary_result': contact.primary_result,
+        'secondary_result': contact.secondary_result,
+    }
+
+
+def _fielding_dict(fielding, fielder_cgs):
+    if fielding is None:
+        return None
+    return {
+        'fielder': _cgs_ref(fielder_cgs),
+        'position': fielding.position,
+        'action': fielding.action,
+        'jump': fielding.jump,
+        'bobble': fielding.bobble,
+        'swap': fielding.swap,
+        'manual_select': fielding.manual_select,
+        'fielder_x_pos': fielding.fielder_x_pos,
+        'fielder_y_pos': fielding.fielder_y_pos,
+        'fielder_z_pos': fielding.fielder_z_pos,
+    }
+
+
+'''
+@ Description: Full per-pitch event detail for a single game — the data source
+    for at-bat-by-at-bat views and the hit visualizer. Each entry is one event
+    (pitch or star-chance action) in event_num order, carrying the complete
+    game state plus nested pitch / contact / fielding summaries and runners.
+
+@ Params:
+    - game_id - (required) the game to fetch events for
+
+@ Output:
+    - {'game_id': int, 'events': [event, ...]} where event contains inning,
+      half_inning, balls/strikes/outs, scores, stars, chemistry, stamina,
+      batter/pitcher/catcher refs (char_id, team, roster slot, hands),
+      result_of_ab / result_rbi / result_num_of_outs, runners (batter + bases),
+      and nested pitch{ contact{ fielding } } detail when present.
+
+@ URL example: http://127.0.0.1:5000/games/events/?game_id=1
+'''
+@app.route('/games/events/', methods=['GET'])
+def endpoint_game_events():
+    game_id_raw = request.args.get('game_id')
+    if game_id_raw is None:
+        abort(400, description='game_id is required')
+    try:
+        game_id = int(game_id_raw)
+    except ValueError:
+        abort(400, description='game_id must be an integer')
+
+    if db.session.get(Game, game_id) is None:
+        abort(404, description='Game not found')
+
+    batter_cgs = aliased(CharacterGameSummary)
+    pitcher_cgs = aliased(CharacterGameSummary)
+    catcher_cgs = aliased(CharacterGameSummary)
+    fielder_cgs = aliased(CharacterGameSummary)
+
+    rows = db.session.execute(
+        select(Event, PitchSummary, ContactSummary, FieldingSummary,
+               batter_cgs, pitcher_cgs, catcher_cgs, fielder_cgs)
+        .select_from(Event)
+        .outerjoin(PitchSummary, Event.pitch_summary_id == PitchSummary.id)
+        .outerjoin(ContactSummary, PitchSummary.contact_summary_id == ContactSummary.id)
+        .outerjoin(FieldingSummary, ContactSummary.fielding_summary_id == FieldingSummary.id)
+        .join(batter_cgs, Event.batter_id == batter_cgs.id)
+        .join(pitcher_cgs, Event.pitcher_id == pitcher_cgs.id)
+        .join(catcher_cgs, Event.catcher_id == catcher_cgs.id)
+        .outerjoin(fielder_cgs, FieldingSummary.fielder_character_game_summary_id == fielder_cgs.id)
+        .where(Event.game_id == game_id)
+        .order_by(Event.event_num)
+    ).all()
+
+    # Batch-resolve every runner referenced by these events (batter + on-base).
+    runner_ids = set()
+    for row in rows:
+        event = row[0]
+        for rid in (event.runner_on_0, event.runner_on_1, event.runner_on_2, event.runner_on_3):
+            if rid is not None:
+                runner_ids.add(rid)
+
+    runner_lookup = {}
+    if runner_ids:
+        runner_rows = db.session.execute(
+            select(
+                Runner.id,
+                Runner.initial_base,
+                Runner.result_base,
+                Runner.out_type,
+                Runner.out_location,
+                Runner.steal,
+                CharacterGameSummary.char_id,
+                CharacterGameSummary.roster_loc,
+            )
+            .join(CharacterGameSummary, Runner.runner_character_game_summary_id == CharacterGameSummary.id)
+            .where(Runner.id.in_(runner_ids))
+        ).all()
+        for r in runner_rows:
+            runner_lookup[r.id] = {
+                'char_id': r.char_id,
+                'roster_loc': r.roster_loc,
+                'initial_base': r.initial_base,
+                'result_base': r.result_base,
+                'out_type': r.out_type,
+                'out_location': r.out_location,
+                'steal': r.steal,
+            }
+
+    events = []
+    for event, pitch, contact, fielding, batter, pitcher, catcher, fielder in rows:
+        pitch_dict = _pitch_dict(pitch)
+        if pitch_dict is not None:
+            contact_dict = _contact_dict(contact)
+            if contact_dict is not None:
+                contact_dict['fielding'] = _fielding_dict(fielding, fielder)
+            pitch_dict['contact'] = contact_dict
+
+        events.append({
+            'event_num': event.event_num,
+            'inning': event.inning,
+            'half_inning': event.half_inning,
+            'away_score': event.away_score,
+            'home_score': event.home_score,
+            'balls': event.balls,
+            'strikes': event.strikes,
+            'outs': event.outs,
+            'chem_links_ob': event.chem_links_ob,
+            'star_chance': event.star_chance,
+            'away_stars': event.away_stars,
+            'home_stars': event.home_stars,
+            'pitcher_stamina': event.pitcher_stamina,
+            'result_num_of_outs': event.result_num_of_outs,
+            'result_rbi': event.result_rbi,
+            'result_of_ab': event.result_of_ab,
+            'batter': _cgs_ref(batter),
+            'pitcher': _cgs_ref(pitcher),
+            'catcher': _cgs_ref(catcher),
+            'runners': {
+                'batter': runner_lookup.get(event.runner_on_0),
+                'first': runner_lookup.get(event.runner_on_1),
+                'second': runner_lookup.get(event.runner_on_2),
+                'third': runner_lookup.get(event.runner_on_3),
+            },
+            'pitch': pitch_dict,
+        })
+
+    return {'game_id': game_id, 'events': events}
