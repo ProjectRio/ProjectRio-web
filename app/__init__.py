@@ -64,12 +64,22 @@ def init_app():
         from .views import reverify_emails
         from .views import db_manage
         from .views import status
+        from .views import season_stats
+        from . import season_metrics_db
         # from .views import log
 
         # Create a cron trigger for running every minute
         min_trigger = CronTrigger(year="*", month="*", day="*", hour="*", minute="*", second="0")
         # Process games every minute on the minute
         sched.add_job(populate_db.process_all_games_job, trigger=min_trigger, args=[app])
+
+        # Recompute per-season advanced percentiles twice a day, off-peak. The
+        # job is guarded by a Postgres advisory lock: the scheduler runs in one
+        # process today, but a multi-worker WSGI server would start one per
+        # worker and they would otherwise overlap.
+        season_trigger = CronTrigger(year="*", month="*", day="*", hour="4,16", minute="0", second="0")
+        sched.add_job(season_metrics_db.refresh_season_metrics_job, trigger=season_trigger, args=[app])
+
         sched.start()
             
         #create sql tables for data models

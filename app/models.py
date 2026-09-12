@@ -846,3 +846,69 @@ class UserIpAddress(db.Model):
         self.ip_address = ip_address
         self.use_count = 0
         self.last_use_date = int(time.time())
+
+class SeasonMetric(db.Model):
+    '''One computed metric for one user in one tag set (season).
+
+    Stored long rather than wide -- one row per metric instead of one row per
+    user with a column each. The metric set has changed repeatedly during
+    design; long form makes adding or removing one a data change instead of a
+    migration. It also holds the mixed shapes honestly: rate metrics carry a
+    numerator and denominator, gen_adjusted_elo and gen_games_played do not.
+
+    percentile is NULL when qualified is False, which means "did not meet the
+    floor", not "not computed yet" -- an absent row means the latter.
+
+    pool_size is the denominator behind percentile: how many players qualified
+    for this metric in this season, i.e. how many the rank was taken over. It
+    is stored rather than counted at read time so it stays pinned to the same
+    computed_at as the percentile it explains. NULL when qualified is False.
+    '''
+    __table_args__ = (
+        # One row per (season, user, metric). Also the upsert conflict target.
+        db.UniqueConstraint('tag_set_id', 'user_id', 'metric',
+                            name='uq_season_metric_tagset_user_metric'),
+        # Leaderboard read: one metric in one season, ordered by percentile.
+        db.Index('ix_season_metric_board', 'tag_set_id', 'metric', 'percentile'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('rio_user.id'), nullable=False, index=True)
+    metric = db.Column(db.String(40), nullable=False)
+
+    value = db.Column(db.Float)          # the rate, rating, or count
+    percentile = db.Column(db.Float)     # 0-100, 100 always best. NULL if not qualified
+    pool_size = db.Column(db.Integer)    # players ranked against. NULL if not qualified
+    numerator = db.Column(db.Integer)    # NULL for gen_* metrics
+    denominator = db.Column(db.Integer)  # NULL for gen_* metrics
+    qualified = db.Column(db.Boolean, nullable=False)
+    computed_at = db.Column(db.Integer, nullable=False)
+
+    tag_set = db.relationship('TagSet', backref='season_metrics')
+    user = db.relationship('RioUser', backref='season_metrics')
+
+    def __init__(self, in_tag_set_id, in_user_id, in_metric, in_value, in_percentile,
+                 in_pool_size, in_numerator, in_denominator, in_qualified):
+        self.tag_set_id = in_tag_set_id
+        self.user_id = in_user_id
+        self.metric = in_metric
+        self.value = in_value
+        self.percentile = in_percentile
+        self.pool_size = in_pool_size
+        self.numerator = in_numerator
+        self.denominator = in_denominator
+        self.qualified = in_qualified
+        self.computed_at = int( time.time() )
+
+    def to_dict(self):
+        return {
+            'metric': self.metric,
+            'value': self.value,
+            'percentile': self.percentile,
+            'pool_size': self.pool_size,
+            'numerator': self.numerator,
+            'denominator': self.denominator,
+            'qualified': self.qualified,
+            'computed_at': self.computed_at,
+        }
