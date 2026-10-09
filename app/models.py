@@ -846,3 +846,123 @@ class UserIpAddress(db.Model):
         self.ip_address = ip_address
         self.use_count = 0
         self.last_use_date = int(time.time())
+
+class CompetitionProfile(db.Model):
+    '''What a competition (tag set) is, and what its games count toward.
+
+    One row per tag set. category names the rules played (stars off, stars on,
+    big balla, hazards, other); the q_ flags say whether its games are good data
+    for each kind of calculation (definitions in competition_profile.py). status
+    is 'reviewed' (an admin decided), 'auto' (continues a reviewed series and
+    copied its decisions) or 'pending' (not decided; every flag off).
+
+    competition repeats tag_set.name so the table reads on its own; the nightly
+    job keeps it in step when a tag set is renamed. Rows are created by that job
+    (from app/data/competition_profile_seed.csv, then for each new tag set) and
+    changed by admins through /competition_profile/update/.
+
+    No relationship() to TagSet on purpose: the row goes with its tag set through
+    ON DELETE CASCADE, which an ORM relationship would try to null out first.
+    '''
+    __tablename__ = 'competition_profile'
+    __table_args__ = (
+        db.CheckConstraint("category IN ('stars off', 'stars on', 'big balla', 'hazards', 'other')",
+                           name='ck_competition_profile_category'),
+        db.CheckConstraint("type IN ('Season', 'League', 'Tournament', 'Exhibition')",
+                           name='ck_competition_profile_type'),
+        db.CheckConstraint("status IN ('pending', 'auto', 'reviewed')",
+                           name='ck_competition_profile_status'),
+    )
+
+    tag_set_id = db.Column(db.Integer, db.ForeignKey('tag_set.id', ondelete='CASCADE'), primary_key=True)
+    competition = db.Column(db.String(100), nullable=False)
+    category = db.Column(db.String(16), nullable=False)
+    type = db.Column(db.String(16), nullable=False)
+    q_ranked = db.Column(db.Boolean, nullable=False, default=False)
+    q_league_stats = db.Column(db.Boolean, nullable=False, default=False)
+    q_player_stats = db.Column(db.Boolean, nullable=False, default=False)
+    q_character_stats = db.Column(db.Boolean, nullable=False, default=False)
+    q_pick_rates = db.Column(db.Boolean, nullable=False, default=False)
+    status = db.Column(db.String(16), nullable=False, default='pending')
+    note = db.Column(db.String(500))
+    updated_at = db.Column(db.Integer, nullable=False)
+    updated_by = db.Column(db.Integer, db.ForeignKey('rio_user.id', ondelete='SET NULL'), nullable=True)
+
+    def to_dict(self):
+        return {
+            'tag_set_id': self.tag_set_id,
+            'competition': self.competition,
+            'category': self.category,
+            'type': self.type,
+            'q_ranked': self.q_ranked,
+            'q_league_stats': self.q_league_stats,
+            'q_player_stats': self.q_player_stats,
+            'q_character_stats': self.q_character_stats,
+            'q_pick_rates': self.q_pick_rates,
+            'status': self.status,
+            'note': self.note,
+            'updated_at': self.updated_at,
+        }
+
+class Re24Game(db.Model):
+    '''Ledger of the games the RE24 job has read: one row per game, written once.
+
+    The job reads only games missing from here, so a night's work is that day's
+    games however late they were uploaded, and a missed night heals itself.
+    complete is False for a game whose pitch log stops early; it is recorded so
+    it isn't re-read every night, and contributes no re24_game_state rows.
+
+    pitches is how many events the job read. populate_db commits a game's row
+    before its events, one event at a time, so a game read mid-ingestion would
+    look cut off; the job re-reads any game it first read in the last two days
+    whose event count has since changed.
+    '''
+    __tablename__ = 're24_game'
+
+    game_id = db.Column(db.BigInteger, db.ForeignKey('game.game_id', ondelete='CASCADE'), primary_key=True)
+    complete = db.Column(db.Boolean, nullable=False)
+    pitches = db.Column(db.Integer, nullable=False)
+    processed_at = db.Column(db.Integer, nullable=False, index=True)
+
+class Re24GameState(db.Model):
+    '''One game's RE24 observations in one base-out state: how many pitches were
+    thrown in it (innings 1-8) and how many runs the batting team scored from
+    them to the end of their half-innings. About 16 rows per game.
+
+    Stored per game rather than summed per competition so that re-sorting a
+    competition, moving a game between competitions or deleting one never needs
+    the event table again. runners: 1st = 1, 2nd = 2, 3rd = 4, added (0-7).
+    '''
+    __tablename__ = 're24_game_state'
+
+    game_id = db.Column(db.BigInteger, db.ForeignKey('re24_game.game_id', ondelete='CASCADE'), primary_key=True)
+    outs = db.Column(db.Integer, primary_key=True)
+    runners = db.Column(db.Integer, primary_key=True)
+    pitches = db.Column(db.Integer, nullable=False)
+    runs = db.Column(db.Integer, nullable=False)
+
+class Re24(db.Model):
+    '''RE24: average runs scored from each base-out state to the end of the
+    half-inning, per game type. Rebuilt from re24_game_state by the nightly job
+    (and after an admin re-sorts a competition) using the games of competitions
+    whose category is a game type and whose q_league_stats is on.
+
+    xruns is stored to 4 decimals (show 2); pitches is the sample behind it.
+    '''
+    __tablename__ = 're24'
+
+    gametype = db.Column(db.String(16), primary_key=True)
+    outs = db.Column(db.Integer, primary_key=True)
+    runners = db.Column(db.Integer, primary_key=True)
+    xruns = db.Column(db.Numeric(6, 4), nullable=False)
+    pitches = db.Column(db.Integer, nullable=False)
+    computed_at = db.Column(db.Integer, nullable=False)
+
+    def to_dict(self):
+        return {
+            'gametype': self.gametype,
+            'outs': self.outs,
+            'runners': self.runners,
+            'xruns': float(self.xruns),
+            'pitches': self.pitches,
+        }

@@ -64,12 +64,21 @@ def init_app():
         from .views import reverify_emails
         from .views import db_manage
         from .views import status
+        from .views import competition_profile
+        from .views import re24
+        from . import re24_db
         # from .views import log
 
         # Create a cron trigger for running every minute
         min_trigger = CronTrigger(year="*", month="*", day="*", hour="*", minute="*", second="0")
         # Process games every minute on the minute
         sched.add_job(populate_db.process_all_games_job, trigger=min_trigger, args=[app])
+
+        # Sort new competitions and bring RE24 up to date once a night, off-peak.
+        # Reads only games it hasn't read before, then rebuilds the table from
+        # stored per-game rows. Guarded by a Postgres advisory lock (re24_db).
+        re24_trigger = CronTrigger(year="*", month="*", day="*", hour="4", minute="30", second="0")
+        sched.add_job(re24_db.refresh_re24_job, trigger=re24_trigger, args=[app], id='re24_nightly')
         sched.start()
             
         #create sql tables for data models
