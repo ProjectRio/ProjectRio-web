@@ -1116,7 +1116,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, activ
     fielding_query = (
         select(
             *select_cols,
-            func.count(case((FieldingSummary.action == 1, 1))).label('jump_catches'),
+            func.count(case((FieldingSummary.jump == 1, 1))).label('jump_catches'),
             func.count(case((FieldingSummary.action == 2, 1))).label('diving_catches'),
             func.count(case((FieldingSummary.action == 3, 1))).label('wall_jumps'),
             func.sum(case((FieldingSummary.swap == True, 1), else_=0)).label('swap_successes'),
