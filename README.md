@@ -337,6 +337,7 @@ Please read the [FAQ](#faq) before using the Api.
 		"rng2": 5490.0,
 		"rng3": 142.0,
 		"stadium": 0,
+		"star_swing_five_star": 0,
 		"stick_input": 1,
 		"tag_set": 42,
 		"type_of_contact": 4,
@@ -351,6 +352,8 @@ Please read the [FAQ](#faq) before using the Api.
 This endpoint returns data from events where contact with the ball is made. The data supplied in this endpoint includes all needed data to fully recreate the hit, as well as supplying data on the landing spot of the hit and the fielder who fielded it.
 
 Like `type_of_swing` and `pitch_type`, the `fielder_action`, `stadium` and `tag_set` fields are raw integer codes. `stadium` and `tag_set` are only included when `include_game_info=1` is passed; `tag_set` is `null` for games that have no tag set.
+
+`star_swing_five_star` is 0 for no Moonshot, 1 for a Moonshot, or 2 for a failed Moonshot attempt. Games played before Rio 2.3.0 recorded failed attempts as 0.
 
 ### <u>Parameters</u>
 - **Game params**:     Params for /games/ (tags/users/date/etc)

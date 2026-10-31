@@ -558,6 +558,7 @@ def endpoint_landing_data():
         'contact.input_direction_stick AS stick_input, \n'
         'contact.charge_power_up AS charge_power_up, \n'
         'contact.charge_power_down AS charge_power_down, \n'
+        'contact.star_swing_five_star AS star_swing_five_star, \n'
         'contact.frame_of_swing_upon_contact AS frame_of_swing, \n'
         'pitch.pitch_type, \n'
         'pitch.charge_pitch_type, \n'

@@ -85,6 +85,10 @@ class TestResponseShape:
             assert expected <= set(row.keys()), f'Missing {expected - set(row.keys())}'
             assert 0 <= row['batter_team_stars'] <= 5
 
+    def test_rows_carry_five_star_field(self, server, base_url, sample_landing_data):
+        for row in sample_landing_data:
+            assert row['star_swing_five_star'] in (0, 1, 2)
+
     def test_stadium_and_tag_set_omitted_by_default(self, server, base_url, sample_landing_data):
         for row in sample_landing_data:
             assert not ({'stadium', 'tag_set'} & set(row.keys()))
