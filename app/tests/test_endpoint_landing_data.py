@@ -78,6 +78,32 @@ class TestResponseShape:
         for row in sample_landing_data:
             assert expected <= set(row.keys()), f'Missing {expected - set(row.keys())}'
 
+    def test_rows_carry_superstar_star_and_fielder_fields(self, server, base_url, sample_landing_data):
+        expected = {'batter_superstar', 'pitcher_superstar', 'batter_team_stars',
+                    'fielder_action', 'fielder_jump', 'pitcher_stamina'}
+        for row in sample_landing_data:
+            assert expected <= set(row.keys()), f'Missing {expected - set(row.keys())}'
+            assert 0 <= row['batter_team_stars'] <= 5
+
+    def test_rows_carry_five_star_field(self, server, base_url, sample_landing_data):
+        for row in sample_landing_data:
+            assert row['star_swing_five_star'] in (0, 1, 2)
+
+    def test_stadium_and_tag_set_omitted_by_default(self, server, base_url, sample_landing_data):
+        for row in sample_landing_data:
+            assert not ({'stadium', 'tag_set'} & set(row.keys()))
+
+    def test_include_game_info_adds_stadium_and_tag_set(self, server, base_url):
+        r = server.get(f'{base_url}/landing_data/', params={
+            'tag': S13_TAG, 'limit_games': '1', 'include_game_info': '1',
+        })
+        assert r.status_code == 200
+        data = r.json().get('Data', [])
+        assert data
+        for row in data:
+            assert {'stadium', 'tag_set'} <= set(row.keys())
+            assert row['tag_set'] is not None  # S13 games are ranked, so they have game_history
+
     def test_empty_filters_with_no_matching_events_returns_empty(self, server, base_url, sample_game):
         # inning=49 is valid (cMAX_INNING=50) but virtually never occurs → empty result
         r = server.get(f'{base_url}/landing_data/', params={

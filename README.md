@@ -302,15 +302,21 @@ Please read the [FAQ](#faq) before using the Api.
 		"ball_z_contact_pos": 1.7,
 		"ball_z_landing_pos": 34.0878,
 		"ball_z_velocity": 0.31422,
+		"bat_x_contact_pos": -0.0872,
+		"bat_z_contact_pos": 1.6503,
 		"batter_char_id": 15,
+		"batter_superstar": false,
+		"batter_team_stars": 3,
 		"batter_username": "MattGree",
 		"batting_hand": true,
+		"charge_pitch_type": 0,
 		"charge_power_down": 0.0,
 		"charge_power_up": 0.0,
 		"chem_links_ob": 0,
 		"contact_absolute": 200.0,
 		"contact_quality": 0.0,
 		"event_num": 2,
+		"fielder_action": 0,
 		"fielder_char_id": 2,
 		"fielder_jump": 0,
 		"fielder_position": 5,
@@ -322,12 +328,18 @@ Please read the [FAQ](#faq) before using the Api.
 		"frame_of_swing": 7,
 		"game_id": 155514857267,
 		"manual_select_state": 0,
+		"pitch_type": 1,
 		"pitcher_char_id": 28,
+		"pitcher_stamina": 9,
+		"pitcher_superstar": false,
 		"pitcher_username": "duckydonne",
 		"rng1": 13017.0,
 		"rng2": 5490.0,
 		"rng3": 142.0,
+		"stadium": 0,
+		"star_swing_five_star": 0,
 		"stick_input": 1,
+		"tag_set": 42,
 		"type_of_contact": 4,
 		"type_of_swing": 1
 		}
@@ -337,11 +349,16 @@ Please read the [FAQ](#faq) before using the Api.
 
 ### <u>Usage</u>
 
-`/landing_data/` does not have any unique parameters like `/plate_data/`. This endpoint returns data from events where contact with the ball is made. The data supplied in this endpoint includes all needed data to fully recreate the hit, as well as supplying data on the landing spot of the hit and the fielder who fielded it.
+This endpoint returns data from events where contact with the ball is made. The data supplied in this endpoint includes all needed data to fully recreate the hit, as well as supplying data on the landing spot of the hit and the fielder who fielded it.
+
+Like `type_of_swing` and `pitch_type`, the `fielder_action`, `stadium` and `tag_set` fields are raw integer codes. `stadium` and `tag_set` are only included when `include_game_info=1` is passed; `tag_set` is `null` for games that have no tag set.
+
+`star_swing_five_star` is 0 for no Moonshot, 1 for a Moonshot, or 2 for a failed Moonshot attempt. Games played before Rio 2.3.0 recorded failed attempts as 0.
 
 ### <u>Parameters</u>
 - **Game params**:     Params for /games/ (tags/users/date/etc)
 - **Event params**:    Params for /events/ (swing_type/inning/)
+- **include_game_info**: [0-1], 1 adds the game's `stadium` and `tag_set` to each row
 
 ## Star Chances
 ```

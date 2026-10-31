@@ -507,14 +507,31 @@ def endpoint_landing_data():
     if event_empty:
         return {}
 
+    # Stadium and tag set need the game/game_history joins, so they are opt-in.
+    game_info_select = ''
+    game_info_join = ''
+    if request.args.get('include_game_info') == '1':
+        game_info_select = (
+            ', game.stadium_id AS stadium, \n'
+            'game_history.tag_set_id AS tag_set \n'
+        )
+        game_info_join = (
+            'JOIN game ON event.game_id = game.game_id \n'
+            'LEFT JOIN game_history ON event.game_id = game_history.game_id \n'      #Left join for games without a tag set
+        )
+
     query = (
         'SELECT \n'
         'event.game_id AS game_id, \n'
         'event.event_num AS event_num, \n'
         'event.result_of_ab AS final_result, \n'
         'event.chem_links_ob AS chem_links_ob, \n'
+        'event.pitcher_stamina AS pitcher_stamina, \n'
+        'CASE WHEN event.half_inning = 0 THEN event.away_stars ELSE event.home_stars END AS batter_team_stars, \n'
         'batter.char_id AS batter_char_id, \n'
         'pitcher.char_id AS pitcher_char_id, \n'
+        'batter.superstar AS batter_superstar, \n'
+        'pitcher.superstar AS pitcher_superstar, \n'
         'fielder.char_id AS fielder_char_id, \n'
         'pitcher_user.username AS pitcher_username, \n'
         'batter_user.username AS batter_username, \n'
@@ -541,6 +558,7 @@ def endpoint_landing_data():
         'contact.input_direction_stick AS stick_input, \n'
         'contact.charge_power_up AS charge_power_up, \n'
         'contact.charge_power_down AS charge_power_down, \n'
+        'contact.star_swing_five_star AS star_swing_five_star, \n'
         'contact.frame_of_swing_upon_contact AS frame_of_swing, \n'
         'pitch.pitch_type, \n'
         'pitch.charge_pitch_type, \n'
@@ -548,14 +566,16 @@ def endpoint_landing_data():
         'contact.type_of_contact, \n'
         'pitch.bat_x_contact_pos, \n'
         'pitch.bat_z_contact_pos, \n'
-        #Add decoded action
         'fielding.position AS fielder_position, \n'
+        'fielding.action AS fielder_action, \n'
         'fielding.fielder_x_pos AS fielder_x_pos, \n'
         'fielding.fielder_y_pos AS fielder_y_pos, \n'
         'fielding.fielder_z_pos AS fielder_z_pos, \n'
         'fielding.jump AS fielder_jump, \n'
         'fielding.manual_select AS manual_select_state \n'
+       f'{game_info_select}'
         'FROM event \n'
+       f'{game_info_join}'
         'JOIN pitch_summary AS pitch ON event.pitch_summary_id = pitch.id \n'
         'JOIN contact_summary AS contact ON pitch.contact_summary_id = contact.id \n'
         'LEFT JOIN fielding_summary AS fielding ON contact.fielding_summary_id = fielding.id \n'
@@ -1116,7 +1136,7 @@ def query_detailed_fielding_stats(stat_dict, game_ids, user_ids, char_ids, activ
     fielding_query = (
         select(
             *select_cols,
-            func.count(case((FieldingSummary.action == 1, 1))).label('jump_catches'),
+            func.count(case((FieldingSummary.jump == 1, 1))).label('jump_catches'),
             func.count(case((FieldingSummary.action == 2, 1))).label('diving_catches'),
             func.count(case((FieldingSummary.action == 3, 1))).label('wall_jumps'),
             func.sum(case((FieldingSummary.swap == True, 1), else_=0)).label('swap_successes'),
